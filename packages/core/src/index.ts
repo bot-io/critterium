@@ -278,6 +278,171 @@ export class SimLoop {
   }
 }
 
+// ─── Spatial Hash Grid ──────────────────────────────────────────
+
+/**
+ * Spatial hash grid for O(n) neighbor queries.
+ *
+ * Cell size should be >= max interaction radius so that any particle's
+ * neighbors are guaranteed to be in the same cell or one of the 8
+ * surrounding cells.
+ *
+ * Designed for zero allocations per rebuild: arrays are pre-allocated
+ * to hold maxParticles entries and reused across clear/rebuild cycles.
+ */
+export class SpatialHashGrid {
+  readonly cellSize: number;
+  readonly invCellSize: number;
+  readonly cols: number;
+  readonly rows: number;
+
+  // head[cellIndex] = first particle index in linked list for that cell, or -1
+  private head: Int32Array;
+  // next[particleIndex] = next particle in the same cell's linked list, or -1
+  private next: Int32Array;
+
+  private readonly capacity: number;
+
+  constructor(width: number, height: number, cellSize: number, maxParticles: number) {
+    this.cellSize = cellSize;
+    this.invCellSize = 1 / cellSize;
+    this.cols = Math.ceil(width / cellSize);
+    this.rows = Math.ceil(height / cellSize);
+    this.capacity = maxParticles;
+
+    const numCells = this.cols * this.rows;
+    this.head = new Int32Array(numCells);
+    this.next = new Int32Array(maxParticles);
+  }
+
+  /** Clear the grid. Resets all linked lists. Call before each rebuild. */
+  clear(): void {
+    this.head.fill(-1);
+  }
+
+  /**
+   * Insert a particle into the grid.
+   * @param index  Particle index (0-based)
+   * @param px     Particle x position
+   * @param py     Particle y position
+   */
+  insert(index: number, px: number, py: number): void {
+    const col = Math.max(0, Math.min(Math.floor(px * this.invCellSize), this.cols - 1));
+    const row = Math.max(0, Math.min(Math.floor(py * this.invCellSize), this.rows - 1));
+    const cellIdx = row * this.cols + col;
+    this.next[index] = this.head[cellIdx];
+    this.head[cellIdx] = index;
+  }
+
+  /**
+   * Rebuild the grid from a World's current positions.
+   * Calls clear() then inserts all particles. Zero allocations.
+   */
+  rebuild(world: World): void {
+    this.clear();
+    for (let i = 0; i < world.count; i++) {
+      this.insert(i, world.x[i], world.y[i]);
+    }
+  }
+
+  /**
+   * Query all neighbors within a given radius of a point.
+   * Uses a callback to avoid allocations.
+   *
+   * @param px       Query x position
+   * @param py       Query y position
+   * @param radius   Search radius
+   * @param xArr     Particle x positions (world.x)
+   * @param yArr     Particle y positions (world.y)
+   * @param count    Number of particles
+   * @param callback Called for each neighbor: (particleIndex, dx, dy, distSq)
+   */
+  queryRadius(
+    px: number, py: number, radius: number,
+    xArr: Float32Array, yArr: Float32Array, count: number,
+    callback: (idx: number, dx: number, dy: number, distSq: number) => void,
+  ): void {
+    const rSq = radius * radius;
+    const invCS = this.invCellSize;
+
+    const centerCol = Math.floor(px * invCS);
+    const centerRow = Math.floor(py * invCS);
+    const minCol = Math.max(0, centerCol - 1);
+    const maxCol = Math.min(this.cols - 1, centerCol + 1);
+    const minRow = Math.max(0, centerRow - 1);
+    const maxRow = Math.min(this.rows - 1, centerRow + 1);
+
+    for (let row = minRow; row <= maxRow; row++) {
+      for (let col = minCol; col <= maxCol; col++) {
+        let pIdx = this.head[row * this.cols + col];
+        while (pIdx !== -1) {
+          if (pIdx < count) {
+            const dx = xArr[pIdx] - px;
+            const dy = yArr[pIdx] - py;
+            const dSq = dx * dx + dy * dy;
+            if (dSq <= rSq && dSq > 0) {
+              callback(pIdx, dx, dy, dSq);
+            }
+          }
+          pIdx = this.next[pIdx];
+        }
+      }
+    }
+  }
+
+  /**
+   * Query neighbors and collect into a pre-allocated Int32Array.
+   * Returns the count of neighbors found.
+   */
+  queryRadiusToArray(
+    px: number, py: number, radius: number,
+    xArr: Float32Array, yArr: Float32Array, count: number,
+    outIndices: Int32Array, maxResults: number,
+  ): number {
+    let n = 0;
+    this.queryRadius(px, py, radius, xArr, yArr, count, (idx) => {
+      if (n < maxResults) {
+        outIndices[n++] = idx;
+      }
+    });
+    return n;
+  }
+
+  /** Get the total number of cells. */
+  get numCells(): number {
+    return this.cols * this.rows;
+  }
+
+  /** Get cell index for a position. Returns -1 if out of bounds. */
+  cellAt(px: number, py: number): number {
+    const col = Math.floor(px * this.invCellSize);
+    const row = Math.floor(py * this.invCellSize);
+    if (col < 0 || col >= this.cols || row < 0 || row >= this.rows) return -1;
+    return row * this.cols + col;
+  }
+}
+
+/**
+ * Brute-force neighbor query (reference for property testing).
+ * Returns sorted array of particle indices within radius (excluding self).
+ */
+export function bruteForceNeighbors(
+  px: number, py: number, radius: number,
+  xArr: Float32Array, yArr: Float32Array, count: number,
+): number[] {
+  const rSq = radius * radius;
+  const result: number[] = [];
+  for (let i = 0; i < count; i++) {
+    const dx = xArr[i] - px;
+    const dy = yArr[i] - py;
+    const dSq = dx * dx + dy * dy;
+    if (dSq <= rSq && dSq > 0) {
+      result.push(i);
+    }
+  }
+  return result.sort((a, b) => a - b);
+}
+
 /** Create a default simulation config for testing. */
 export function defaultConfig(overrides?: Partial<SimulationConfig>): SimulationConfig {
   return {

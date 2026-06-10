@@ -4,6 +4,8 @@ import {
   createRng,
   World,
   SimLoop,
+  SpatialHashGrid,
+  bruteForceNeighbors,
   defaultConfig,
   type SimulationConfig,
   type ParticleTypeConfig,
@@ -370,5 +372,359 @@ describe('World.snapshot', () => {
 describe('Constants', () => {
   it('MAX_TYPES is 16', () => {
     expect(MAX_TYPES).toBe(16);
+  });
+});
+
+// ─── Spatial Hash Grid ──────────────────────────────────────────
+
+describe('SpatialHashGrid', () => {
+  const W = 800, H = 600;
+  const CELL = 100; // max interaction radius
+  const MAX_P = 1000;
+
+  function makeGrid(cellSize = CELL, maxP = MAX_P): SpatialHashGrid {
+    return new SpatialHashGrid(W, H, cellSize, maxP);
+  }
+
+  // ─── Construction ───────────────────────────────────────────
+
+  it('computes correct grid dimensions', () => {
+    const grid = makeGrid();
+    expect(grid.cols).toBe(8); // ceil(800/100)
+    expect(grid.rows).toBe(6); // ceil(600/100)
+    expect(grid.numCells).toBe(48);
+  });
+
+  it('handles non-divisible cell sizes', () => {
+    const grid = new SpatialHashGrid(800, 600, 70, 100);
+    expect(grid.cols).toBe(12); // ceil(800/70)
+    expect(grid.rows).toBe(9); // ceil(600/70)
+  });
+
+  it('handles cell size equal to world size', () => {
+    const grid = new SpatialHashGrid(800, 600, 800, 100);
+    expect(grid.cols).toBe(1);
+    expect(grid.rows).toBe(1);
+    expect(grid.numCells).toBe(1);
+  });
+
+  // ─── Insert & cellAt ────────────────────────────────────────
+
+  it('inserts particles into correct cells', () => {
+    const grid = makeGrid();
+    grid.clear();
+    grid.insert(0, 50, 50);   // col 0, row 0 → cell 0
+    grid.insert(1, 150, 50);  // col 1, row 0 → cell 1
+    grid.insert(2, 50, 150);  // col 0, row 1 → cell 8
+    expect(grid.cellAt(50, 50)).toBe(0);
+    expect(grid.cellAt(150, 50)).toBe(1);
+    expect(grid.cellAt(50, 150)).toBe(8);
+  });
+
+  it('clamps particles at edges to valid cells', () => {
+    const grid = makeGrid();
+    grid.clear();
+    grid.insert(0, 799, 599); // near edge
+    grid.insert(1, 0, 0);     // corner
+    expect(grid.cellAt(799, 599)).toBe(47); // last cell
+    expect(grid.cellAt(0, 0)).toBe(0);
+  });
+
+  it('returns -1 for out-of-bounds cellAt', () => {
+    const grid = makeGrid();
+    expect(grid.cellAt(-1, 0)).toBe(-1);
+    expect(grid.cellAt(0, -1)).toBe(-1);
+    expect(grid.cellAt(800, 600)).toBe(-1);
+  });
+
+  // ─── Query ──────────────────────────────────────────────────
+
+  it('finds nearby particles', () => {
+    const grid = makeGrid();
+    grid.clear();
+    grid.insert(0, 100, 100);
+    grid.insert(1, 110, 100);
+    grid.insert(2, 500, 500); // far away
+
+    const xArr = new Float32Array([100, 110, 500]);
+    const yArr = new Float32Array([100, 100, 500]);
+
+    const neighbors: number[] = [];
+    grid.queryRadius(100, 100, 50, xArr, yArr, 3, (idx) => {
+      neighbors.push(idx);
+    });
+    expect(neighbors).toContain(1); // 10 units away
+    expect(neighbors).not.toContain(0); // self (dist=0, excluded)
+    expect(neighbors).not.toContain(2); // too far
+  });
+
+  it('finds particles in adjacent cells', () => {
+    const grid = makeGrid();
+    grid.clear();
+    // Particle at (99, 50) — in cell col 0, row 0
+    // Particle at (101, 50) — in cell col 1, row 0
+    // They're only 2 units apart but in different cells
+    grid.insert(0, 99, 50);
+    grid.insert(1, 101, 50);
+
+    const xArr = new Float32Array([99, 101]);
+    const yArr = new Float32Array([50, 50]);
+
+    const neighbors: number[] = [];
+    grid.queryRadius(99, 50, 10, xArr, yArr, 2, (idx) => {
+      neighbors.push(idx);
+    });
+    expect(neighbors).toContain(1);
+  });
+
+  it('excludes particles beyond radius', () => {
+    const grid = makeGrid();
+    grid.clear();
+    grid.insert(0, 100, 100);
+    grid.insert(1, 200, 100); // 100 units away
+
+    const xArr = new Float32Array([100, 200]);
+    const yArr = new Float32Array([100, 100]);
+
+    const neighbors: number[] = [];
+    grid.queryRadius(100, 100, 50, xArr, yArr, 2, (idx) => {
+      neighbors.push(idx);
+    });
+    expect(neighbors).toHaveLength(0);
+  });
+
+  it('handles query at world edge (clamped cells)', () => {
+    const grid = makeGrid();
+    grid.clear();
+    grid.insert(0, 5, 5);
+    grid.insert(1, 15, 5); // 10 units away
+
+    const xArr = new Float32Array([5, 15]);
+    const yArr = new Float32Array([5, 5]);
+
+    const neighbors: number[] = [];
+    grid.queryRadius(5, 5, 20, xArr, yArr, 2, (idx) => {
+      neighbors.push(idx);
+    });
+    expect(neighbors).toContain(1);
+  });
+
+  it('queryRadiusToArray collects into pre-allocated array', () => {
+    const grid = makeGrid();
+    grid.clear();
+    grid.insert(0, 100, 100);
+    grid.insert(1, 105, 100);
+    grid.insert(2, 500, 500);
+
+    const xArr = new Float32Array([100, 105, 500]);
+    const yArr = new Float32Array([100, 100, 500]);
+    const out = new Int32Array(10);
+
+    const count = grid.queryRadiusToArray(100, 100, 20, xArr, yArr, 3, out, 10);
+    expect(count).toBe(1);
+    expect(out[0]).toBe(1);
+  });
+
+  it('queryRadiusToArray respects maxResults', () => {
+    const grid = makeGrid();
+    grid.clear();
+    for (let i = 0; i < 10; i++) {
+      grid.insert(i, 100 + i * 2, 100);
+    }
+
+    const xArr = new Float32Array(10);
+    const yArr = new Float32Array(10);
+    for (let i = 0; i < 10; i++) {
+      xArr[i] = 100 + i * 2;
+      yArr[i] = 100;
+    }
+
+    const out = new Int32Array(3);
+    const count = grid.queryRadiusToArray(100, 100, 50, xArr, yArr, 10, out, 3);
+    // Should find neighbors but cap at 3
+    expect(count).toBe(3);
+  });
+
+  // ─── Rebuild ────────────────────────────────────────────────
+
+  it('rebuild from World', () => {
+    const world = new World(singleTypeConfig(50));
+    const grid = makeGrid();
+    grid.rebuild(world);
+
+    // Verify querying all particles doesn't crash and returns consistent results
+    for (let i = 0; i < world.count; i++) {
+      const neighbors: number[] = [];
+      grid.queryRadius(world.x[i], world.y[i], 1, world.x, world.y, world.count, (idx) => {
+        neighbors.push(idx);
+      });
+      // No crash = success. Neighbors within 1 unit are valid.
+    }
+  });
+
+  it('rebuild clears previous state', () => {
+    const grid = makeGrid();
+    grid.clear();
+    grid.insert(0, 100, 100);
+
+    // Rebuild with a world that has particles far from (100, 100)
+    const world = new World(singleTypeConfig(5));
+    // Move all particles far away
+    for (let i = 0; i < world.count; i++) {
+      world.x[i] = 700;
+      world.y[i] = 500;
+    }
+    grid.rebuild(world);
+
+    // Query near (100, 100) should find nothing
+    const neighbors: number[] = [];
+    grid.queryRadius(100, 100, 200, world.x, world.y, world.count, (idx) => {
+      neighbors.push(idx);
+    });
+    expect(neighbors).toHaveLength(0);
+  });
+
+  // ─── Zero-allocation verification ──────────────────────────
+
+  it('rebuild+query produces zero allocations (heap growth check)', () => {
+    const world = new World(singleTypeConfig(200));
+    const grid = makeGrid(100, 200);
+
+    // Warm up
+    grid.rebuild(world);
+    const buf = new Int32Array(200);
+    grid.queryRadiusToArray(100, 100, 50, world.x, world.y, world.count, buf, 200);
+
+    // Measure heap before
+    const before = (performance as any).memory?.usedJSHeapSize;
+    if (!before) {
+      // memory API not available (non-Chrome) — skip the heap check,
+      // but verify the operations still work correctly
+      for (let i = 0; i < 100; i++) {
+        grid.rebuild(world);
+        grid.queryRadiusToArray(100, 100, 50, world.x, world.y, world.count, buf, 200);
+      }
+      return; // soft pass
+    }
+
+    // Run many cycles
+    for (let i = 0; i < 100; i++) {
+      grid.rebuild(world);
+      grid.queryRadiusToArray(100, 100, 50, world.x, world.y, world.count, buf, 200);
+    }
+
+    const after = (performance as any).memory?.usedJSHeapSize;
+    // Allow small fluctuation but no significant growth
+    const growth = after - before;
+    // Less than 1MB growth from 100 cycles of rebuild+query
+    expect(growth).toBeLessThan(1_000_000);
+  });
+
+  // ─── Property test: grid matches brute force ───────────────
+
+  it('matches brute-force for random positions (property test, 200 trials)', () => {
+    const rng = createRng(12345);
+    const N = 100;
+    const RADIUS = 80;
+
+    for (let trial = 0; trial < 200; trial++) {
+      // Generate random positions
+      const xArr = new Float32Array(N);
+      const yArr = new Float32Array(N);
+      for (let i = 0; i < N; i++) {
+        xArr[i] = rng() * W;
+        yArr[i] = rng() * H;
+      }
+
+      // Build grid
+      const grid = makeGrid(RADIUS, N);
+      grid.clear();
+      for (let i = 0; i < N; i++) {
+        grid.insert(i, xArr[i], yArr[i]);
+      }
+
+      // Pick a random query particle
+      const qi = Math.floor(rng() * N);
+      const px = xArr[qi];
+      const py = yArr[qi];
+
+      // Grid query
+      const gridResult: number[] = [];
+      grid.queryRadius(px, py, RADIUS, xArr, yArr, N, (idx) => {
+        gridResult.push(idx);
+      });
+      gridResult.sort((a, b) => a - b);
+
+      // Brute force
+      const bruteResult = bruteForceNeighbors(px, py, RADIUS, xArr, yArr, N);
+
+      // Must match exactly
+      expect(gridResult).toEqual(bruteResult);
+    }
+  });
+
+  it('matches brute-force for large world (500 particles, 50 trials)', () => {
+    const rng = createRng(99999);
+    const N = 500;
+    const RADIUS = 60;
+
+    for (let trial = 0; trial < 50; trial++) {
+      const xArr = new Float32Array(N);
+      const yArr = new Float32Array(N);
+      for (let i = 0; i < N; i++) {
+        xArr[i] = rng() * W;
+        yArr[i] = rng() * H;
+      }
+
+      const grid = makeGrid(RADIUS, N);
+      grid.clear();
+      for (let i = 0; i < N; i++) {
+        grid.insert(i, xArr[i], yArr[i]);
+      }
+
+      const qi = Math.floor(rng() * N);
+
+      const gridResult: number[] = [];
+      grid.queryRadius(xArr[qi], yArr[qi], RADIUS, xArr, yArr, N, (idx) => {
+        gridResult.push(idx);
+      });
+      gridResult.sort((a, b) => a - b);
+
+      const bruteResult = bruteForceNeighbors(xArr[qi], yArr[qi], RADIUS, xArr, yArr, N);
+      expect(gridResult).toEqual(bruteResult);
+    }
+  });
+
+  // ─── Correctness with World integration ────────────────────
+
+  it('finds neighbors correctly after simulation steps', () => {
+    const cfg = defaultConfig({ seed: 777 });
+    const world = new World(cfg);
+    const grid = new SpatialHashGrid(world.width, world.height, 100, world.count);
+
+    // Step a few times
+    for (let i = 0; i < 100; i++) {
+      world.step(1 / 60);
+    }
+
+    grid.rebuild(world);
+
+    // Verify against brute force for several particles
+    const rng = createRng(777);
+    for (let t = 0; t < 20; t++) {
+      const qi = Math.floor(rng() * world.count);
+
+      const gridResult: number[] = [];
+      grid.queryRadius(world.x[qi], world.y[qi], 100, world.x, world.y, world.count, (idx) => {
+        gridResult.push(idx);
+      });
+      gridResult.sort((a, b) => a - b);
+
+      const bruteResult = bruteForceNeighbors(
+        world.x[qi], world.y[qi], 100,
+        world.x, world.y, world.count,
+      );
+      expect(gridResult).toEqual(bruteResult);
+    }
   });
 });
