@@ -7,8 +7,12 @@ import {
   SpatialHashGrid,
   bruteForceNeighbors,
   defaultConfig,
+  InteractionMatrix,
+  PairwiseForce,
+  DEFAULT_REPULSION,
   type SimulationConfig,
   type ParticleTypeConfig,
+  type InteractionEntry,
 } from './index.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -726,5 +730,459 @@ describe('SpatialHashGrid', () => {
       );
       expect(gridResult).toEqual(bruteResult);
     }
+  });
+});
+
+// ─── InteractionMatrix ─────────────────────────────────────────
+
+describe('InteractionMatrix', () => {
+  it('creates NxN matrix initialized to null', () => {
+    const m = new InteractionMatrix(3);
+    expect(m.numTypes).toBe(3);
+    for (let i = 0; i < 3; i++) {
+      for (let j = 0; j < 3; j++) {
+        expect(m.get(i, j)).toBeNull();
+      }
+    }
+  });
+
+  it('stores and retrieves entries', () => {
+    const m = new InteractionMatrix(2);
+    const entry: InteractionEntry = { strength: 100, radius: 50, falloff: 'linear' };
+    m.set(0, 1, entry);
+    const got = m.get(0, 1);
+    expect(got).not.toBeNull();
+    expect(got!.strength).toBe(100);
+    expect(got!.radius).toBe(50);
+    expect(got!.falloff).toBe('linear');
+  });
+
+  it('supports asymmetric entries (A→B ≠ B→A)', () => {
+    const m = new InteractionMatrix(2);
+    m.set(0, 1, { strength: 100, radius: 50, falloff: 'linear' }); // A chases B
+    m.set(1, 0, { strength: -80, radius: 40, falloff: 'inverse' }); // B flees A
+    const aToB = m.get(0, 1)!;
+    const bToA = m.get(1, 0)!;
+    expect(aToB.strength).toBe(100);
+    expect(bToA.strength).toBe(-80);
+    expect(aToB.radius).toBe(50);
+    expect(bToA.radius).toBe(40);
+    expect(aToB.falloff).toBe('linear');
+    expect(bToA.falloff).toBe('inverse');
+  });
+
+  describe('forceAtDistance', () => {
+    it('returns 0 when distance >= radius', () => {
+      const entry: InteractionEntry = { strength: 100, radius: 50, falloff: 'linear' };
+      expect(InteractionMatrix.forceAtDistance(entry, 50)).toBe(0);
+      expect(InteractionMatrix.forceAtDistance(entry, 60)).toBe(0);
+    });
+
+    it('returns 0 when distance <= 0', () => {
+      const entry: InteractionEntry = { strength: 100, radius: 50, falloff: 'linear' };
+      expect(InteractionMatrix.forceAtDistance(entry, 0)).toBe(0);
+      expect(InteractionMatrix.forceAtDistance(entry, -5)).toBe(0);
+    });
+
+    it('linear falloff: force = strength * (1 - d/r)', () => {
+      const entry: InteractionEntry = { strength: 100, radius: 100, falloff: 'linear' };
+      expect(InteractionMatrix.forceAtDistance(entry, 0)).toBeCloseTo(0, 3); // d=0 excluded
+      expect(InteractionMatrix.forceAtDistance(entry, 25)).toBeCloseTo(75, 3);
+      expect(InteractionMatrix.forceAtDistance(entry, 50)).toBeCloseTo(50, 3);
+      expect(InteractionMatrix.forceAtDistance(entry, 75)).toBeCloseTo(25, 3);
+    });
+
+    it('inverse falloff: force = strength / (d/r + 0.1)', () => {
+      const entry: InteractionEntry = { strength: 100, radius: 100, falloff: 'inverse' };
+      const d = 50;
+      const expected = 100 / (0.5 + 0.1); // 100/0.6 ≈ 166.67
+      expect(InteractionMatrix.forceAtDistance(entry, d)).toBeCloseTo(expected, 2);
+    });
+
+    it('constant falloff: force = strength regardless of distance', () => {
+      const entry: InteractionEntry = { strength: 100, radius: 100, falloff: 'constant' };
+      expect(InteractionMatrix.forceAtDistance(entry, 10)).toBeCloseTo(100, 3);
+      expect(InteractionMatrix.forceAtDistance(entry, 50)).toBeCloseTo(100, 3);
+      expect(InteractionMatrix.forceAtDistance(entry, 99)).toBeCloseTo(100, 3);
+    });
+
+    it('negative strength produces repulsive force', () => {
+      const entry: InteractionEntry = { strength: -200, radius: 50, falloff: 'constant' };
+      expect(InteractionMatrix.forceAtDistance(entry, 25)).toBe(-200);
+    });
+  });
+});
+
+// ─── PairwiseForce ──────────────────────────────────────────────
+
+describe('PairwiseForce', () => {
+  const W = 800, H = 600;
+
+  function twoParticleWorld(
+    typeA: number, typeB: number,
+    x0: number, y0: number, x1: number, y1: number,
+    maxSpeed = 200,
+  ): { world: World; grid: SpatialHashGrid } {
+    const cfg: SimulationConfig = {
+      width: W, height: H, boundaryMode: 'bounce', seed: 42,
+      types: [
+        { count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed },
+        { count: 1, color: '#0f0', radius: 3, initialSpeed: 0, maxSpeed },
+      ],
+    };
+    // If only one type, adjust
+    if (typeA === typeB) {
+      cfg.types = [
+        { count: 2, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed },
+      ];
+    }
+    const world = new World(cfg);
+    // Override positions (deterministic seed doesn't matter here)
+    world.x[0] = x0; world.y[0] = y0; world.vx[0] = 0; world.vy[0] = 0;
+    world.x[1] = x1; world.y[1] = y1; world.vx[1] = 0; world.vy[1] = 0;
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+    return { world, grid };
+  }
+
+  // ─── AC1: N×N interaction matrix ──────────────────────────────
+
+  it('applies attraction via interaction matrix (analytic two-particle)', () => {
+    // Two particles at distance 20, attraction strength 1000, radius 50, linear
+    const { world, grid } = twoParticleWorld(0, 1, 100, 300, 120, 300);
+    const matrix = new InteractionMatrix(2);
+    // Type 0 is attracted to type 1
+    matrix.set(0, 1, { strength: 1000, radius: 50, falloff: 'linear' });
+
+    const force = new PairwiseForce(matrix, { strength: 0, radius: 0 });
+    const dt = 1 / 60;
+    force.apply(world, grid, dt);
+
+    // Particle 0 should have gained velocity toward particle 1 (positive x direction)
+    expect(world.vx[0]).toBeGreaterThan(0);
+    expect(world.vy[0]).toBeCloseTo(0, 5);
+
+    // Analytic: force = strength * (1 - d/r) = 1000 * (1 - 20/50) = 1000 * 0.6 = 600
+    // dv = force * dt = 600 * 1/60 = 10
+    expect(world.vx[0]).toBeCloseTo(10, 1);
+  });
+
+  it('applies repulsion via interaction matrix (negative strength)', () => {
+    const { world, grid } = twoParticleWorld(0, 1, 100, 300, 120, 300);
+    const matrix = new InteractionMatrix(2);
+    // Type 0 is repelled by type 1
+    matrix.set(0, 1, { strength: -1000, radius: 50, falloff: 'linear' });
+
+    const force = new PairwiseForce(matrix, { strength: 0, radius: 0 });
+    const dt = 1 / 60;
+    force.apply(world, grid, dt);
+
+    // Particle 0 should have velocity AWAY from particle 1 (negative x)
+    expect(world.vx[0]).toBeLessThan(0);
+  });
+
+  // ─── AC2: Asymmetric interactions ─────────────────────────────
+
+  it('asymmetric: A chases B, B flees A', () => {
+    // Two particles: type 0 (predator) at x=100, type 1 (prey) at x=120
+    const { world, grid } = twoParticleWorld(0, 1, 100, 300, 120, 300);
+    const matrix = new InteractionMatrix(2);
+
+    // Predator (type 0) is attracted to prey (type 1) → chases
+    matrix.set(0, 1, { strength: 1000, radius: 50, falloff: 'linear' });
+    // Prey (type 1) is repelled by predator (type 0) → flees
+    matrix.set(1, 0, { strength: -800, radius: 50, falloff: 'linear' });
+
+    const force = new PairwiseForce(matrix, { strength: 0, radius: 0 });
+    const dt = 1 / 60;
+    force.apply(world, grid, dt);
+
+    // Predator (0) should move toward prey (positive x) — chasing
+    expect(world.vx[0]).toBeGreaterThan(0);
+    // Prey (1) should move away from predator (positive x, further away) — fleeing
+    expect(world.vx[1]).toBeGreaterThan(0);
+
+    // The forces are asymmetric: predator is attracted, prey is repelled
+    // Both move in same direction but for different reasons
+    // Predator: attracted toward prey at +x → vx[0] > 0
+    // Prey: repelled from predator at -x → vx[1] > 0
+  });
+
+  it('asymmetric interaction does not affect same-type pairs (no self-interaction set)', () => {
+    const { world, grid } = twoParticleWorld(0, 0, 100, 300, 120, 300);
+    const matrix = new InteractionMatrix(1);
+    // No entries set — no interaction
+
+    const force = new PairwiseForce(matrix, { strength: 0, radius: 0 });
+    force.apply(world, grid, 1 / 60);
+
+    // No forces applied → velocities stay at 0
+    expect(world.vx[0]).toBe(0);
+    expect(world.vy[0]).toBe(0);
+    expect(world.vx[1]).toBe(0);
+    expect(world.vy[1]).toBe(0);
+  });
+
+  // ─── AC3: Universal short-range repulsion ─────────────────────
+
+  it('short-range repulsion prevents particle collapse', () => {
+    // Two particles very close (distance 2), with strong repulsion
+    const { world, grid } = twoParticleWorld(0, 1, 100, 300, 102, 300);
+    const matrix = new InteractionMatrix(2);
+    // Attraction that would collapse particles
+    matrix.set(0, 1, { strength: 1000, radius: 50, falloff: 'constant' });
+
+    // Repulsion with radius 8 will kick in at distance 2
+    const force = new PairwiseForce(matrix, { strength: 5000, radius: 8 });
+    const dt = 1 / 60;
+    force.apply(world, grid, dt);
+
+    // Particle 0 should be pushed AWAY from particle 1 (net repulsion wins)
+    // At distance 2: repulsion = 5000 * (1 - 2/8) = 5000 * 0.75 = 3750
+    // Attraction = 1000 (constant)
+    // Net on particle 0 = 1000 (attract toward) - 3750 (repel away) = -2750
+    expect(world.vx[0]).toBeLessThan(0);
+  });
+
+  it('repulsion has linear falloff: zero at repulsion radius', () => {
+    // Two particles at exactly repulsion radius — repulsion should be ~0
+    const { world, grid } = twoParticleWorld(0, 1, 100, 300, 108, 300);
+    const matrix = new InteractionMatrix(2);
+    // No interaction, only repulsion at radius 8
+    const force = new PairwiseForce(matrix, { strength: 5000, radius: 8 });
+    const dt = 1 / 60;
+    force.apply(world, grid, dt);
+
+    // Distance = 8, which is exactly repulsion.radius → repForce = 5000 * (1-1) = 0
+    expect(world.vx[0]).toBeCloseTo(0, 3);
+    expect(world.vx[1]).toBeCloseTo(0, 3);
+  });
+
+  it('repulsion is stronger at closer distances', () => {
+    const dt = 1 / 60;
+    const repulsion = { strength: 5000, radius: 8 };
+
+    // Close pair (distance 1)
+    const { world: closeWorld, grid: closeGrid } = twoParticleWorld(0, 1, 100, 300, 101, 300);
+    const closeForce = new PairwiseForce(new InteractionMatrix(2), repulsion);
+    closeForce.apply(closeWorld, closeGrid, dt);
+    const closeVx = Math.abs(closeWorld.vx[0]);
+
+    // Far pair (distance 4)
+    const { world: farWorld, grid: farGrid } = twoParticleWorld(0, 1, 100, 300, 104, 300);
+    const farForce = new PairwiseForce(new InteractionMatrix(2), repulsion);
+    farForce.apply(farWorld, farGrid, dt);
+    const farVx = Math.abs(farWorld.vx[0]);
+
+    // Closer particles should have stronger repulsion
+    expect(closeVx).toBeGreaterThan(farVx);
+  });
+
+  // ─── AC4: Analytic two-particle tests ─────────────────────────
+
+  it('analytic: two particles on x-axis, known force magnitude', () => {
+    const dist = 30;
+    const { world, grid } = twoParticleWorld(0, 1, 100, 300, 100 + dist, 300);
+    const matrix = new InteractionMatrix(2);
+    matrix.set(0, 1, { strength: 600, radius: 60, falloff: 'linear' });
+
+    const force = new PairwiseForce(matrix, { strength: 0, radius: 0 });
+    const dt = 1 / 60;
+    force.apply(world, grid, dt);
+
+    // force = strength * (1 - d/r) = 600 * (1 - 30/60) = 600 * 0.5 = 300
+    // dv = force * dt = 300 * 1/60 = 5
+    expect(world.vx[0]).toBeCloseTo(5, 2);
+    expect(world.vy[0]).toBeCloseTo(0, 5);
+  });
+
+  it('analytic: two particles on y-axis, known force magnitude', () => {
+    const dist = 25;
+    const { world, grid } = twoParticleWorld(0, 1, 400, 200, 400, 200 + dist);
+    const matrix = new InteractionMatrix(2);
+    matrix.set(0, 1, { strength: 900, radius: 50, falloff: 'linear' });
+
+    const force = new PairwiseForce(matrix, { strength: 0, radius: 0 });
+    const dt = 1 / 60;
+    force.apply(world, grid, dt);
+
+    // force = 900 * (1 - 25/50) = 900 * 0.5 = 450
+    // dv = 450 * 1/60 = 7.5
+    expect(world.vy[0]).toBeCloseTo(7.5, 2);
+    expect(world.vx[0]).toBeCloseTo(0, 5);
+  });
+
+  it('analytic: two particles diagonal, force direction correct', () => {
+    const { world, grid } = twoParticleWorld(0, 1, 200, 200, 230, 230);
+    const matrix = new InteractionMatrix(2);
+    matrix.set(0, 1, { strength: 1000, radius: 100, falloff: 'constant' });
+
+    const force = new PairwiseForce(matrix, { strength: 0, radius: 0 });
+    const dt = 1 / 60;
+    force.apply(world, grid, dt);
+
+    // Distance ≈ 42.43, direction = (1/√2, 1/√2)
+    // force = 1000 (constant), dv = 1000/60 ≈ 16.67
+    // vx = 16.67 * (30/42.43) ≈ 11.79
+    // vy = 16.67 * (30/42.43) ≈ 11.79
+    expect(world.vx[0]).toBeGreaterThan(0);
+    expect(world.vy[0]).toBeGreaterThan(0);
+    // Should be equal (diagonal)
+    expect(world.vx[0]).toBeCloseTo(world.vy[0], 3);
+  });
+
+  // ─── AC5: Asymmetry test: chase/flee scenario ─────────────────
+
+  it('chase/flee: predator accelerates toward prey, prey accelerates away', () => {
+    // 3 types: predator (0), prey (1), neutral (2)
+    const cfg: SimulationConfig = {
+      width: W, height: H, boundaryMode: 'bounce', seed: 42,
+      types: [
+        { count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 },  // predator
+        { count: 1, color: '#0f0', radius: 3, initialSpeed: 0, maxSpeed: 200 },  // prey
+        { count: 1, color: '#00f', radius: 3, initialSpeed: 0, maxSpeed: 200 },  // neutral
+      ],
+    };
+    const world = new World(cfg);
+
+    // Position them: predator at left, prey at center, neutral far right
+    world.x[0] = 100; world.y[0] = 300; world.vx[0] = 0; world.vy[0] = 0;
+    world.x[1] = 150; world.y[1] = 300; world.vx[1] = 0; world.vy[1] = 0;
+    world.x[2] = 700; world.y[2] = 300; world.vx[2] = 0; world.vy[2] = 0;
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const matrix = new InteractionMatrix(3);
+    // Predator chases prey
+    matrix.set(0, 1, { strength: 1000, radius: 100, falloff: 'linear' });
+    // Prey flees predator
+    matrix.set(1, 0, { strength: -600, radius: 80, falloff: 'linear' });
+    // Neutral has no interactions
+
+    const force = new PairwiseForce(matrix, { strength: 0, radius: 0 });
+    const dt = 1 / 60;
+    force.apply(world, grid, dt);
+
+    // Predator (0) should move toward prey → positive x
+    expect(world.vx[0]).toBeGreaterThan(0);
+    // Prey (1) should flee from predator → positive x (away from predator at -x)
+    expect(world.vx[1]).toBeGreaterThan(0);
+    // Neutral (2) should be unaffected
+    expect(world.vx[2]).toBeCloseTo(0, 5);
+    expect(world.vy[2]).toBeCloseTo(0, 5);
+  });
+
+  it('3x3 matrix: each pair gets its own interaction', () => {
+    // 3 types, 9 entries
+    const cfg: SimulationConfig = {
+      width: W, height: H, boundaryMode: 'bounce', seed: 42,
+      types: [
+        { count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 },
+        { count: 1, color: '#0f0', radius: 3, initialSpeed: 0, maxSpeed: 200 },
+        { count: 1, color: '#00f', radius: 3, initialSpeed: 0, maxSpeed: 200 },
+      ],
+    };
+    const world = new World(cfg);
+
+    // Arrange in a line: 0 at x=100, 1 at x=130, 2 at x=160
+    world.x[0] = 100; world.y[0] = 300; world.vx[0] = 0; world.vy[0] = 0;
+    world.x[1] = 130; world.y[1] = 300; world.vx[1] = 0; world.vy[1] = 0;
+    world.x[2] = 160; world.y[2] = 300; world.vx[2] = 0; world.vy[2] = 0;
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const matrix = new InteractionMatrix(3);
+    // 0→1: strong attract, 0→2: weak attract
+    matrix.set(0, 1, { strength: 1000, radius: 50, falloff: 'constant' });
+    matrix.set(0, 2, { strength: 100, radius: 50, falloff: 'constant' });
+    // 1→0: repel, 1→2: attract
+    matrix.set(1, 0, { strength: -500, radius: 50, falloff: 'constant' });
+    matrix.set(1, 2, { strength: 800, radius: 50, falloff: 'constant' });
+    // 2→0: repel, 2→1: repel
+    matrix.set(2, 0, { strength: -200, radius: 50, falloff: 'constant' });
+    matrix.set(2, 1, { strength: -300, radius: 50, falloff: 'constant' });
+
+    const force = new PairwiseForce(matrix, { strength: 0, radius: 0 });
+    force.apply(world, grid, 1 / 60);
+
+    // Particle 0: attracted to both 1 (1000, +x) and 2 (100, +x) → net +x
+    expect(world.vx[0]).toBeGreaterThan(0);
+    // Particle 1: repelled by 0 (-500, pushes away from 0 which is at -x → +x)
+    //              + attracted to 2 (800, +x toward 2) → net +x
+    expect(world.vx[1]).toBeGreaterThan(0);
+    // Particle 2: repelled by 0 (-200) + repelled by 1 (-300).
+    // Both 0 and 1 are to the LEFT of 2, so "repel from them" = push RIGHT (+x)
+    expect(world.vx[2]).toBeGreaterThan(0);
+  });
+
+  // ─── Integration: pairwise force in simulation loop ───────────
+
+  it('pairwise force integrated with simulation steps', () => {
+    const cfg = defaultConfig({ seed: 42 });
+    const world = new World(cfg);
+    const grid = new SpatialHashGrid(world.width, world.height, 100, world.count);
+
+    const matrix = new InteractionMatrix(3);
+    // Type 0 attracted to type 1
+    matrix.set(0, 1, { strength: 500, radius: 80, falloff: 'linear' });
+    // Type 1 repelled by type 0
+    matrix.set(1, 0, { strength: -300, radius: 60, falloff: 'linear' });
+    // Type 2 neutral
+
+    const force = new PairwiseForce(matrix, { strength: 1000, radius: 5 });
+    const dt = 1 / 60;
+
+    // Run 100 steps with force application
+    for (let step = 0; step < 100; step++) {
+      grid.rebuild(world);
+      force.apply(world, grid, dt);
+      world.step(dt);
+    }
+
+    // Should not have exploded (positions stay in bounds due to bounce)
+    for (let i = 0; i < world.count; i++) {
+      expect(world.x[i]).toBeGreaterThanOrEqual(0);
+      expect(world.x[i]).toBeLessThanOrEqual(world.width);
+      expect(world.y[i]).toBeGreaterThanOrEqual(0);
+      expect(world.y[i]).toBeLessThanOrEqual(world.height);
+    }
+
+    // Simulation time should be ~100/60 ≈ 1.67s
+    expect(world.simTime).toBeGreaterThan(1);
+  });
+
+  // ─── Edge cases ───────────────────────────────────────────────
+
+  it('no forces when no matrix entries and no repulsion', () => {
+    const { world, grid } = twoParticleWorld(0, 1, 100, 300, 105, 300);
+    const matrix = new InteractionMatrix(2);
+    const force = new PairwiseForce(matrix, { strength: 0, radius: 0 });
+    force.apply(world, grid, 1 / 60);
+
+    expect(world.vx[0]).toBe(0);
+    expect(world.vy[0]).toBe(0);
+    expect(world.vx[1]).toBe(0);
+    expect(world.vy[1]).toBe(0);
+  });
+
+  it('particles beyond interaction radius are unaffected', () => {
+    const { world, grid } = twoParticleWorld(0, 1, 100, 300, 500, 300);
+    const matrix = new InteractionMatrix(2);
+    matrix.set(0, 1, { strength: 10000, radius: 50, falloff: 'constant' });
+
+    const force = new PairwiseForce(matrix, { strength: 0, radius: 0 });
+    force.apply(world, grid, 1 / 60);
+
+    // Distance = 400, interaction radius = 50 → no force
+    expect(world.vx[0]).toBe(0);
+    expect(world.vx[1]).toBe(0);
+  });
+
+  it('DEFAULT_REPULSION has expected values', () => {
+    expect(DEFAULT_REPULSION.strength).toBe(500);
+    expect(DEFAULT_REPULSION.radius).toBe(8);
   });
 });

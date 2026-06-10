@@ -458,3 +458,162 @@ export function defaultConfig(overrides?: Partial<SimulationConfig>): Simulation
     ...overrides,
   };
 }
+
+// ─── Interaction Matrix & Pairwise Force ────────────────────────
+
+/** Falloff curve for an interaction entry. */
+export type FalloffType = 'linear' | 'inverse' | 'constant';
+
+/** A single entry in the N×N interaction matrix. */
+export interface InteractionEntry {
+  /** Force magnitude. Positive = attract, negative = repel. */
+  strength: number;
+  /** Maximum interaction radius (must be ≤ spatial hash cell size). */
+  radius: number;
+  /** How force decays with distance. */
+  falloff: FalloffType;
+}
+
+/** N×N interaction matrix. matrix[typeA][typeB] = effect of typeB on typeA. */
+export class InteractionMatrix {
+  readonly numTypes: number;
+  private readonly entries: (InteractionEntry | null)[][];
+
+  constructor(numTypes: number) {
+    this.numTypes = numTypes;
+    this.entries = [];
+    for (let i = 0; i < numTypes; i++) {
+      this.entries[i] = [];
+      for (let j = 0; j < numTypes; j++) {
+        this.entries[i][j] = null;
+      }
+    }
+  }
+
+  /** Set the interaction for (typeA, typeB): how typeB affects typeA. */
+  set(typeA: number, typeB: number, entry: InteractionEntry): void {
+    this.entries[typeA][typeB] = entry;
+  }
+
+  /** Get the interaction entry for (typeA, typeB). Returns null if not set. */
+  get(typeA: number, typeB: number): InteractionEntry | null {
+    return this.entries[typeA][typeB];
+  }
+
+  /**
+   * Compute the force magnitude for a given entry at a given distance.
+   * Returns 0 if distance >= entry.radius.
+   */
+  static forceAtDistance(entry: InteractionEntry, dist: number): number {
+    if (dist >= entry.radius || dist <= 0) return 0;
+    const t = dist / entry.radius; // normalized distance [0, 1)
+    switch (entry.falloff) {
+      case 'linear':
+        return entry.strength * (1 - t);
+      case 'inverse':
+        return entry.strength / (t + 0.1); // +0.1 prevents singularity at 0
+      case 'constant':
+        return entry.strength;
+    }
+  }
+}
+
+/** Short-range repulsion parameters. */
+export interface RepulsionConfig {
+  /** Force strength (always positive = repulsive). */
+  strength: number;
+  /** Distance below which repulsion activates. */
+  radius: number;
+}
+
+/** Default short-range repulsion. */
+export const DEFAULT_REPULSION: RepulsionConfig = {
+  strength: 500,
+  radius: 8,
+};
+
+/**
+ * PairwiseForce: applies interaction-matrix forces and short-range repulsion.
+ *
+ * Uses the spatial hash grid for O(n) neighbor lookups.
+ * For each particle pair within range, computes:
+ *   1. Interaction force from the N×N matrix (asymmetric: A→B ≠ B→A)
+ *   2. Universal short-range repulsion (symmetric, prevents collapse)
+ *
+ * Forces are applied as velocity changes (impulse-style: dv = force * dt).
+ */
+export class PairwiseForce {
+  readonly matrix: InteractionMatrix;
+  readonly repulsion: RepulsionConfig;
+
+  constructor(matrix: InteractionMatrix, repulsion: RepulsionConfig = DEFAULT_REPULSION) {
+    this.matrix = matrix;
+    this.repulsion = repulsion;
+  }
+
+  /**
+   * Apply pairwise forces to the world for one timestep.
+   * Modifies world.vx and world.vy in-place.
+   *
+   * @param world  The simulation world
+   * @param grid   Spatial hash grid (must be rebuilt for current positions)
+   * @param dt     Timestep duration
+   */
+  apply(world: World, grid: SpatialHashGrid, dt: number): void {
+    const { x, y, vx, vy, type, count } = world;
+    const { matrix, repulsion } = this;
+
+    // Pre-compute max interaction radius from matrix entries
+    let maxRadius = repulsion.radius;
+    for (let a = 0; a < matrix.numTypes; a++) {
+      for (let b = 0; b < matrix.numTypes; b++) {
+        const entry = matrix.get(a, b);
+        if (entry && entry.radius > maxRadius) {
+          maxRadius = entry.radius;
+        }
+      }
+    }
+
+    // Accumulate velocity changes in temp arrays to avoid order dependency
+    const dvx = new Float32Array(count);
+    const dvy = new Float32Array(count);
+
+    for (let i = 0; i < count; i++) {
+      const xi = x[i];
+      const yi = y[i];
+      const typeI = type[i];
+
+      grid.queryRadius(xi, yi, maxRadius, x, y, count, (j, dx, dy, distSq) => {
+        const dist = Math.sqrt(distSq);
+        const typeJ = type[j];
+        const nx = dx / dist; // unit normal from i to j
+        const ny = dy / dist;
+
+        // 1. Interaction matrix force: how typeJ affects typeI
+        const entry = matrix.get(typeI, typeJ);
+        if (entry && dist < entry.radius) {
+          const force = InteractionMatrix.forceAtDistance(entry, dist);
+          // Positive strength = attract (toward j), negative = repel (away from j)
+          dvx[i] += nx * force * dt;
+          dvy[i] += ny * force * dt;
+        }
+
+        // 2. Universal short-range repulsion (always repulsive, symmetric)
+        if (dist < repulsion.radius) {
+          // Linear falloff: strongest at dist=0, zero at repulsion.radius
+          const t = dist / repulsion.radius;
+          const repForce = repulsion.strength * (1 - t);
+          // Repel: push i away from j (opposite direction of normal)
+          dvx[i] -= nx * repForce * dt;
+          dvy[i] -= ny * repForce * dt;
+        }
+      });
+    }
+
+    // Apply accumulated velocity changes
+    for (let i = 0; i < count; i++) {
+      vx[i] += dvx[i];
+      vy[i] += dvy[i];
+    }
+  }
+}
