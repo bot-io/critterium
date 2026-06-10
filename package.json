@@ -1,0 +1,21 @@
+{
+  "name": "critterium",
+  "private": true,
+  "description": "A living world in your pocket — fast 2D particle sandbox with emergent behaviors",
+  "license": "MIT",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces",
+    "format:check": "prettier --check .",
+    "format": "prettier --write .",
+    "typecheck": "npm run typecheck --workspaces"
+  },
+  "devDependencies": {
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.3"
+  }
+}
