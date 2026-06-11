@@ -1070,3 +1070,119 @@ export class VortexForce implements Force {
     }
   }
 }
+
+// ─── Alignment (Flocking) Force ─────────────────────────────────
+
+/** Alignment force parameters. */
+export interface AlignmentParams {
+  [key: string]: unknown;
+  /**
+   * Strength of the alignment steering force.
+   * Higher values cause faster convergence to group heading.
+   * Typical range: 10–200.
+   */
+  strength: number;
+  /**
+   * Radius within which neighbors are considered for alignment.
+   * Should be ≤ spatial hash grid cell size for correctness.
+   */
+  radius: number;
+  /**
+   * Whether to align across all types (true) or only same-type neighbors (false).
+   * Default: false (flock only with same type).
+   */
+  crossType: boolean;
+}
+
+/**
+ * AlignmentForce: steers each particle toward the average heading of its neighbors.
+ *
+ * This is the classic "alignment" behavior from Craig Reynolds' boids model.
+ * Each particle looks at the velocities of nearby same-type neighbors (or all
+ * neighbors if crossType=true) and steers toward the average heading.
+ *
+ * Uses the spatial hash grid for O(n) neighbor queries.
+ * Pre-allocates temporary arrays — zero hot-loop allocations.
+ *
+ * Implementation:
+ * 1. For each particle, query neighbors within `radius` using the spatial grid.
+ * 2. Compute the average velocity (heading) of qualifying neighbors.
+ * 3. Apply a steering force proportional to the difference between the
+ *    particle's velocity and the average neighbor velocity, scaled by `strength`.
+ */
+export class AlignmentForce implements Force {
+  readonly id = 'alignment';
+  readonly params: AlignmentParams;
+
+  // Pre-allocated temp arrays for velocity accumulation
+  private sumVx: Float32Array;
+  private sumVy: Float32Array;
+  private neighborCounts: Int32Array;
+  private capacity: number;
+
+  constructor(strength: number = 80, radius: number = 80, crossType: boolean = false) {
+    this.params = { strength, radius, crossType };
+    this.sumVx = new Float32Array(0);
+    this.sumVy = new Float32Array(0);
+    this.neighborCounts = new Int32Array(0);
+    this.capacity = 0;
+  }
+
+  /**
+   * Ensure internal arrays are large enough for the current particle count.
+   * Only reallocates when count increases (no hot-loop allocations).
+   */
+  private ensureCapacity(count: number): void {
+    if (count <= this.capacity) return;
+    this.sumVx = new Float32Array(count);
+    this.sumVy = new Float32Array(count);
+    this.neighborCounts = new Int32Array(count);
+    this.capacity = count;
+  }
+
+  apply(world: World, grid: SpatialHashGrid, dt: number): void {
+    const { x, y, vx, vy, type, count } = world;
+    const { strength, radius, crossType } = this.params;
+
+    this.ensureCapacity(count);
+
+    // Clear accumulators
+    this.sumVx.fill(0);
+    this.sumVy.fill(0);
+    this.neighborCounts.fill(0);
+
+    // For each particle, query neighbors and accumulate their velocities
+    for (let i = 0; i < count; i++) {
+      const xi = x[i];
+      const yi = y[i];
+      const typeI = type[i];
+
+      grid.queryRadius(xi, yi, radius, x, y, count, (j, _dx, _dy, _distSq) => {
+        // Only align with same-type neighbors (unless crossType is enabled)
+        if (crossType || type[j] === typeI) {
+          this.sumVx[i] += vx[j];
+          this.sumVy[i] += vy[j];
+          this.neighborCounts[i]++;
+        }
+      });
+    }
+
+    // Apply alignment steering force
+    for (let i = 0; i < count; i++) {
+      const n = this.neighborCounts[i];
+      if (n === 0) continue;
+
+      // Average neighbor velocity (desired heading)
+      const avgVx = this.sumVx[i] / n;
+      const avgVy = this.sumVy[i] / n;
+
+      // Steering force: difference between average heading and current velocity
+      const steerX = avgVx - vx[i];
+      const steerY = avgVy - vy[i];
+
+      // Apply as velocity change, scaled by strength and dt
+      vx[i] += steerX * strength * dt;
+      vy[i] += steerY * strength * dt;
+    }
+  }
+}

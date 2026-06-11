@@ -22,6 +22,7 @@ import {
   WanderForce,
   FlowFieldForce,
   VortexForce,
+  AlignmentForce,
 } from './index.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -2329,5 +2330,279 @@ describe('CRT-6: Integration — Wander + FlowField + Vortex together', () => {
     // Particle should have moved (not stuck in same place)
     expect(positions[1].x).not.toBeCloseTo(positions[0].x, 0);
     expect(positions[2].x).not.toBeCloseTo(positions[1].x, 0);
+  });
+});
+
+// ─── CRT-7: Alignment (Flocking) Force ────────────────────────────
+
+describe('AlignmentForce', () => {
+  const W = 800, H = 600;
+
+  it('has correct default params', () => {
+    const af = new AlignmentForce();
+    expect(af.id).toBe('alignment');
+    expect(af.params.strength).toBe(80);
+    expect(af.params.radius).toBe(80);
+    expect(af.params.crossType).toBe(false);
+  });
+
+  it('does nothing to an isolated particle (no neighbors)', () => {
+    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const world = new World(cfg);
+    world.x[0] = 400;
+    world.y[0] = 300;
+    world.vx[0] = 50;
+    world.vy[0] = 30;
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const align = new AlignmentForce(80, 80);
+    align.apply(world, grid, 1 / 60);
+
+    expect(world.vx[0]).toBe(50);
+    expect(world.vy[0]).toBe(30);
+  });
+
+  it('steers toward average heading of same-type neighbors', () => {
+    // 3 particles of same type, same position cluster
+    const cfg = defaultConfig({ types: [{ count: 3, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 500 }] });
+    const world = new World(cfg);
+
+    // Place them close together
+    world.x[0] = 400; world.y[0] = 300;
+    world.x[1] = 405; world.y[1] = 302;
+    world.x[2] = 398; world.y[2] = 305;
+
+    // Particle 0 heading right, neighbors heading up
+    world.vx[0] = 100; world.vy[0] = 0;
+    world.vx[1] = 0;   world.vy[1] = 100;
+    world.vx[2] = 0;   world.vy[2] = 100;
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const align = new AlignmentForce(1.0, 80); // strength=1 for clear calculation
+    align.apply(world, grid, 1 / 60);
+
+    // Particle 0 should be steered toward average neighbor heading
+    // Average of neighbors (p1, p2) vx = (0+0)/2 = 0, vy = (100+100)/2 = 100
+    // Steer = (avgVx - vx0, avgVy - vy0) = (0-100, 100-0) = (-100, 100)
+    // dv = steer * strength * dt = (-100, 100) * 1.0 * 1/60 ≈ (-1.667, 1.667)
+    expect(world.vx[0]).toBeCloseTo(100 + (-100) * 1.0 / 60, 3);
+    expect(world.vy[0]).toBeCloseTo(0 + (100) * 1.0 / 60, 3);
+  });
+
+  it('aligned neighbors converge headings over time', () => {
+    // Start with particles heading in different directions
+    const cfg = defaultConfig({ types: [{ count: 5, color: '#f00', radius: 3, initialSpeed: 60, maxSpeed: 200 }] });
+    const world = new World(cfg);
+
+    // Cluster all particles close together
+    for (let i = 0; i < 5; i++) {
+      world.x[i] = 400 + i * 2;
+      world.y[i] = 300 + i * 2;
+    }
+    // Set diverse velocities
+    world.vx[0] = 100; world.vy[0] = 0;
+    world.vx[1] = 0;   world.vy[1] = 100;
+    world.vx[2] = -100; world.vy[2] = 0;
+    world.vx[3] = 0;   world.vy[3] = -100;
+    world.vx[4] = 70;  world.vy[4] = 70;
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+
+    const align = new AlignmentForce(5.0, 80);
+    const drag = new DragForce(2.0);
+    const dt = 1 / 60;
+
+    // Run for 2 seconds (120 steps)
+    for (let step = 0; step < 120; step++) {
+      grid.rebuild(world);
+      align.apply(world, grid, dt);
+      drag.apply(world, grid, dt);
+      world.step(dt);
+    }
+
+    // After alignment, all particles should have similar headings
+    // Measure angular divergence: max difference in atan2(vy, vx)
+    const headings = [];
+    for (let i = 0; i < 5; i++) {
+      const speed = Math.sqrt(world.vx[i] ** 2 + world.vy[i] ** 2);
+      if (speed > 0.1) {
+        headings.push(Math.atan2(world.vy[i], world.vx[i]));
+      }
+    }
+
+    // All headings should be within 0.5 radians of the mean
+    if (headings.length >= 2) {
+      const meanHeading = headings.reduce((a, b) => a + b, 0) / headings.length;
+      for (const h of headings) {
+        let diff = Math.abs(h - meanHeading);
+        if (diff > Math.PI) diff = 2 * Math.PI - diff;
+        expect(diff).toBeLessThan(0.5);
+      }
+    }
+  });
+
+  it('does not affect different types (same-type only by default)', () => {
+    const cfg = defaultConfig({ types: [
+      { count: 2, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 500 },
+      { count: 1, color: '#0f0', radius: 3, initialSpeed: 0, maxSpeed: 500 },
+    ]});
+    const world = new World(cfg);
+
+    // Place all close together
+    world.x[0] = 400; world.y[0] = 300;
+    world.x[1] = 402; world.y[1] = 300;
+    world.x[2] = 404; world.y[2] = 300; // type 1
+
+    // All heading differently
+    world.vx[0] = 100; world.vy[0] = 0;   // type 0
+    world.vx[1] = 0;   world.vy[1] = 100;  // type 0
+    world.vx[2] = -50;  world.vy[2] = -50;  // type 1 — should NOT influence type 0
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const align = new AlignmentForce(1.0, 80, false); // crossType=false
+    align.apply(world, grid, 1 / 60);
+
+    // Particle 0 should only average with particle 1 (same type)
+    // Average of p1: vx=0, vy=100
+    // Steer for p0: (0-100, 100-0) = (-100, 100)
+    // dv = (-100, 100) * 1.0 * 1/60
+    expect(world.vx[0]).toBeCloseTo(100 + (-100) / 60, 3);
+    expect(world.vy[0]).toBeCloseTo(0 + 100 / 60, 3);
+  });
+
+  it('crossType=true aligns across different types', () => {
+    const cfg = defaultConfig({ types: [
+      { count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 500 },
+      { count: 2, color: '#0f0', radius: 3, initialSpeed: 0, maxSpeed: 500 },
+    ]});
+    const world = new World(cfg);
+
+    // Place all close together
+    world.x[0] = 400; world.y[0] = 300;
+    world.x[1] = 402; world.y[1] = 300;
+    world.x[2] = 404; world.y[2] = 300;
+
+    world.vx[0] = 100; world.vy[0] = 0;   // type 0
+    world.vx[1] = 0;   world.vy[1] = 100;  // type 1
+    world.vx[2] = 0;   world.vy[2] = 100;  // type 1
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const align = new AlignmentForce(1.0, 80, true); // crossType=true
+    align.apply(world, grid, 1 / 60);
+
+    // Particle 0 should average with BOTH type 1 particles
+    // Average: vx = (0+0)/2 = 0, vy = (100+100)/2 = 100
+    // Steer: (0-100, 100-0) = (-100, 100)
+    expect(world.vx[0]).toBeCloseTo(100 + (-100) / 60, 3);
+    expect(world.vy[0]).toBeCloseTo(0 + 100 / 60, 3);
+  });
+
+  it('does not affect particles outside alignment radius', () => {
+    const cfg = defaultConfig({ types: [{ count: 2, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 500 }] });
+    const world = new World(cfg);
+
+    // Place particles far apart (200 units)
+    world.x[0] = 100; world.y[0] = 300;
+    world.x[1] = 300; world.y[1] = 300;
+
+    world.vx[0] = 50; world.vy[0] = 0;
+    world.vx[1] = 0;  world.vy[1] = 50;
+
+    const grid = new SpatialHashGrid(W, H, 250, 10);
+    grid.rebuild(world);
+
+    const align = new AlignmentForce(1.0, 80); // radius=80, particles 200 apart
+    align.apply(world, grid, 1 / 60);
+
+    // No change — particles are outside alignment radius
+    expect(world.vx[0]).toBe(50);
+    expect(world.vy[0]).toBe(0);
+  });
+
+  it('works in ForcePipeline', () => {
+    const cfg = defaultConfig({ types: [
+      { count: 30, color: '#f00', radius: 3, initialSpeed: 60, maxSpeed: 200 },
+    ]});
+    const world = new World(cfg);
+    const grid = new SpatialHashGrid(W, H, 100, 50);
+
+    const pipeline = new ForcePipeline();
+    pipeline.add(new AlignmentForce(60, 80));
+    pipeline.add(new DragForce(1.5));
+
+    const dt = 1 / 60;
+    for (let step = 0; step < 300; step++) {
+      grid.rebuild(world);
+      pipeline.step(world, grid, dt);
+      world.step(dt);
+    }
+
+    // Should be stable
+    expect(world.simTime).toBeGreaterThan(4);
+    for (let i = 0; i < world.count; i++) {
+      const speed = Math.sqrt(world.vx[i] ** 2 + world.vy[i] ** 2);
+      expect(speed).toBeLessThan(1000);
+    }
+  });
+
+  it('re-uses internal arrays (no reallocation after first apply)', () => {
+    const cfg = defaultConfig({ types: [{ count: 10, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 }] });
+    const world = new World(cfg);
+    const grid = new SpatialHashGrid(W, H, 100, 20);
+    grid.rebuild(world);
+
+    const align = new AlignmentForce(50, 80);
+
+    // First apply — allocates
+    align.apply(world, grid, 1 / 60);
+
+    // Second apply — should not reallocate
+    // We can't directly test this, but we verify correctness is maintained
+    const vx0Before = world.vx[0];
+    const vy0Before = world.vy[0];
+
+    align.apply(world, grid, 1 / 60);
+
+    // Velocities should have changed further (alignment keeps pushing)
+    // unless all particles are perfectly aligned already
+    // Just verify no crash and data is still valid (not NaN)
+    for (let i = 0; i < world.count; i++) {
+      expect(isNaN(world.vx[i])).toBe(false);
+      expect(isNaN(world.vy[i])).toBe(false);
+    }
+  });
+
+  it('particles already aligned experience minimal force', () => {
+    const cfg = defaultConfig({ types: [{ count: 5, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const world = new World(cfg);
+
+    // Place close together, all heading same direction
+    for (let i = 0; i < 5; i++) {
+      world.x[i] = 400 + i * 3;
+      world.y[i] = 300;
+      world.vx[i] = 80;
+      world.vy[i] = 20;
+    }
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const vxBefore = world.vx[0];
+    const vyBefore = world.vy[0];
+
+    const align = new AlignmentForce(1.0, 80);
+    align.apply(world, grid, 1 / 60);
+
+    // Since all velocities are identical, avgV = currentV → steer = 0
+    expect(world.vx[0]).toBeCloseTo(vxBefore, 10);
+    expect(world.vy[0]).toBeCloseTo(vyBefore, 10);
   });
 });
