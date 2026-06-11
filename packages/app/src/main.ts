@@ -4,6 +4,10 @@
  * Bootstraps the simulation core and renderer.
  * Three species: prey (green), predator (red), parasite (purple).
  * Predator eats prey. Parasite infects prey. Prey flocks with prey.
+ *
+ * CRT-12: Controls UI overlay
+ * CRT-13: Autosave + exact resume
+ * CRT-14: Export/import config files
  */
 
 import {
@@ -30,8 +34,15 @@ import {
   InteractionRuleMatrix,
   FORCE_FLAGS,
   forceFlags,
+  // Config schema (CRT-11)
+  serializeConfig,
+  deserializeConfig,
+  applyConfig,
+  type CritteriumConfig,
 } from '@critterium/core';
 import { CritteriumRenderer, type SpeciesVisual } from '@critterium/render';
+import { createControlsPanel, type ControlsPanelOptions } from './controls.js';
+import { autosave, loadAutosave, clearAutosave, exportConfig, importConfig } from './persistence.js';
 
 // ─── Species Definitions ─────────────────────────────────────
 
@@ -200,28 +211,49 @@ function onError(err: unknown): void {
 // ─── Main ─────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  // 1. Create ecosystem world
-  const eco = new EcosystemWorld(CONFIG);
+  // 1. Check for autosave (CRT-13)
+  let eco: EcosystemWorld;
+  let interactionMatrix: InteractionMatrix;
+  let useAutosave = false;
+  const savedConfig = loadAutosave();
+
+  if (savedConfig) {
+    try {
+      const validated = deserializeConfig(savedConfig as any);
+      const applied = applyConfig(validated);
+      eco = applied.eco;
+      interactionMatrix = applied.matrix;
+      useAutosave = true;
+      console.log('[Critterium] Restored from autosave');
+      clearAutosave();
+    } catch {
+      console.warn('[Critterium] Autosave restore failed, starting fresh');
+      eco = new EcosystemWorld(CONFIG);
+      interactionMatrix = buildInteractionMatrix();
+    }
+  } else {
+    eco = new EcosystemWorld(CONFIG);
+    interactionMatrix = buildInteractionMatrix();
+  }
 
   // 2. Build physics forces
-  const interactionMatrix = buildInteractionMatrix();
   const pairwiseForce = new PairwiseForce(interactionMatrix);
   const dragForce = new DragForce(0.8);
   const wanderForce = new WanderForce(40, 2.5);
 
   // 3. Spatial hash grid
   const grid = new SpatialHashGrid(
-    CONFIG.width,
-    CONFIG.height,
+    eco.config.width,
+    eco.config.height,
     150,
-    CONFIG.populationCap,
+    eco.config.populationCap,
   );
 
   // 4. Create renderer
   const renderer = await CritteriumRenderer.create(
     SPECIES_VISUALS,
     [...SPECIES_NAMES],
-    CONFIG.populationCap,
+    eco.config.populationCap,
   );
 
   // Attach canvas to DOM
@@ -233,15 +265,34 @@ async function main(): Promise<void> {
   // 5. Simulation loop with freeze detection
   const FIXED_DT = 1 / 60;
   const MAX_FRAME_DT = 0.1;
-  const MAX_ACCUMULATOR_STEPS = 5; // Cap steps to prevent death spiral
-  const FREEZE_THRESHOLD_MS = 500; // If a frame takes >500ms, likely froze
+  const MAX_ACCUMULATOR_STEPS = 5;
+  const FREEZE_THRESHOLD_MS = 500;
   let accumulator = 0;
   let lastTime = performance.now();
   let totalSimTime = 0;
   let stepCount = 0;
+  let paused = false;
+
+  function getCurrentConfig(): CritteriumConfig {
+    return serializeConfig(eco, interactionMatrix, [dragForce, wanderForce]);
+  }
+
+  function doAutosave(): void {
+    try {
+      const config = getCurrentConfig();
+      autosave(config);
+    } catch {
+      // Silently ignore autosave failures
+    }
+  }
 
   function loop(now: number): void {
     try {
+      if (paused) {
+        requestAnimationFrame(loop);
+        return;
+      }
+
       const frameDt = Math.min((now - lastTime) / 1000, MAX_FRAME_DT);
       lastTime = now;
 
@@ -253,7 +304,6 @@ async function main(): Promise<void> {
           console.warn('[Critterium] Freeze detected — resetting accumulator');
           accumulator = 0;
           consecutiveSlowFrames = 0;
-          // Don't schedule another frame immediately — give browser a breath
           setTimeout(() => {
             freezeDetected = false;
             lastTime = performance.now();
@@ -306,10 +356,111 @@ async function main(): Promise<void> {
     }
   }
 
+  // 6. Wire controls panel (CRT-12)
+  const controlsPanel = createControlsPanel({
+    speciesCount: 3,
+    speciesNames: [...SPECIES_NAMES],
+    onTogglePause: (p: boolean) => {
+      paused = p;
+      if (p) {
+        doAutosave();
+      }
+    },
+    onReset: () => {
+      eco = new EcosystemWorld(CONFIG);
+      interactionMatrix = buildInteractionMatrix();
+      grid.rebuild(eco.world);
+      clearAutosave();
+    },
+    onReseed: () => {
+      const newSeed = Math.floor(Math.random() * 2147483647);
+      const newConfig = { ...CONFIG, seed: newSeed };
+      eco = new EcosystemWorld(newConfig);
+      interactionMatrix = buildInteractionMatrix();
+      grid.rebuild(eco.world);
+    },
+    onPopulationCapChange: (cap: number) => {
+      (eco.config as { populationCap: number }).populationCap = cap;
+    },
+    onForceChange: (forceId: string, param: string, value: number) => {
+      if (forceId === 'drag' && param === 'coefficient') {
+        (dragForce.params as Record<string, unknown>).coefficient = value;
+      } else if (forceId === 'wander' && param === 'strength') {
+        (wanderForce.params as Record<string, unknown>).strength = value;
+      } else if (forceId === 'wander' && param === 'rate') {
+        (wanderForce.params as Record<string, unknown>).rate = value;
+      }
+    },
+    onMatrixChange: (i: number, j: number, strength: number) => {
+      const existing = interactionMatrix.get(i, j);
+      if (existing) {
+        interactionMatrix.set(i, j, { ...existing, strength });
+      } else {
+        interactionMatrix.set(i, j, { strength, radius: 100, falloff: 'linear' });
+      }
+    },
+    onRandomizeMatrix: () => {
+      interactionMatrix = new InteractionMatrix(3);
+      for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 3; j++) {
+          if (i === j) continue;
+          const str = Math.round((Math.random() - 0.5) * 200);
+          if (Math.abs(str) > 10) {
+            interactionMatrix.set(i, j, {
+              strength: str,
+              radius: 50 + Math.random() * 100,
+              falloff: 'linear',
+            });
+          }
+        }
+      }
+      // Update pairwiseForce's matrix reference
+      (pairwiseForce as { matrix: InteractionMatrix }).matrix = interactionMatrix;
+    },
+    onExport: () => {
+      const config = getCurrentConfig();
+      exportConfig(config, 'critterium-config.json');
+    },
+    onImport: async () => {
+      const imported = await importConfig();
+      if (imported) {
+        try {
+          const validated = deserializeConfig(imported as any);
+          const applied = applyConfig(validated);
+          eco = applied.eco;
+          interactionMatrix = applied.matrix;
+          (pairwiseForce as { matrix: InteractionMatrix }).matrix = interactionMatrix;
+          grid.rebuild(eco.world);
+        } catch (err) {
+          console.error('[Critterium] Import failed:', err);
+        }
+      }
+    },
+  });
+
+  // Mount controls panel
+  if (appEl) {
+    appEl.appendChild(controlsPanel);
+  }
+
+  // 7. Autosave wiring (CRT-13)
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      doAutosave();
+    }
+  });
+
+  window.addEventListener('beforeunload', () => {
+    doAutosave();
+  });
+
   console.log('Critterium — a living world in your pocket');
   console.log(`Species: ${SPECIES_NAMES.join(', ')}`);
   console.log(`Initial particles: ${eco.aliveCount}`);
-  console.log(`World: ${CONFIG.width}×${CONFIG.height}`);
+  console.log(`World: ${eco.config.width}×${eco.config.height}`);
+  if (useAutosave) {
+    console.log('[Critterium] Resumed from autosave');
+  }
 
   requestAnimationFrame(loop);
 }

@@ -1083,3 +1083,7 @@ export { processReproduction, processInfection, infectParticle } from './lifecyc
 export type { EcosystemStepResult } from './lifecycle.js';
 export { InteractionRuleMatrix, FORCE_FLAGS, NO_INTERACTION, forceFlags, decodeForceFlags } from './interaction-rules.js';
 export type { ForceType, InteractionRule as RuleInteractionRule } from './interaction-rules.js';
+export { PointerForce } from './pointer-force.js';
+export type { PointerParams } from './pointer-force.js';
+export { serializeConfig, deserializeConfig, applyConfig } from './config-schema.js';
+export type { CritteriumConfig, JsonSpeciesConfig, JsonForcesConfig, JsonInteractionEntry, JsonSnapshot, AppliedConfig } from './config-schema.js';
