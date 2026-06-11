@@ -190,11 +190,28 @@ describe('FreeList', () => {
     expect(list.isEmpty).toBe(true);
   });
 
-  it('throws on overflow', () => {
+  it('auto-grows on overflow', () => {
     const list = new FreeList(2);
     list.push(0);
     list.push(1);
-    expect(() => list.push(2)).toThrow('FreeList overflow');
+    // No longer throws — auto-grows
+    list.push(2);
+    expect(list.size).toBe(3);
+    expect(list.pop()).toBe(2);
+    expect(list.pop()).toBe(1);
+    expect(list.pop()).toBe(0);
+  });
+
+  it('grow() expands capacity', () => {
+    const list = new FreeList(2);
+    list.push(0);
+    list.push(1);
+    list.grow(10);
+    // Existing entries preserved
+    expect(list.size).toBe(2);
+    // Can now push more
+    for (let i = 2; i < 10; i++) list.push(i);
+    expect(list.size).toBe(10);
   });
 });
 

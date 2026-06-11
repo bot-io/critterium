@@ -208,17 +208,25 @@ export interface EcosystemSnapshot {
  * Uses a stack-based free list backed by a Uint32Array.
  */
 export class FreeList {
-  private readonly slots: Uint32Array;
+  private slots: Uint32Array;
   private top: number = 0;
 
   constructor(capacity: number) {
     this.slots = new Uint32Array(capacity);
   }
 
-  /** Push a freed slot index. */
+  /** Grow internal storage to at least `minCapacity`. */
+  grow(minCapacity: number): void {
+    if (minCapacity <= this.slots.length) return;
+    const newSlots = new Uint32Array(minCapacity);
+    newSlots.set(this.slots.subarray(0, this.top));
+    this.slots = newSlots;
+  }
+
+  /** Push a freed slot index. Auto-grows if needed. */
   push(index: number): void {
     if (this.top >= this.slots.length) {
-      throw new Error('FreeList overflow');
+      this.grow(this.slots.length * 2);
     }
     this.slots[this.top++] = index;
   }

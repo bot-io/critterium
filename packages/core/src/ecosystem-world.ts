@@ -304,6 +304,8 @@ export class EcosystemWorld {
     newEco.infectionTime.set(oldEco.infectionTime);
     // Replace internal reference (need to cast away readonly)
     (this as { eco: EcosystemState }).eco = newEco;
+    // Grow free list to match
+    this.freeList.grow(newCapacity);
   }
 
   /** Ensure world arrays can hold up to `capacity` particles. */
