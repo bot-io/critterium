@@ -3,7 +3,27 @@
  *
  * Bootstraps the simulation core and renderer.
  * Three species: prey (green), predator (red), parasite (purple).
- * Predator eats prey. Parasite infects prey. Prey flocks with prey.
+ *
+ * Default 3-type config produces emergent behaviors:
+ * - Prey flock together (same-type attract) and flee from predators/parasites
+ * - Predators chase prey (cross-type attract) and space out from each other
+ * - Parasites seek prey (cross-type attract) to spread infection
+ *
+ * Interaction matrix (asymmetric, drives chase/flee):
+ * ┌──────────────┬─────────────────┬─────────────────┬─────────────────┐
+ * │              │ Prey (0)        │ Predator (1)    │ Parasite (2)    │
+ * ├──────────────┼─────────────────┼─────────────────┼─────────────────┤
+ * │ Prey →       │ attract 30/80   │ flee -80/120    │ flee -40/80     │
+ * │ Predator →   │ chase 60/150    │ repel -20/50    │ (none)          │
+ * │ Parasite →   │ seek 50/120     │ (none)          │ repel -15/40    │
+ * └──────────────┴─────────────────┴─────────────────┴─────────────────┘
+ * Format: strength (positive=attract, negative=repel) / radius
+ *
+ * Ecosystem dynamics:
+ * - Predators eat prey on contact → gain 40 energy
+ * - Parasites infect prey on contact → prey die after 8s sickness
+ * - All species reproduce via binary fission when energy is sufficient
+ * - Population capped at 600
  */
 
 import {
@@ -19,7 +39,6 @@ import { type EcosystemConfig, type SpeciesConfig, defaultEnergyConfig, defaultL
 import { EcosystemWorld } from '@critterium/core/ecosystem-world';
 import { processEating } from '@critterium/core/eating';
 import { processReproduction, processInfection } from '@critterium/core/lifecycle';
-import { InteractionRuleMatrix, FORCE_FLAGS, forceFlags } from '@critterium/core/interaction-rules';
 import { CritteriumRenderer, type SpeciesVisual } from '@critterium/render';
 
 // ─── Species Definitions ─────────────────────────────────────
@@ -202,7 +221,7 @@ async function main(): Promise<void> {
     appEl.appendChild(renderer.app.canvas as HTMLCanvasElement);
   }
 
-  // 5. Simulation loop
+  // 5. Simulation loop with interpolation
   const FIXED_DT = 1 / 60;
   const MAX_FRAME_DT = 0.1;
   let accumulator = 0;
@@ -212,6 +231,10 @@ async function main(): Promise<void> {
   function loop(now: number): void {
     const frameDt = Math.min((now - lastTime) / 1000, MAX_FRAME_DT);
     lastTime = now;
+
+    // Store previous positions for interpolation (before sim step)
+    renderer.storePreviousPositions(eco.world);
+
     accumulator += frameDt;
 
     let stepsThisFrame = 0;
@@ -238,8 +261,11 @@ async function main(): Promise<void> {
       stepsThisFrame++;
     }
 
-    // Render
-    renderer.update(eco.world, eco.eco, frameDt);
+    // Interpolation alpha: how far between the last fixed step and the next
+    const alpha = accumulator / FIXED_DT;
+
+    // Render with interpolation
+    renderer.update(eco.world, eco.eco, frameDt, alpha);
 
     requestAnimationFrame(loop);
   }
