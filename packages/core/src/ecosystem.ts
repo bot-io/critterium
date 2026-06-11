@@ -56,6 +56,8 @@ export interface LifecycleConfig {
   reproductionCooldownSec: number;
   /** Seconds after infection before dying. 0 = immune to sickness death. */
   sicknessDurationSec: number;
+  /** Radius within which an infected particle spreads sickness. 0 = no contagion. */
+  contagionRadius: number;
 }
 
 /** Diet configuration per species. */
@@ -260,6 +262,7 @@ export function defaultLifecycleConfig(overrides?: Partial<LifecycleConfig>): Li
     starvationDamagePerSec: 10,
     reproductionCooldownSec: 5,
     sicknessDurationSec: 10,
+    contagionRadius: 20,
     ...overrides,
   };
 }
