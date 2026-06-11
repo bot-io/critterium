@@ -781,3 +781,292 @@ export class BoundaryForce implements Force {
     world.applyBoundaries();
   }
 }
+
+// ─── Wander Force ────────────────────────────────────────────
+
+/** Wander force parameters. */
+export interface WanderParams {
+  [key: string]: unknown;
+  /**
+   * Strength of the wander steering force.
+   * Higher values produce more erratic motion.
+   * Typical range: 20–200.
+   */
+  strength: number;
+  /**
+   * Angular noise rate (radians/sec). Controls how quickly
+   * the wander angle changes. Higher = more frequent direction changes.
+   * Typical range: 1–10.
+   */
+  rate: number;
+}
+
+/**
+ * WanderForce: per-particle smooth noise for organic motion.
+ *
+ * Each particle has its own wander angle that evolves smoothly over time.
+ * The wander angle is perturbed by a noise function derived from the
+ * particle index and current simulation time, producing a smooth random
+ * walk in angle space. The resulting force steers the particle's velocity
+ * toward the wander angle.
+ *
+ * Pre-allocates a Float32Array for per-particle wander angles.
+ * Zero hot-loop allocations.
+ */
+export class WanderForce implements Force {
+  readonly id = 'wander';
+  readonly params: WanderParams;
+
+  /** Per-particle wander angle (radians). Pre-allocated. */
+  private angles: Float32Array;
+
+  /** Per-particle accumulated noise phase. */
+  private phase: Float32Array;
+
+  private capacity: number;
+
+  constructor(strength: number = 80, rate: number = 3) {
+    this.params = { strength, rate };
+    this.angles = new Float32Array(0);
+    this.phase = new Float32Array(0);
+    this.capacity = 0;
+  }
+
+  /**
+   * Ensure internal arrays are large enough for the current particle count.
+   * Only reallocates when count increases (no hot-loop allocations).
+   */
+  private ensureCapacity(count: number): void {
+    if (count <= this.capacity) return;
+    const newAngles = new Float32Array(count);
+    const newPhase = new Float32Array(count);
+    // Preserve existing data
+    if (this.capacity > 0) {
+      newAngles.set(this.angles.subarray(0, this.capacity));
+      newPhase.set(this.phase.subarray(0, this.capacity));
+    }
+    this.angles = newAngles;
+    this.phase = newPhase;
+    this.capacity = count;
+  }
+
+  apply(world: World, _grid: SpatialHashGrid, dt: number): void {
+    const { vx, vy, count } = world;
+    this.ensureCapacity(count);
+
+    const { strength, rate } = this.params;
+    const simTime = world.simTime;
+
+    for (let i = 0; i < count; i++) {
+      // Smooth noise: use sin/cos of a compound phase for smooth random walk.
+      // Phase evolves based on index (unique per particle) and time.
+      const noiseInput = simTime * rate + i * 7.31;
+      // Smooth noise value in [-1, 1]
+      const noise = Math.sin(noiseInput) * 0.5 + Math.sin(noiseInput * 2.17 + 1.3) * 0.3 + Math.sin(noiseInput * 0.73 + 2.1) * 0.2;
+
+      // Update wander angle: integrate noise
+      this.angles[i] += noise * rate * dt;
+
+      // Compute desired heading from wander angle
+      const desiredVx = Math.cos(this.angles[i]);
+      const desiredVy = Math.sin(this.angles[i]);
+
+      // Get current speed to normalize
+      const speed = Math.sqrt(vx[i] * vx[i] + vy[i] * vy[i]);
+      // Steer: add force toward wander direction, scaled by strength
+      if (speed > 0.01) {
+        // Blend between current heading and wander heading
+        vx[i] += desiredVx * strength * dt;
+        vy[i] += desiredVy * strength * dt;
+      } else {
+        // If nearly stationary, give a push in wander direction
+        vx[i] += desiredVx * strength * dt * 2;
+        vy[i] += desiredVy * strength * dt * 2;
+      }
+    }
+  }
+}
+
+// ─── Flow Field Force ────────────────────────────────────────
+
+/** Flow field function type: maps (x, y) to a force vector [fx, fy]. */
+export type FlowFieldFn = (x: number, y: number) => [number, number];
+
+/** Flow field force parameters. */
+export interface FlowFieldParams {
+  [key: string]: unknown;
+  /** Force magnitude multiplier. */
+  strength: number;
+  /** Flow field mode: 'uniform', 'turbulence', or 'custom'. */
+  mode: string;
+  /** Uniform flow direction angle (radians). Used when mode='uniform'. */
+  angle: number;
+  /** Turbulence scale. Used when mode='turbulence'. */
+  turbulenceScale: number;
+}
+
+/**
+ * FlowFieldForce: spatially varying directional force.
+ *
+ * Applies a force at each particle's position based on a flow field function.
+ * Built-in modes:
+ * - 'uniform': constant direction everywhere
+ * - 'turbulence': sin/cos-based pseudo-turbulence field
+ *
+ * Custom flow fields can be provided via setCustomField().
+ *
+ * Zero allocations per step.
+ */
+export class FlowFieldForce implements Force {
+  readonly id = 'flow-field';
+  readonly params: FlowFieldParams;
+
+  private customField: FlowFieldFn | null = null;
+
+  constructor(strength: number = 50, mode: string = 'uniform', angle: number = 0, turbulenceScale: number = 0.01) {
+    this.params = { strength, mode, angle, turbulenceScale };
+  }
+
+  /** Set a custom flow field function. Overrides mode-based field. */
+  setCustomField(fn: FlowFieldFn): void {
+    this.customField = fn;
+  }
+
+  /** Compute the flow field direction at (x, y). Returns [fx, fy] normalized. */
+  private fieldAt(x: number, y: number): [number, number] {
+    if (this.customField) return this.customField(x, y);
+
+    const { mode, angle, turbulenceScale } = this.params;
+    switch (mode) {
+      case 'uniform':
+        return [Math.cos(angle), Math.sin(angle)];
+      case 'turbulence': {
+        // Pseudo-turbulence: sinusoidal field that varies spatially
+        const fx = Math.sin(y * turbulenceScale * 6.28) + Math.cos((x + y) * turbulenceScale * 3.14);
+        const fy = Math.cos(x * turbulenceScale * 6.28) + Math.sin((x - y) * turbulenceScale * 3.14);
+        return [fx, fy];
+      }
+      default:
+        return [0, 0];
+    }
+  }
+
+  apply(world: World, _grid: SpatialHashGrid, dt: number): void {
+    const { x, y, vx, vy, count } = world;
+    const { strength } = this.params;
+
+    for (let i = 0; i < count; i++) {
+      const [fx, fy] = this.fieldAt(x[i], y[i]);
+      vx[i] += fx * strength * dt;
+      vy[i] += fy * strength * dt;
+    }
+  }
+}
+
+// ─── Vortex Force ────────────────────────────────────────────
+
+/** Vortex force parameters. */
+export interface VortexParams {
+  [key: string]: unknown;
+  /** Vortex center x position. */
+  cx: number;
+  /** Vortex center y position. */
+  cy: number;
+  /**
+   * Tangential (swirl) strength. Positive = counter-clockwise, negative = clockwise.
+   * Typical range: 50–500.
+   */
+  strength: number;
+  /**
+   * Radial (inward/outward) component. Positive = outward, negative = inward.
+   * Creates spiral patterns when combined with tangential force.
+   * Typical range: -200 to 200. 0 = pure rotation.
+   */
+  radialStrength: number;
+  /**
+   * Maximum radius of influence. Beyond this, no force is applied.
+   */
+  radius: number;
+  /**
+   * Falloff type for the vortex: 'linear', 'inverse', or 'constant'.
+   */
+  falloff: FalloffType;
+}
+
+/**
+ * VortexForce: swirl force around a point.
+ *
+ * Each particle within `radius` of the center receives a tangential force
+ * (perpendicular to the radius vector) and an optional radial component
+ * (toward or away from center). This creates orbiting/spiral patterns.
+ *
+ * Falloff: force decreases with distance from center based on falloff type.
+ * - 'linear': strongest at center, zero at radius
+ * - 'inverse': strong near center, gradual falloff
+ * - 'constant': uniform strength within radius
+ *
+ * Zero allocations per step.
+ */
+export class VortexForce implements Force {
+  readonly id = 'vortex';
+  readonly params: VortexParams;
+
+  constructor(
+    cx: number = 400,
+    cy: number = 300,
+    strength: number = 150,
+    radialStrength: number = 0,
+    radius: number = 300,
+    falloff: FalloffType = 'linear',
+  ) {
+    this.params = { cx, cy, strength, radialStrength, radius, falloff };
+  }
+
+  apply(world: World, _grid: SpatialHashGrid, dt: number): void {
+    const { x, y, vx, vy, count } = world;
+    const { cx, cy, strength, radialStrength, radius, falloff } = this.params;
+
+    for (let i = 0; i < count; i++) {
+      const dx = x[i] - cx;
+      const dy = y[i] - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist >= radius || dist < 0.001) continue;
+
+      // Normalized direction from center
+      const nx = dx / dist;
+      const ny = dy / dist;
+
+      // Tangential direction (perpendicular, counter-clockwise)
+      const tx = -ny;
+      const ty = nx;
+
+      // Falloff
+      const t = dist / radius;
+      let falloffMultiplier: number;
+      switch (falloff) {
+        case 'linear':
+          falloffMultiplier = 1 - t;
+          break;
+        case 'inverse':
+          falloffMultiplier = 1 / (t + 0.1);
+          break;
+        case 'constant':
+          falloffMultiplier = 1;
+          break;
+      }
+
+      // Tangential force (swirl)
+      const tangentialForce = strength * falloffMultiplier;
+      vx[i] += tx * tangentialForce * dt;
+      vy[i] += ty * tangentialForce * dt;
+
+      // Radial force (inward/outward)
+      if (radialStrength !== 0) {
+        const radialForce = radialStrength * falloffMultiplier;
+        vx[i] += nx * radialForce * dt;
+        vy[i] += ny * radialForce * dt;
+      }
+    }
+  }
+}

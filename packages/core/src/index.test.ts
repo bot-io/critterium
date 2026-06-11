@@ -19,6 +19,9 @@ import {
   DragForce,
   GravityForce,
   BoundaryForce,
+  WanderForce,
+  FlowFieldForce,
+  VortexForce,
 } from './index.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -1641,5 +1644,690 @@ describe('ForcePipeline', () => {
     // vy should be close to terminal velocity
     expect(world.vy[0]).toBeGreaterThan(80);
     expect(world.vy[0]).toBeLessThan(120);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// CRT-6: WanderForce, FlowFieldForce, VortexForce
+// ═══════════════════════════════════════════════════════════════
+
+const W = 800;
+const H = 600;
+
+describe('WanderForce', () => {
+  it('implements Force interface', () => {
+    const wf = new WanderForce();
+    expect(wf.id).toBe('wander');
+    expect(wf.params).toHaveProperty('strength');
+    expect(wf.params).toHaveProperty('rate');
+    expect(typeof wf.apply).toBe('function');
+  });
+
+  it('changes particle velocities over time', () => {
+    const cfg = defaultConfig({ types: [{ count: 5, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 }] });
+    const world = new World(cfg);
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const wander = new WanderForce(100, 3);
+    const dt = 1 / 60;
+
+    // Snapshot initial velocities
+    const vx0 = new Float32Array(world.vx);
+    const vy0 = new Float32Array(world.vy);
+
+    // Run 60 steps (1 second)
+    for (let i = 0; i < 60; i++) {
+      wander.apply(world, grid, dt);
+      world.step(dt);
+    }
+
+    // At least some particles should have changed velocity
+    let changed = 0;
+    for (let i = 0; i < world.count; i++) {
+      if (Math.abs(world.vx[i] - vx0[i]) > 0.1 || Math.abs(world.vy[i] - vy0[i]) > 0.1) {
+        changed++;
+      }
+    }
+    expect(changed).toBeGreaterThan(0);
+  });
+
+  it('higher strength produces larger velocity changes', () => {
+    const makeWorld = () => {
+      const cfg = defaultConfig({ seed: 42, types: [{ count: 10, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 500 }] });
+      return new World(cfg);
+    };
+
+    const grid = new SpatialHashGrid(W, H, 100, 20);
+    const w1 = makeWorld();
+    const w2 = makeWorld();
+    const g1 = new SpatialHashGrid(W, H, 100, 20);
+    const g2 = new SpatialHashGrid(W, H, 100, 20);
+    g1.rebuild(w1);
+    g2.rebuild(w2);
+
+    const weak = new WanderForce(10, 3);
+    const strong = new WanderForce(200, 3);
+    const dt = 1 / 60;
+
+    for (let i = 0; i < 60; i++) {
+      weak.apply(w1, g1, dt);
+      strong.apply(w2, g2, dt);
+      w1.step(dt);
+      w2.step(dt);
+    }
+
+    // Strong wander should produce more speed on average
+    let totalSpeed1 = 0, totalSpeed2 = 0;
+    for (let i = 0; i < 10; i++) {
+      totalSpeed1 += Math.sqrt(w1.vx[i] ** 2 + w1.vy[i] ** 2);
+      totalSpeed2 += Math.sqrt(w2.vx[i] ** 2 + w2.vy[i] ** 2);
+    }
+    expect(totalSpeed2).toBeGreaterThan(totalSpeed1);
+  });
+
+  it('produces smooth motion (no discontinuous jumps)', () => {
+    const cfg = defaultConfig({ types: [{ count: 5, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 }] });
+    const world = new World(cfg);
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const wander = new WanderForce(80, 3);
+    const dt = 1 / 60;
+
+    // Track velocity changes per step
+    let maxDeltaV = 0;
+    for (let step = 0; step < 300; step++) {
+      const prevVx = new Float32Array(world.vx);
+      const prevVy = new Float32Array(world.vy);
+
+      wander.apply(world, grid, dt);
+
+      for (let i = 0; i < world.count; i++) {
+        const dvx = Math.abs(world.vx[i] - prevVx[i]);
+        const dvy = Math.abs(world.vy[i] - prevVy[i]);
+        const delta = Math.sqrt(dvx * dvx + dvy * dvy);
+        if (delta > maxDeltaV) maxDeltaV = delta;
+      }
+
+      world.step(dt);
+    }
+
+    // Max velocity change per step should be bounded
+    // With strength=80, rate=3, dt=1/60: max noise contribution ≈ 80 * 1 * (1/60) ≈ 1.33
+    expect(maxDeltaV).toBeLessThan(5);
+  });
+
+  it('different particles wander independently', () => {
+    const cfg = defaultConfig({ seed: 42, types: [{ count: 10, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 }] });
+    const world = new World(cfg);
+    const grid = new SpatialHashGrid(W, H, 100, 20);
+    grid.rebuild(world);
+
+    const wander = new WanderForce(80, 3);
+    const dt = 1 / 60;
+
+    for (let i = 0; i < 120; i++) {
+      wander.apply(world, grid, dt);
+      world.step(dt);
+    }
+
+    // Check that not all particles have the same velocity (they wander independently)
+    let sameVelocity = true;
+    for (let i = 1; i < world.count; i++) {
+      if (Math.abs(world.vx[i] - world.vx[0]) > 0.01 || Math.abs(world.vy[i] - world.vy[0]) > 0.01) {
+        sameVelocity = false;
+        break;
+      }
+    }
+    expect(sameVelocity).toBe(false);
+  });
+
+  it('zero strength produces no velocity change', () => {
+    const cfg = defaultConfig({ types: [{ count: 5, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 }] });
+    const world = new World(cfg);
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const wander = new WanderForce(0, 3);
+    const prevVx = new Float32Array(world.vx);
+    const prevVy = new Float32Array(world.vy);
+
+    wander.apply(world, grid, 1 / 60);
+
+    for (let i = 0; i < world.count; i++) {
+      expect(world.vx[i]).toBeCloseTo(prevVx[i], 5);
+      expect(world.vy[i]).toBeCloseTo(prevVy[i], 5);
+    }
+  });
+
+  it('default constructor values', () => {
+    const wander = new WanderForce();
+    expect(wander.params.strength).toBe(80);
+    expect(wander.params.rate).toBe(3);
+  });
+
+  it('handles capacity growth correctly', () => {
+    // Start with small world, then verify wander works with larger world
+    const cfg1 = defaultConfig({ types: [{ count: 3, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 }] });
+    const w1 = new World(cfg1);
+    const g1 = new SpatialHashGrid(W, H, 100, 10);
+    g1.rebuild(w1);
+
+    const wander = new WanderForce(80, 3);
+    wander.apply(w1, g1, 1 / 60); // capacity grows to 3
+
+    const cfg2 = defaultConfig({ types: [{ count: 10, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 }] });
+    const w2 = new World(cfg2);
+    const g2 = new SpatialHashGrid(W, H, 100, 20);
+    g2.rebuild(w2);
+
+    // Should grow capacity without errors
+    expect(() => wander.apply(w2, g2, 1 / 60)).not.toThrow();
+  });
+});
+
+describe('FlowFieldForce', () => {
+  it('implements Force interface', () => {
+    const ff = new FlowFieldForce();
+    expect(ff.id).toBe('flow-field');
+    expect(ff.params).toHaveProperty('strength');
+    expect(ff.params).toHaveProperty('mode');
+    expect(typeof ff.apply).toBe('function');
+  });
+
+  it('uniform mode pushes all particles in the same direction', () => {
+    const cfg = defaultConfig({ types: [{ count: 5, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const world = new World(cfg);
+    // Place particles at known positions
+    for (let i = 0; i < 5; i++) {
+      world.x[i] = 100 + i * 100;
+      world.y[i] = 300;
+    }
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    // Push rightward (angle = 0)
+    const flow = new FlowFieldForce(100, 'uniform', 0);
+    flow.apply(world, grid, 1 / 60);
+
+    // All particles should have positive vx, zero vy
+    for (let i = 0; i < 5; i++) {
+      expect(world.vx[i]).toBeGreaterThan(0);
+      expect(world.vy[i]).toBeCloseTo(0, 5);
+    }
+  });
+
+  it('uniform mode with angle π/2 pushes upward', () => {
+    const cfg = defaultConfig({ types: [{ count: 3, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const world = new World(cfg);
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const flow = new FlowFieldForce(100, 'uniform', Math.PI / 2);
+    flow.apply(world, grid, 1 / 60);
+
+    for (let i = 0; i < 3; i++) {
+      expect(world.vy[i]).toBeGreaterThan(0);
+      expect(world.vx[i]).toBeCloseTo(0, 5);
+    }
+  });
+
+  it('turbulence mode produces different forces at different positions', () => {
+    const cfg = defaultConfig({ types: [{ count: 2, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const world = new World(cfg);
+    world.x[0] = 100;
+    world.y[0] = 100;
+    world.x[1] = 500;
+    world.y[1] = 400;
+    world.vx[0] = 0;
+    world.vy[0] = 0;
+    world.vx[1] = 0;
+    world.vy[1] = 0;
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const flow = new FlowFieldForce(100, 'turbulence', 0, 0.01);
+    flow.apply(world, grid, 1 / 60);
+
+    // Particles at different positions should get different forces
+    const sameForce = Math.abs(world.vx[0] - world.vx[1]) < 0.001 && Math.abs(world.vy[0] - world.vy[1]) < 0.001;
+    expect(sameForce).toBe(false);
+  });
+
+  it('custom flow field function', () => {
+    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const world = new World(cfg);
+    world.x[0] = 400;
+    world.y[0] = 300;
+    world.vx[0] = 0;
+    world.vy[0] = 0;
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const flow = new FlowFieldForce(100);
+    // Custom field: always push in (+1, +1) direction
+    flow.setCustomField((_x: number, _y: number) => [1, 1]);
+    flow.apply(world, grid, 1 / 60);
+
+    expect(world.vx[0]).toBeGreaterThan(0);
+    expect(world.vy[0]).toBeGreaterThan(0);
+  });
+
+  it('custom field receives particle position', () => {
+    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const world = new World(cfg);
+    world.x[0] = 250;
+    world.y[0] = 350;
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    let receivedX = 0;
+    let receivedY = 0;
+
+    const flow = new FlowFieldForce(50);
+    flow.setCustomField((x: number, y: number) => {
+      receivedX = x;
+      receivedY = y;
+      return [1, 0];
+    });
+    flow.apply(world, grid, 1 / 60);
+
+    expect(receivedX).toBe(250);
+    expect(receivedY).toBe(350);
+  });
+
+  it('zero strength produces no velocity change', () => {
+    const cfg = defaultConfig({ types: [{ count: 3, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const world = new World(cfg);
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const flow = new FlowFieldForce(0, 'uniform', 0);
+    const prevVx = new Float32Array(world.vx);
+    const prevVy = new Float32Array(world.vy);
+
+    flow.apply(world, grid, 1 / 60);
+
+    for (let i = 0; i < 3; i++) {
+      expect(world.vx[i]).toBeCloseTo(prevVx[i], 5);
+      expect(world.vy[i]).toBeCloseTo(prevVy[i], 5);
+    }
+  });
+
+  it('analytic force check: uniform angle = π pushes in -x direction', () => {
+    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const world = new World(cfg);
+    world.vx[0] = 0;
+    world.vy[0] = 0;
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const strength = 200;
+    const dt = 1 / 60;
+    const flow = new FlowFieldForce(strength, 'uniform', Math.PI);
+    flow.apply(world, grid, dt);
+
+    // cos(π) = -1, so vx should decrease by strength * dt
+    const expectedDv = strength * dt;
+    expect(world.vx[0]).toBeCloseTo(-expectedDv, 3);
+    expect(world.vy[0]).toBeCloseTo(0, 5);
+  });
+
+  it('default constructor values', () => {
+    const flow = new FlowFieldForce();
+    expect(flow.params.strength).toBe(50);
+    expect(flow.params.mode).toBe('uniform');
+    expect(flow.params.angle).toBe(0);
+  });
+
+  it('unknown mode produces no force', () => {
+    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const world = new World(cfg);
+    world.vx[0] = 0;
+    world.vy[0] = 0;
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const flow = new FlowFieldForce(100, 'nonexistent' as string, 0);
+    flow.apply(world, grid, 1 / 60);
+
+    expect(world.vx[0]).toBe(0);
+    expect(world.vy[0]).toBe(0);
+  });
+});
+
+describe('VortexForce', () => {
+  it('implements Force interface', () => {
+    const vf = new VortexForce();
+    expect(vf.id).toBe('vortex');
+    expect(vf.params).toHaveProperty('cx');
+    expect(vf.params).toHaveProperty('cy');
+    expect(vf.params).toHaveProperty('strength');
+    expect(vf.params).toHaveProperty('radialStrength');
+    expect(vf.params).toHaveProperty('radius');
+    expect(vf.params).toHaveProperty('falloff');
+    expect(typeof vf.apply).toBe('function');
+  });
+
+  it('applies tangential force to nearby particle', () => {
+    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const world = new World(cfg);
+
+    // Place particle to the right of vortex center
+    const cx = 400, cy = 300;
+    world.x[0] = cx + 100; // 100 units to the right
+    world.y[0] = cy;
+    world.vx[0] = 0;
+    world.vy[0] = 0;
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    // Positive strength = counter-clockwise
+    const vortex = new VortexForce(cx, cy, 100, 0, 200, 'constant');
+    vortex.apply(world, grid, 1 / 60);
+
+    // Particle is at (cx+100, cy). Tangential (CCW) direction at this point is (0, +1).
+    // So vy should increase, vx should be ~0
+    expect(world.vy[0]).toBeGreaterThan(0);
+    expect(Math.abs(world.vx[0])).toBeLessThan(Math.abs(world.vy[0]) * 0.01); // essentially 0
+  });
+
+  it('analytic tangential force magnitude (constant falloff)', () => {
+    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const world = new World(cfg);
+
+    const cx = 400, cy = 300, dist = 50;
+    world.x[0] = cx; // directly above center
+    world.y[0] = cy - dist;
+    world.vx[0] = 0;
+    world.vy[0] = 0;
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const strength = 300;
+    const dt = 1 / 60;
+    const vortex = new VortexForce(cx, cy, strength, 0, 200, 'constant');
+    vortex.apply(world, grid, dt);
+
+    // Particle at (cx, cy-50) → dx=0, dy=-50 → nx=0, ny=-1
+    // Tangential (CCW): tx = -ny = 1, ty = nx = 0
+    // So vx should increase by strength * dt
+    const expectedDv = strength * dt;
+    expect(world.vx[0]).toBeCloseTo(expectedDv, 3);
+    expect(world.vy[0]).toBeCloseTo(0, 5);
+  });
+
+  it('analytic tangential force magnitude (linear falloff)', () => {
+    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const world = new World(cfg);
+
+    const cx = 400, cy = 300, radius = 200, dist = 80;
+    world.x[0] = cx + dist; // to the right
+    world.y[0] = cy;
+    world.vx[0] = 0;
+    world.vy[0] = 0;
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const strength = 300;
+    const dt = 1 / 60;
+    const vortex = new VortexForce(cx, cy, strength, 0, radius, 'linear');
+    vortex.apply(world, grid, dt);
+
+    // Linear falloff: (1 - 80/200) = 0.6
+    // At (cx+80, cy): dx=80, dy=0 → nx=1, ny=0 → tangential = (0, 1)
+    const expectedDv = strength * (1 - dist / radius) * dt;
+    expect(world.vy[0]).toBeCloseTo(expectedDv, 3);
+    expect(world.vx[0]).toBeCloseTo(0, 5);
+  });
+
+  it('particle beyond radius receives no force', () => {
+    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const world = new World(cfg);
+
+    world.x[0] = 400;
+    world.y[0] = 300;
+    world.vx[0] = 0;
+    world.vy[0] = 0;
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    // Vortex at (0, 0) with radius 50 — particle at (400,300) is way outside
+    const vortex = new VortexForce(0, 0, 500, 0, 50, 'constant');
+    vortex.apply(world, grid, 1 / 60);
+
+    expect(world.vx[0]).toBe(0);
+    expect(world.vy[0]).toBe(0);
+  });
+
+  it('particle at center receives no force', () => {
+    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const world = new World(cfg);
+
+    world.x[0] = 400;
+    world.y[0] = 300;
+    world.vx[0] = 0;
+    world.vy[0] = 0;
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const vortex = new VortexForce(400, 300, 500, 0, 200, 'constant');
+    vortex.apply(world, grid, 1 / 60);
+
+    expect(world.vx[0]).toBe(0);
+    expect(world.vy[0]).toBe(0);
+  });
+
+  it('radial inward component pulls particles toward center', () => {
+    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const world = new World(cfg);
+
+    const cx = 400, cy = 300;
+    world.x[0] = cx + 100; // 100 to the right
+    world.y[0] = cy;
+    world.vx[0] = 0;
+    world.vy[0] = 0;
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    // Negative radialStrength = inward
+    const vortex = new VortexForce(cx, cy, 0, -200, 200, 'constant');
+    vortex.apply(world, grid, 1 / 60);
+
+    // Radial inward at (cx+100, cy): direction toward center = (-1, 0)
+    expect(world.vx[0]).toBeLessThan(0);
+  });
+
+  it('radial outward component pushes particles away from center', () => {
+    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const world = new World(cfg);
+
+    const cx = 400, cy = 300;
+    world.x[0] = cx + 100;
+    world.y[0] = cy;
+    world.vx[0] = 0;
+    world.vy[0] = 0;
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    // Positive radialStrength = outward
+    const vortex = new VortexForce(cx, cy, 0, 200, 200, 'constant');
+    vortex.apply(world, grid, 1 / 60);
+
+    // Radial outward at (cx+100, cy): direction away from center = (+1, 0)
+    expect(world.vx[0]).toBeGreaterThan(0);
+  });
+
+  it('spiral pattern with combined tangential + radial', () => {
+    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 500 }] });
+    const world = new World(cfg);
+
+    const cx = 400, cy = 300;
+    world.x[0] = cx + 80;
+    world.y[0] = cy;
+    world.vx[0] = 0;
+    world.vy[0] = 0;
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    // CCW rotation + inward pull = spiral inward
+    const vortex = new VortexForce(cx, cy, 200, -100, 200, 'linear');
+    const dt = 1 / 60;
+
+    for (let step = 0; step < 60; step++) {
+      vortex.apply(world, grid, dt);
+      world.step(dt);
+      grid.rebuild(world);
+    }
+
+    // After 1 second with inward radial, particle should be closer to center
+    const finalDist = Math.sqrt((world.x[0] - cx) ** 2 + (world.y[0] - cy) ** 2);
+    // Should have moved somewhat (spiral is happening)
+    expect(finalDist).not.toBeCloseTo(80, 0);
+  });
+
+  it('inverse falloff produces stronger force near center', () => {
+    const cfg = defaultConfig({ types: [{ count: 2, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 10000 }] });
+    const world = new World(cfg);
+
+    const cx = 400, cy = 300;
+    // Particle A: close to center
+    world.x[0] = cx + 20;
+    world.y[0] = cy;
+    // Particle B: far from center
+    world.x[1] = cx + 150;
+    world.y[1] = cy;
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const vortex = new VortexForce(cx, cy, 100, 0, 200, 'inverse');
+    vortex.apply(world, grid, 1 / 60);
+
+    // Near particle should get more force (inverse falloff)
+    expect(Math.abs(world.vy[0])).toBeGreaterThan(Math.abs(world.vy[1]));
+  });
+
+  it('negative strength produces clockwise rotation', () => {
+    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const world = new World(cfg);
+
+    const cx = 400, cy = 300;
+    world.x[0] = cx + 100;
+    world.y[0] = cy;
+    world.vx[0] = 0;
+    world.vy[0] = 0;
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    // Negative = clockwise
+    const vortex = new VortexForce(cx, cy, -100, 0, 200, 'constant');
+    vortex.apply(world, grid, 1 / 60);
+
+    // CW rotation at (cx+100, cy): tangential should be (0, -1)
+    expect(world.vy[0]).toBeLessThan(0);
+  });
+
+  it('zero strength and zero radial produce no force', () => {
+    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const world = new World(cfg);
+
+    world.x[0] = 450;
+    world.y[0] = 300;
+
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const vortex = new VortexForce(400, 300, 0, 0, 200, 'constant');
+    vortex.apply(world, grid, 1 / 60);
+
+    expect(world.vx[0]).toBe(0);
+    expect(world.vy[0]).toBe(0);
+  });
+
+  it('default constructor values', () => {
+    const vf = new VortexForce();
+    expect(vf.params.cx).toBe(400);
+    expect(vf.params.cy).toBe(300);
+    expect(vf.params.strength).toBe(150);
+    expect(vf.params.radialStrength).toBe(0);
+    expect(vf.params.radius).toBe(300);
+    expect(vf.params.falloff).toBe('linear');
+  });
+});
+
+describe('CRT-6: Integration — Wander + FlowField + Vortex together', () => {
+  it('pipeline with all three forces runs stably', () => {
+    const cfg = defaultConfig({ types: [
+      { count: 50, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 },
+      { count: 50, color: '#0f0', radius: 3, initialSpeed: 40, maxSpeed: 180 },
+    ]});
+    const world = new World(cfg);
+    const grid = new SpatialHashGrid(W, H, 100, 200);
+    grid.rebuild(world);
+
+    const pipeline = new ForcePipeline();
+    pipeline.add(new WanderForce(60, 2));
+    pipeline.add(new FlowFieldForce(30, 'turbulence', 0, 0.01));
+    pipeline.add(new VortexForce(400, 300, 80, -30, 300, 'linear'));
+    pipeline.add(new DragForce(1.5));
+
+    const dt = 1 / 60;
+    for (let step = 0; step < 600; step++) { // 10 seconds
+      pipeline.step(world, grid, dt);
+      world.step(dt);
+      grid.rebuild(world);
+    }
+
+    // All particles should still be within reasonable bounds
+    expect(world.simTime).toBeGreaterThan(9);
+    for (let i = 0; i < world.count; i++) {
+      const speed = Math.sqrt(world.vx[i] ** 2 + world.vy[i] ** 2);
+      expect(speed).toBeLessThan(1000);
+    }
+  });
+
+  it('wander + vortex produces orbiting + wandering behavior', () => {
+    const cfg = defaultConfig({ types: [{ count: 5, color: '#f00', radius: 3, initialSpeed: 30, maxSpeed: 200 }] });
+    const world = new World(cfg);
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const pipeline = new ForcePipeline();
+    pipeline.add(new WanderForce(40, 2));
+    pipeline.add(new VortexForce(400, 300, 120, 0, 400, 'linear'));
+    pipeline.add(new DragForce(2.0));
+
+    const dt = 1 / 60;
+    const positions: { x: number; y: number }[] = [];
+
+    for (let step = 0; step < 180; step++) { // 3 seconds
+      pipeline.step(world, grid, dt);
+      world.step(dt);
+      grid.rebuild(world);
+
+      if (step === 0 || step === 89 || step === 179) {
+        positions.push({ x: world.x[0], y: world.y[0] });
+      }
+    }
+
+    // Particle should have moved (not stuck in same place)
+    expect(positions[1].x).not.toBeCloseTo(positions[0].x, 0);
+    expect(positions[2].x).not.toBeCloseTo(positions[1].x, 0);
   });
 });
