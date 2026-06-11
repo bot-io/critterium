@@ -89,6 +89,11 @@ export class EcosystemWorld {
     this._highWaterMark = totalCount;
   }
 
+  /** Current highest used particle index (may have gaps from kills). */
+  get highWaterMark(): number {
+    return this._highWaterMark;
+  }
+
   /** Number of currently alive particles. */
   get aliveCount(): number {
     return this._aliveCount;
