@@ -14,6 +14,7 @@ import {
   ALIVE,
   DEAD,
 } from './ecosystem.js';
+import { processReproduction } from './lifecycle.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
@@ -336,5 +337,101 @@ describe('EcosystemWorld with predatorPreyConfig', () => {
     const eco = new EcosystemWorld(cfg);
     expect(eco.species[0].diet.canEat.has(1)).toBe(true);
     expect(eco.species[1].diet.canEat.size).toBe(0);
+  });
+});
+
+// ─── Hard Cap Enforcement ────────────────────────────────────────
+
+describe('Hard population cap enforcement', () => {
+  it('constructor clamps initial count to populationCap', () => {
+    // 10+10+10 = 30, but cap is 15
+    const cfg: EcosystemConfig = {
+      width: 800,
+      height: 600,
+      boundaryMode: 'bounce',
+      seed: 42,
+      populationCap: 15,
+      species: [
+        { ...singleSpeciesConfig(10, 15).species[0], count: 10, name: 'A' },
+        { ...singleSpeciesConfig(10, 15).species[0], count: 10, name: 'B' },
+        { ...singleSpeciesConfig(10, 15).species[0], count: 10, name: 'C' },
+      ],
+      interactionRules: [],
+    };
+    const eco = new EcosystemWorld(cfg);
+    // aliveCount must not exceed populationCap
+    expect(eco.aliveCount).toBeLessThanOrEqual(15);
+    // Must have at least 1 of each species
+    const types = new Set<number>();
+    for (let i = 0; i < eco.highWaterMark; i++) {
+      if (eco.eco.alive[i] === ALIVE) types.add(eco.world.type[i]);
+    }
+    expect(types.size).toBe(3);
+  });
+
+  it('spawn cannot exceed populationCap even with free list exhausted', () => {
+    // Start with 5 particles, cap 10
+    const eco = new EcosystemWorld(singleSpeciesConfig(5, 10));
+    // Spawn 5 more to reach cap
+    for (let i = 0; i < 5; i++) {
+      expect(eco.spawn(0)).toBeGreaterThanOrEqual(0);
+    }
+    expect(eco.aliveCount).toBe(10);
+    // Next spawn rejected
+    expect(eco.spawn(0)).toBe(-1);
+    expect(eco.aliveCount).toBe(10);
+  });
+
+  it('spawn cannot grow highWaterMark beyond populationCap', () => {
+    // Start with 5 particles, cap 8
+    const eco = new EcosystemWorld(singleSpeciesConfig(5, 8));
+    // Spawn 3 to fill cap (no kills, so hwm grows)
+    for (let i = 0; i < 3; i++) {
+      expect(eco.spawn(0)).toBeGreaterThanOrEqual(0);
+    }
+    expect(eco.aliveCount).toBe(8);
+    expect(eco.highWaterMark).toBeLessThanOrEqual(8);
+    // Even after kills, spawn respects cap
+    eco.kill(0);
+    eco.kill(1);
+    expect(eco.aliveCount).toBe(6);
+    // Can spawn again (reuses free slots)
+    expect(eco.spawn(0)).toBeGreaterThanOrEqual(0);
+    expect(eco.aliveCount).toBe(7);
+  });
+
+  it('reproduction cannot exceed populationCap', () => {
+    // Start with 8 particles, cap 10
+    const cfg: EcosystemConfig = {
+      width: 800,
+      height: 600,
+      boundaryMode: 'bounce',
+      seed: 42,
+      populationCap: 10,
+      species: [{
+        ...singleSpeciesConfig(8, 10).species[0],
+        count: 8,
+        energy: defaultEnergyConfig({
+          initialEnergy: 200,
+          reproductionCost: 10,
+        }),
+        lifecycle: defaultLifecycleConfig({
+          reproductionCooldownSec: 0, // no cooldown
+        }),
+      }],
+      interactionRules: [],
+    };
+    const eco = new EcosystemWorld(cfg);
+    // All particles have energy and no cooldown — reproduction should work
+    let totalBorn = 0;
+    for (let frame = 0; frame < 5; frame++) {
+      const born = processReproduction(eco);
+      totalBorn += born;
+      eco.processLifecycle(1 / 60);
+    }
+    // Must not exceed cap
+    expect(eco.aliveCount).toBeLessThanOrEqual(10);
+    // Should have spawned exactly 2 (8 + 2 = cap)
+    expect(totalBorn).toBe(2);
   });
 });

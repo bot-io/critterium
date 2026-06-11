@@ -59,8 +59,17 @@ export class EcosystemWorld {
     this.species = config.species;
     this.rng = createRng(config.seed);
 
-    // Calculate total initial particles
-    const totalCount = config.species.reduce((sum, s) => sum + s.count, 0);
+    // Calculate total initial particles, capped to populationCap
+    const rawTotal = config.species.reduce((sum, s) => sum + s.count, 0);
+    let totalCount = Math.min(rawTotal, config.populationCap);
+
+    // If capped, proportionally reduce each species count
+    const speciesCounts = rawTotal > config.populationCap
+      ? config.species.map(s => Math.max(1, Math.floor(s.count * config.populationCap / rawTotal)))
+      : config.species.map(s => s.count);
+
+    // Recompute in case rounding changed it
+    totalCount = Math.min(speciesCounts.reduce((sum, c) => sum + c, 0), config.populationCap);
 
     // Create base world with a compatible config
     const simConfig: SimulationConfig = {
@@ -68,8 +77,8 @@ export class EcosystemWorld {
       height: config.height,
       boundaryMode: config.boundaryMode,
       seed: config.seed,
-      types: config.species.map((s) => ({
-        count: s.count,
+      types: config.species.map((s, i) => ({
+        count: speciesCounts[i],
         color: s.color,
         radius: s.radius,
         initialSpeed: s.initialSpeed,
@@ -77,8 +86,9 @@ export class EcosystemWorld {
       })),
     };
     this.world = new World(simConfig);
-    this.eco = new EcosystemState(totalCount);
-    this.freeList = new FreeList(totalCount);
+    // Allocate ecosystem state for up to populationCap (particles may reproduce up to cap)
+    this.eco = new EcosystemState(config.populationCap);
+    this.freeList = new FreeList(config.populationCap);
 
     // Initialize ecosystem state for all spawned particles
     for (let i = 0; i < totalCount; i++) {
@@ -120,17 +130,12 @@ export class EcosystemWorld {
 
     // Try to reuse a free slot
     let idx = this.freeList.pop();
-    let needsGrow = false;
 
     if (idx === -1) {
-      // No free slots — append
+      // No free slots — append, but never exceed populationCap total slots
+      if (this._highWaterMark >= this.config.populationCap) return -1;
       idx = this._highWaterMark;
       this._highWaterMark++;
-      needsGrow = idx >= this.eco.capacity;
-    }
-
-    if (needsGrow) {
-      this.growArrays(idx + 1);
     }
 
     // Set position
