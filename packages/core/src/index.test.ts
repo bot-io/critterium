@@ -13,6 +13,12 @@ import {
   type SimulationConfig,
   type ParticleTypeConfig,
   type InteractionEntry,
+  type BoundaryMode,
+  Force,
+  ForcePipeline,
+  DragForce,
+  GravityForce,
+  BoundaryForce,
 } from './index.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -1184,5 +1190,456 @@ describe('PairwiseForce', () => {
   it('DEFAULT_REPULSION has expected values', () => {
     expect(DEFAULT_REPULSION.strength).toBe(500);
     expect(DEFAULT_REPULSION.radius).toBe(8);
+  });
+});
+
+// ─── CRT-5: Force Interface, DragForce, GravityForce, ForcePipeline ──
+
+describe('Force Interface', () => {
+  it('Force type is satisfied by DragForce', () => {
+    const drag: Force = new DragForce(1.0);
+    expect(drag.id).toBe('drag');
+    expect(drag.params.coefficient).toBe(1.0);
+  });
+
+  it('Force type is satisfied by GravityForce', () => {
+    const gravity: Force = new GravityForce(200);
+    expect(gravity.id).toBe('gravity');
+    expect(gravity.params.acceleration).toBe(200);
+  });
+
+  it('Force type is satisfied by BoundaryForce', () => {
+    const boundary: Force = new BoundaryForce('bounce');
+    expect(boundary.id).toBe('boundary');
+    expect(boundary.params.mode).toBe('bounce');
+  });
+});
+
+// ─── DragForce ──────────────────────────────────────────────────
+
+describe('DragForce', () => {
+  const W = 800, H = 600;
+
+  function makeWorld(velocity = 100): { world: World; grid: SpatialHashGrid } {
+    const cfg: SimulationConfig = {
+      width: W, height: H, boundaryMode: 'bounce', seed: 42,
+      types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
+    };
+    const world = new World(cfg);
+    world.vx[0] = velocity;
+    world.vy[0] = 0;
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+    return { world, grid };
+  }
+
+  it('reduces velocity by factor (1 - coefficient * dt)', () => {
+    const { world, grid } = makeWorld(100);
+    const drag = new DragForce(2.0); // coefficient = 2.0
+    const dt = 1 / 60;
+
+    drag.apply(world, grid, dt);
+
+    // factor = 1 - 2.0 * (1/60) = 1 - 0.0333... ≈ 0.9667
+    // vx = 100 * 0.9667 ≈ 96.67
+    const factor = 1 - 2.0 * dt;
+    expect(world.vx[0]).toBeCloseTo(100 * factor, 5);
+    expect(world.vy[0]).toBeCloseTo(0, 5);
+  });
+
+  it('applies to both vx and vy', () => {
+    const { world, grid } = makeWorld(0);
+    world.vx[0] = 60;
+    world.vy[0] = 80;
+    const drag = new DragForce(1.0);
+    const dt = 1 / 60;
+
+    drag.apply(world, grid, dt);
+
+    const factor = 1 - 1.0 * dt;
+    expect(world.vx[0]).toBeCloseTo(60 * factor, 5);
+    expect(world.vy[0]).toBeCloseTo(80 * factor, 5);
+  });
+
+  it('analytic: velocity after N steps matches exponential decay', () => {
+    const { world, grid } = makeWorld(100);
+    const drag = new DragForce(3.0);
+    const dt = 1 / 60;
+
+    // Apply 60 times (= 1 second of simulation)
+    for (let i = 0; i < 60; i++) {
+      drag.apply(world, grid, dt);
+    }
+
+    // After time T=1s: v = v0 * (1 - coeff*dt)^steps = 100 * (1 - 3/60)^60
+    // = 100 * (0.95)^60 ≈ 100 * 0.04607 ≈ 4.607
+    // Equivalent to e^(-3 * 1) ≈ e^(-3) ≈ 0.04979 → 4.979
+    // Using discrete: 100 * 0.95^60
+    const expected = 100 * Math.pow(1 - 3.0 / 60, 60);
+    expect(world.vx[0]).toBeCloseTo(expected, 2);
+  });
+
+  it('zero drag coefficient does not change velocity', () => {
+    const { world, grid } = makeWorld(100);
+    const drag = new DragForce(0);
+    drag.apply(world, grid, 1 / 60);
+    expect(world.vx[0]).toBeCloseTo(100, 5);
+    expect(world.vy[0]).toBeCloseTo(0, 5);
+  });
+
+  it('high drag with large dt clamps to zero (no velocity inversion)', () => {
+    const { world, grid } = makeWorld(100);
+    const drag = new DragForce(1000); // very high drag
+    drag.apply(world, grid, 1); // dt = 1 second
+
+    // factor = 1 - 1000 * 1 = -999 → clamped to 0
+    expect(world.vx[0]).toBe(0);
+    expect(world.vy[0]).toBe(0);
+  });
+
+  it('preserves velocity direction (only reduces magnitude)', () => {
+    const { world, grid } = makeWorld(0);
+    world.vx[0] = 300;
+    world.vy[0] = 400;
+    const drag = new DragForce(1.0);
+
+    drag.apply(world, grid, 1 / 60);
+
+    // Direction ratio should be preserved (3:4)
+    const ratio = world.vx[0] / world.vy[0];
+    expect(ratio).toBeCloseTo(0.75, 5);
+  });
+
+  it('applies to all particles in world', () => {
+    const cfg: SimulationConfig = {
+      width: W, height: H, boundaryMode: 'bounce', seed: 42,
+      types: [{ count: 5, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 }],
+    };
+    const world = new World(cfg);
+    const grid = new SpatialHashGrid(W, H, 100, world.count);
+    grid.rebuild(world);
+
+    // Record speeds before
+    const speedsBefore: number[] = [];
+    for (let i = 0; i < world.count; i++) {
+      speedsBefore.push(Math.sqrt(world.vx[i] ** 2 + world.vy[i] ** 2));
+    }
+
+    const drag = new DragForce(2.0);
+    drag.apply(world, grid, 1 / 60);
+
+    const factor = 1 - 2.0 / 60;
+    for (let i = 0; i < world.count; i++) {
+      const speedAfter = Math.sqrt(world.vx[i] ** 2 + world.vy[i] ** 2);
+      expect(speedAfter).toBeCloseTo(speedsBefore[i] * factor, 3);
+    }
+  });
+
+  it('default coefficient is 1.0', () => {
+    const drag = new DragForce();
+    expect(drag.params.coefficient).toBe(1.0);
+  });
+
+  it('id is "drag"', () => {
+    expect(new DragForce().id).toBe('drag');
+  });
+});
+
+// ─── GravityForce ───────────────────────────────────────────────
+
+describe('GravityForce', () => {
+  const W = 800, H = 600;
+
+  function makeWorld(): { world: World; grid: SpatialHashGrid } {
+    const cfg: SimulationConfig = {
+      width: W, height: H, boundaryMode: 'bounce', seed: 42,
+      types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
+    };
+    const world = new World(cfg);
+    world.vx[0] = 50;
+    world.vy[0] = 0;
+    world.x[0] = 400;
+    world.y[0] = 300;
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+    return { world, grid };
+  }
+
+  it('increases vy by acceleration * dt', () => {
+    const { world, grid } = makeWorld();
+    const gravity = new GravityForce(200);
+    const dt = 1 / 60;
+
+    gravity.apply(world, grid, dt);
+
+    // dv = 200 * 1/60 ≈ 3.333
+    expect(world.vy[0]).toBeCloseTo(200 / 60, 5);
+    // vx should be unchanged
+    expect(world.vx[0]).toBe(50);
+  });
+
+  it('analytic: velocity after N steps equals acceleration * T', () => {
+    const { world, grid } = makeWorld();
+    const gravity = new GravityForce(300);
+    const dt = 1 / 60;
+
+    // Apply 60 times (= 1 second)
+    for (let i = 0; i < 60; i++) {
+      gravity.apply(world, grid, dt);
+    }
+
+    // vy should be 300 * 1 = 300 (accumulated over 1 second)
+    expect(world.vy[0]).toBeCloseTo(300, 2);
+  });
+
+  it('negative acceleration produces upward force (anti-gravity)', () => {
+    const { world, grid } = makeWorld();
+    const gravity = new GravityForce(-200);
+    gravity.apply(world, grid, 1 / 60);
+
+    // Should decrease vy (push upward)
+    expect(world.vy[0]).toBeLessThan(0);
+  });
+
+  it('zero acceleration does not change velocity', () => {
+    const { world, grid } = makeWorld();
+    const gravity = new GravityForce(0);
+    gravity.apply(world, grid, 1 / 60);
+
+    expect(world.vy[0]).toBe(0);
+    expect(world.vx[0]).toBe(50);
+  });
+
+  it('does not modify vx', () => {
+    const { world, grid } = makeWorld();
+    const vxBefore = world.vx[0];
+    const gravity = new GravityForce(500);
+    gravity.apply(world, grid, 1 / 60);
+    expect(world.vx[0]).toBe(vxBefore);
+  });
+
+  it('applies to all particles equally', () => {
+    const cfg: SimulationConfig = {
+      width: W, height: H, boundaryMode: 'bounce', seed: 42,
+      types: [{ count: 10, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
+    };
+    const world = new World(cfg);
+    const grid = new SpatialHashGrid(W, H, 100, world.count);
+    grid.rebuild(world);
+
+    const gravity = new GravityForce(200);
+    const dt = 1 / 60;
+    gravity.apply(world, grid, dt);
+
+    const expectedDv = 200 / 60;
+    for (let i = 0; i < world.count; i++) {
+      expect(world.vy[i]).toBeCloseTo(expectedDv, 5);
+    }
+  });
+
+  it('default acceleration is 200', () => {
+    const gravity = new GravityForce();
+    expect(gravity.params.acceleration).toBe(200);
+  });
+
+  it('id is "gravity"', () => {
+    expect(new GravityForce().id).toBe('gravity');
+  });
+});
+
+// ─── BoundaryForce ──────────────────────────────────────────────
+
+describe('BoundaryForce', () => {
+  const W = 800, H = 600;
+
+  it('applies bounce boundaries via force pipeline', () => {
+    const cfg: SimulationConfig = {
+      width: W, height: H, boundaryMode: 'bounce', seed: 42,
+      types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
+    };
+    const world = new World(cfg);
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    world.x[0] = -10;
+    world.vx[0] = -50;
+
+    const boundary = new BoundaryForce('bounce');
+    boundary.apply(world, grid, 1 / 60);
+
+    expect(world.x[0]).toBe(10);
+    expect(world.vx[0]).toBe(50);
+  });
+
+  it('applies wrap boundaries via force pipeline', () => {
+    const cfg: SimulationConfig = {
+      width: W, height: H, boundaryMode: 'wrap', seed: 42,
+      types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
+    };
+    const world = new World(cfg);
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    world.x[0] = 810;
+    const boundary = new BoundaryForce('wrap');
+    boundary.apply(world, grid, 1 / 60);
+
+    expect(world.x[0]).toBeCloseTo(10, 3);
+  });
+
+  it('id is "boundary"', () => {
+    expect(new BoundaryForce().id).toBe('boundary');
+  });
+});
+
+// ─── ForcePipeline ──────────────────────────────────────────────
+
+describe('ForcePipeline', () => {
+  const W = 800, H = 600;
+
+  it('applies forces in order', () => {
+    const cfg: SimulationConfig = {
+      width: W, height: H, boundaryMode: 'bounce', seed: 42,
+      types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 500 }],
+    };
+    const world = new World(cfg);
+    world.x[0] = 400;
+    world.y[0]  = 300;
+    world.vx[0] = 100;
+    world.vy[0] = 0;
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const pipeline = new ForcePipeline();
+    const drag = new DragForce(1.0);
+    const gravity = new GravityForce(200);
+    pipeline.add(drag);
+    pipeline.add(gravity);
+
+    const dt = 1 / 60;
+    const count = pipeline.step(world, grid, dt);
+
+    expect(count).toBe(2);
+    // After drag: vx = 100 * (1 - 1/60) ≈ 98.33
+    const dragFactor = 1 - 1.0 * dt;
+    expect(world.vx[0]).toBeCloseTo(100 * dragFactor, 3);
+    // After gravity: vy = 0 + 200/60 ≈ 3.333
+    expect(world.vy[0]).toBeCloseTo(200 / 60, 3);
+  });
+
+  it('add and remove forces', () => {
+    const pipeline = new ForcePipeline();
+    pipeline.add(new DragForce());
+    pipeline.add(new GravityForce());
+
+    expect(pipeline.forces).toHaveLength(2);
+    expect(pipeline.get('drag')).toBeDefined();
+    expect(pipeline.get('gravity')).toBeDefined();
+
+    const removed = pipeline.remove('drag');
+    expect(removed).toBe(true);
+    expect(pipeline.forces).toHaveLength(1);
+    expect(pipeline.get('drag')).toBeUndefined();
+
+    // Removing non-existent returns false
+    expect(pipeline.remove('nonexistent')).toBe(false);
+  });
+
+  it('empty pipeline does nothing', () => {
+    const cfg: SimulationConfig = {
+      width: W, height: H, boundaryMode: 'bounce', seed: 42,
+      types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
+    };
+    const world = new World(cfg);
+    world.vx[0] = 100;
+    world.vy[0] = 50;
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const pipeline = new ForcePipeline();
+    const count = pipeline.step(world, grid, 1 / 60);
+
+    expect(count).toBe(0);
+    expect(world.vx[0]).toBe(100);
+    expect(world.vy[0]).toBe(50);
+  });
+
+  it('full simulation loop with pipeline: pairwise + drag + gravity + boundaries', () => {
+    const cfg = defaultConfig({ seed: 42 });
+    const world = new World(cfg);
+    const grid = new SpatialHashGrid(world.width, world.height, 100, world.count);
+
+    const matrix = new InteractionMatrix(3);
+    matrix.set(0, 1, { strength: 500, radius: 80, falloff: 'linear' });
+    matrix.set(1, 0, { strength: -300, radius: 60, falloff: 'linear' });
+
+    const pipeline = new ForcePipeline();
+    const pairwise = new PairwiseForce(matrix, { strength: 1000, radius: 5 });
+    pipeline.add(new DragForce(0.5));
+    pipeline.add(new GravityForce(100));
+    pipeline.add(new BoundaryForce('bounce'));
+
+    const dt = 1 / 60;
+
+    // Run 200 steps
+    for (let step = 0; step < 200; step++) {
+      grid.rebuild(world);
+      pairwise.apply(world, grid, dt); // pairwise doesn't implement Force yet
+      pipeline.step(world, grid, dt);
+      world.step(dt);
+    }
+
+    // All particles should stay in bounds (bounce mode)
+    for (let i = 0; i < world.count; i++) {
+      expect(world.x[i]).toBeGreaterThanOrEqual(0);
+      expect(world.x[i]).toBeLessThanOrEqual(world.width);
+      expect(world.y[i]).toBeGreaterThanOrEqual(0);
+      expect(world.y[i]).toBeLessThanOrEqual(world.height);
+    }
+
+    // Simulation time should have advanced
+    expect(world.simTime).toBeGreaterThan(3);
+
+    // Drag should have slowed particles (speeds bounded)
+    for (let i = 0; i < world.count; i++) {
+      const speed = Math.sqrt(world.vx[i] ** 2 + world.vy[i] ** 2);
+      // With drag and gravity, speeds shouldn't be astronomical
+      expect(speed).toBeLessThan(500);
+    }
+  });
+
+  it('pipeline with gravity + drag reaches terminal velocity', () => {
+    const cfg: SimulationConfig = {
+      width: W, height: H, boundaryMode: 'bounce', seed: 42,
+      types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 10000 }],
+    };
+    const world = new World(cfg);
+    world.x[0] = 400;
+    world.y[0] = 300;
+    const grid = new SpatialHashGrid(W, H, 100, 10);
+    grid.rebuild(world);
+
+    const pipeline = new ForcePipeline();
+    const gravityAcc = 200;
+    const dragCoeff = 2.0;
+    pipeline.add(new GravityForce(gravityAcc));
+    pipeline.add(new DragForce(dragCoeff));
+
+    const dt = 1 / 60;
+
+    // Run until near terminal velocity
+    for (let step = 0; step < 600; step++) { // 10 seconds
+      pipeline.step(world, grid, dt);
+      // Keep particle in bounds for testing
+      if (world.y[0] > world.height) {
+        world.y[0] = world.height;
+        world.vy[0] = 0;
+      }
+    }
+
+    // Terminal velocity = gravity / drag_coefficient = 200 / 2.0 = 100
+    // vy should be close to terminal velocity
+    expect(world.vy[0]).toBeGreaterThan(80);
+    expect(world.vy[0]).toBeLessThan(120);
   });
 });

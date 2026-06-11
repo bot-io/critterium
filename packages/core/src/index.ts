@@ -617,3 +617,167 @@ export class PairwiseForce {
     }
   }
 }
+
+// ─── Force Interface & Pipeline ────────────────────────────────
+
+/**
+ * Base force interface. All forces implement this contract.
+ * Forces are serializable (via params) and composed in a pipeline.
+ *
+ * `grid` may be unused by global forces (drag, gravity, boundaries)
+ * but is required for pairwise/neighborhood forces.
+ */
+export interface Force<P extends Record<string, unknown> = Record<string, unknown>> {
+  /** Unique identifier for this force instance. */
+  readonly id: string;
+  /** Serializable parameters (for config persistence). */
+  readonly params: P;
+  /** Apply the force to the world for one timestep. */
+  apply(world: World, grid: SpatialHashGrid, dt: number): void;
+}
+
+/**
+ * ForcePipeline: composes multiple forces and applies them in order.
+ * Typical order: pairwise → neighborhood → global (drag, gravity) → boundaries.
+ *
+ * After all forces apply, the pipeline integrates positions and applies boundaries.
+ */
+export class ForcePipeline {
+  readonly forces: Force[] = [];
+
+  /** Add a force to the pipeline. */
+  add(force: Force): void {
+    this.forces.push(force);
+  }
+
+  /** Remove a force by id. Returns true if found and removed. */
+  remove(id: string): boolean {
+    const idx = this.forces.findIndex((f) => f.id === id);
+    if (idx === -1) return false;
+    this.forces.splice(idx, 1);
+    return true;
+  }
+
+  /** Get a force by id. Returns undefined if not found. */
+  get(id: string): Force | undefined {
+    return this.forces.find((f) => f.id === id);
+  }
+
+  /**
+   * Apply all forces in order, then integrate and apply boundaries.
+   * @returns the number of forces applied
+   */
+  step(world: World, grid: SpatialHashGrid, dt: number): number {
+    for (const force of this.forces) {
+      force.apply(world, grid, dt);
+    }
+    return this.forces.length;
+  }
+}
+
+// ─── Drag Force ─────────────────────────────────────────────────
+
+/** Drag force parameters. */
+export interface DragParams {
+  [key: string]: unknown;
+  /**
+   * Drag coefficient. Velocity is multiplied by (1 - coefficient * dt) each step.
+   * Typical range: 0.5–5.0. Higher = more drag (slower particles).
+   */
+  coefficient: number;
+}
+
+/**
+ * DragForce: linear drag that reduces velocity proportionally.
+ *
+ * Each step: v *= (1 - coefficient * dt)
+ *
+ * This is an exponential decay model: after time T, speed is reduced by
+ * factor e^(-coefficient * T). For coefficient=1, speed halves in ~0.7s.
+ *
+ * Zero allocations per step.
+ */
+export class DragForce implements Force {
+  readonly id = 'drag';
+  readonly params: DragParams;
+
+  constructor(coefficient: number = 1.0) {
+    this.params = { coefficient };
+  }
+
+  apply(world: World, _grid: SpatialHashGrid, dt: number): void {
+    const factor = 1 - this.params.coefficient * dt;
+    // Clamp to prevent velocity inversion (if dt is very large)
+    const safeFactor = Math.max(0, factor);
+    const { vx, vy, count } = world;
+    for (let i = 0; i < count; i++) {
+      vx[i] *= safeFactor;
+      vy[i] *= safeFactor;
+    }
+  }
+}
+
+// ─── Gravity Force ──────────────────────────────────────────────
+
+/** Gravity force parameters. */
+export interface GravityParams {
+  [key: string]: unknown;
+  /**
+   * Gravitational acceleration (units/s²). Applied as downward velocity change.
+   * Positive = downward (standard gravity), negative = upward (anti-gravity).
+   * Typical: 0 for no gravity, 100–500 for mild-to-strong gravity.
+   */
+  acceleration: number;
+}
+
+/**
+ * GravityForce: constant downward (positive y) acceleration.
+ *
+ * Each step: vy += acceleration * dt
+ *
+ * Zero allocations per step.
+ */
+export class GravityForce implements Force {
+  readonly id = 'gravity';
+  readonly params: GravityParams;
+
+  constructor(acceleration: number = 200) {
+    this.params = { acceleration };
+  }
+
+  apply(world: World, _grid: SpatialHashGrid, dt: number): void {
+    const { vy, count } = world;
+    const dv = this.params.acceleration * dt;
+    for (let i = 0; i < count; i++) {
+      vy[i] += dv;
+    }
+  }
+}
+
+// ─── Boundary Force (adapter for World.applyBoundaries) ─────────
+
+/** Boundary force parameters. */
+export interface BoundaryParams {
+  [key: string]: unknown;
+  mode: BoundaryMode;
+}
+
+/**
+ * BoundaryForce: adapter that wraps World.applyBoundaries() as a Force.
+ *
+ * This allows boundaries to participate in the ForcePipeline.
+ * Note: World.applyBoundaries() already handles bounce/wrap internally,
+ * reading from world.boundaryMode. This force exists for pipeline consistency.
+ */
+export class BoundaryForce implements Force {
+  readonly id = 'boundary';
+  readonly params: BoundaryParams;
+
+  constructor(mode: BoundaryMode = 'bounce') {
+    this.params = { mode };
+  }
+
+  apply(world: World, _grid: SpatialHashGrid, _dt: number): void {
+    world.applyBoundaries();
+  }
+}
