@@ -1070,3 +1070,16 @@ export class VortexForce implements Force {
     }
   }
 }
+
+// ─── Re-exports for barrel import ────────────────────────────────
+export type { EcosystemConfig, SpeciesConfig, EnergyConfig, LifecycleConfig, DietConfig, InteractionRule as EcoInteractionRule } from './ecosystem.js';
+export { ALIVE, DEAD, NOT_INFECTED, defaultEnergyConfig, defaultLifecycleConfig, defaultDietConfig } from './ecosystem.js';
+export type { EcosystemState } from './ecosystem.js';
+export { EcosystemWorld } from './ecosystem-world.js';
+export type { LifecycleResult } from './ecosystem-world.js';
+export { processEating } from './eating.js';
+export type { EatingResult } from './eating.js';
+export { processReproduction, processInfection, infectParticle } from './lifecycle.js';
+export type { EcosystemStepResult } from './lifecycle.js';
+export { InteractionRuleMatrix, FORCE_FLAGS, NO_INTERACTION, forceFlags, decodeForceFlags } from './interaction-rules.js';
+export type { ForceType, InteractionRule as RuleInteractionRule } from './interaction-rules.js';

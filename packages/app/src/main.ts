@@ -3,27 +3,7 @@
  *
  * Bootstraps the simulation core and renderer.
  * Three species: prey (green), predator (red), parasite (purple).
- *
- * Default 3-type config produces emergent behaviors:
- * - Prey flock together (same-type attract) and flee from predators/parasites
- * - Predators chase prey (cross-type attract) and space out from each other
- * - Parasites seek prey (cross-type attract) to spread infection
- *
- * Interaction matrix (asymmetric, drives chase/flee):
- * ┌──────────────┬─────────────────┬─────────────────┬─────────────────┐
- * │              │ Prey (0)        │ Predator (1)    │ Parasite (2)    │
- * ├──────────────┼─────────────────┼─────────────────┼─────────────────┤
- * │ Prey →       │ attract 30/80   │ flee -80/120    │ flee -40/80     │
- * │ Predator →   │ chase 60/150    │ repel -20/50    │ (none)          │
- * │ Parasite →   │ seek 50/120     │ (none)          │ repel -15/40    │
- * └──────────────┴─────────────────┴─────────────────┴─────────────────┘
- * Format: strength (positive=attract, negative=repel) / radius
- *
- * Ecosystem dynamics:
- * - Predators eat prey on contact → gain 40 energy
- * - Parasites infect prey on contact → prey die after 8s sickness
- * - All species reproduce via binary fission when energy is sufficient
- * - Population capped at 600
+ * Predator eats prey. Parasite infects prey. Prey flocks with prey.
  */
 
 import {
@@ -34,11 +14,23 @@ import {
   DragForce,
   WanderForce,
   type InteractionEntry,
+  // Ecosystem barrel re-exports
+  type EcosystemConfig,
+  type SpeciesConfig,
+  type EcosystemState,
+  defaultEnergyConfig,
+  defaultLifecycleConfig,
+  defaultDietConfig,
+  ALIVE,
+  DEAD,
+  EcosystemWorld,
+  processEating,
+  processReproduction,
+  processInfection,
+  InteractionRuleMatrix,
+  FORCE_FLAGS,
+  forceFlags,
 } from '@critterium/core';
-import { type EcosystemConfig, type SpeciesConfig, defaultEnergyConfig, defaultLifecycleConfig, defaultDietConfig } from '@critterium/core/ecosystem';
-import { EcosystemWorld } from '@critterium/core/ecosystem-world';
-import { processEating } from '@critterium/core/eating';
-import { processReproduction, processInfection } from '@critterium/core/lifecycle';
 import { CritteriumRenderer, type SpeciesVisual } from '@critterium/render';
 
 // ─── Species Definitions ─────────────────────────────────────
@@ -70,8 +62,8 @@ const SPECIES_CONFIGS: SpeciesConfig[] = [
       contagionRadius: 15,
     }),
     diet: defaultDietConfig({
-      canEat: new Set(),
-      infectionVulnerability: new Set([2]), // vulnerable to parasite (species 2)
+      canEat: new Set<number>(),
+      infectionVulnerability: new Set([2]),
     }),
   },
   // 1: Predator — red, hunts prey
@@ -88,7 +80,7 @@ const SPECIES_CONFIGS: SpeciesConfig[] = [
       reproductionCost: 50,
       movementCostPerSec: 3,
       idleDrainPerSec: 2,
-      energyGainPerPrey: [40, 0, 0], // gains energy from eating prey (species 0)
+      energyGainPerPrey: [40, 0, 0],
     }),
     lifecycle: defaultLifecycleConfig({
       maxAgeSec: 60,
@@ -98,8 +90,8 @@ const SPECIES_CONFIGS: SpeciesConfig[] = [
       contagionRadius: 0,
     }),
     diet: defaultDietConfig({
-      canEat: new Set([0]), // eats prey
-      infectionVulnerability: new Set(),
+      canEat: new Set([0]),
+      infectionVulnerability: new Set<number>(),
     }),
   },
   // 2: Parasite — purple, infects prey
@@ -126,8 +118,8 @@ const SPECIES_CONFIGS: SpeciesConfig[] = [
       contagionRadius: 25,
     }),
     diet: defaultDietConfig({
-      canEat: new Set(),
-      infectionVulnerability: new Set(),
+      canEat: new Set<number>(),
+      infectionVulnerability: new Set<number>(),
     }),
   },
 ];
@@ -142,11 +134,11 @@ const CONFIG: EcosystemConfig = {
   populationCap: 600,
   species: SPECIES_CONFIGS,
   interactionRules: [
-    // [prey][prey]: flock (attract)
+    // [prey][*]
     [{ enabledForces: new Set(['attract']), radius: 80, strength: 30, falloff: 'linear' }, null, null],
-    // [predator][prey]: chase prey (strong attract)
+    // [predator][*]
     [null, null, null],
-    // [parasite][prey]: seek prey (attract)
+    // [parasite][*]
     [null, null, null],
   ],
 };
@@ -188,6 +180,23 @@ function buildInteractionMatrix(): InteractionMatrix {
   return matrix;
 }
 
+// ─── Error boundary ──────────────────────────────────────────
+
+let freezeDetected = false;
+let lastLoopTime = performance.now();
+let consecutiveSlowFrames = 0;
+
+function onError(err: unknown): void {
+  console.error('[Critterium] Fatal error:', err);
+  const el = document.getElementById('app');
+  if (el) {
+    const msg = document.createElement('div');
+    msg.style.cssText = 'position:fixed;top:0;left:0;right:0;padding:12px;background:#cc0000;color:#fff;font:14px monospace;z-index:9999;white-space:pre-wrap;';
+    msg.textContent = `Critterium crashed:\n${err instanceof Error ? err.message + '\n' + err.stack : String(err)}`;
+    el.appendChild(msg);
+  }
+}
+
 // ─── Main ─────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -204,7 +213,7 @@ async function main(): Promise<void> {
   const grid = new SpatialHashGrid(
     CONFIG.width,
     CONFIG.height,
-    150, // cell size >= max interaction radius
+    150,
     CONFIG.populationCap,
   );
 
@@ -221,53 +230,80 @@ async function main(): Promise<void> {
     appEl.appendChild(renderer.app.canvas as HTMLCanvasElement);
   }
 
-  // 5. Simulation loop with interpolation
+  // 5. Simulation loop with freeze detection
   const FIXED_DT = 1 / 60;
   const MAX_FRAME_DT = 0.1;
+  const MAX_ACCUMULATOR_STEPS = 5; // Cap steps to prevent death spiral
+  const FREEZE_THRESHOLD_MS = 500; // If a frame takes >500ms, likely froze
   let accumulator = 0;
   let lastTime = performance.now();
   let totalSimTime = 0;
+  let stepCount = 0;
 
   function loop(now: number): void {
-    const frameDt = Math.min((now - lastTime) / 1000, MAX_FRAME_DT);
-    lastTime = now;
+    try {
+      const frameDt = Math.min((now - lastTime) / 1000, MAX_FRAME_DT);
+      lastTime = now;
 
-    // Store previous positions for interpolation (before sim step)
-    renderer.storePreviousPositions(eco.world);
+      // Freeze detection
+      if (frameDt * 1000 > FREEZE_THRESHOLD_MS) {
+        consecutiveSlowFrames++;
+        if (consecutiveSlowFrames >= 3 && !freezeDetected) {
+          freezeDetected = true;
+          console.warn('[Critterium] Freeze detected — resetting accumulator');
+          accumulator = 0;
+          consecutiveSlowFrames = 0;
+          // Don't schedule another frame immediately — give browser a breath
+          setTimeout(() => {
+            freezeDetected = false;
+            lastTime = performance.now();
+            requestAnimationFrame(loop);
+          }, 100);
+          return;
+        }
+      } else {
+        consecutiveSlowFrames = 0;
+      }
 
-    accumulator += frameDt;
+      accumulator += frameDt;
 
-    let stepsThisFrame = 0;
-    while (accumulator >= FIXED_DT && stepsThisFrame < 5) {
-      // Rebuild spatial hash
-      grid.rebuild(eco.world);
+      let stepsThisFrame = 0;
+      while (accumulator >= FIXED_DT && stepsThisFrame < MAX_ACCUMULATOR_STEPS) {
+        // Rebuild spatial hash
+        grid.rebuild(eco.world);
 
-      // Apply forces
-      pairwiseForce.apply(eco.world, grid, FIXED_DT);
-      dragForce.apply(eco.world, grid, FIXED_DT);
-      wanderForce.apply(eco.world, grid, FIXED_DT);
+        // Apply forces
+        pairwiseForce.apply(eco.world, grid, FIXED_DT);
+        dragForce.apply(eco.world, grid, FIXED_DT);
+        wanderForce.apply(eco.world, grid, FIXED_DT);
 
-      // Step physics
-      eco.world.step(FIXED_DT);
+        // Step physics
+        eco.world.step(FIXED_DT);
 
-      // Process ecosystem systems
-      eco.processLifecycle(FIXED_DT);
-      processEating(eco);
-      processReproduction(eco);
-      processInfection(eco, FIXED_DT);
+        // Process ecosystem systems
+        eco.processLifecycle(FIXED_DT);
+        processEating(eco);
+        processReproduction(eco);
+        processInfection(eco, FIXED_DT);
 
-      totalSimTime += FIXED_DT;
-      accumulator -= FIXED_DT;
-      stepsThisFrame++;
+        totalSimTime += FIXED_DT;
+        accumulator -= FIXED_DT;
+        stepsThisFrame++;
+        stepCount++;
+      }
+
+      // If accumulator is still large, drain it to prevent death spiral
+      if (accumulator > FIXED_DT * 3) {
+        accumulator = 0;
+      }
+
+      // Render
+      renderer.update(eco.world, eco.eco, frameDt);
+
+      requestAnimationFrame(loop);
+    } catch (err) {
+      onError(err);
     }
-
-    // Interpolation alpha: how far between the last fixed step and the next
-    const alpha = accumulator / FIXED_DT;
-
-    // Render with interpolation
-    renderer.update(eco.world, eco.eco, frameDt, alpha);
-
-    requestAnimationFrame(loop);
   }
 
   console.log('Critterium — a living world in your pocket');
@@ -278,7 +314,9 @@ async function main(): Promise<void> {
   requestAnimationFrame(loop);
 }
 
-// Bootstrap
-main().catch((err) => {
-  console.error('Critterium failed to start:', err);
-});
+// Bootstrap with error boundary
+main().catch(onError);
+
+// Global error handlers
+window.addEventListener('error', (e) => onError(e.error));
+window.addEventListener('unhandledrejection', (e) => onError(e.reason));
