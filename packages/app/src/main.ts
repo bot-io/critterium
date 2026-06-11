@@ -5,9 +5,9 @@
  * Three species: prey (green), predator (red), parasite (purple).
  * Predator eats prey. Parasite infects prey. Prey flocks with prey.
  *
- * CRT-12: Controls UI overlay
- * CRT-13: Autosave + exact resume
- * CRT-14: Export/import config files
+ * Full controls panel with: Simulation, Species, Forces, Matrix, Actions.
+ * PointerForce wired to mouse/touch.
+ * Preset save/load via localStorage.
  */
 
 import {
@@ -17,6 +17,7 @@ import {
   PairwiseForce,
   DragForce,
   WanderForce,
+  PointerForce,
   type InteractionEntry,
   // Ecosystem barrel re-exports
   type EcosystemConfig,
@@ -34,7 +35,7 @@ import {
   InteractionRuleMatrix,
   FORCE_FLAGS,
   forceFlags,
-  // Config schema (CRT-11)
+  // Config schema
   serializeConfig,
   deserializeConfig,
   applyConfig,
@@ -191,6 +192,47 @@ function buildInteractionMatrix(): InteractionMatrix {
   return matrix;
 }
 
+// ─── Preset helpers ───────────────────────────────────────────
+
+const PRESETS_KEY = 'critterium-presets';
+
+function getSavedPresets(): string[] {
+  try {
+    const json = localStorage.getItem(PRESETS_KEY);
+    return json ? Object.keys(JSON.parse(json)) : [];
+  } catch { return []; }
+}
+
+function savePreset(name: string, config: CritteriumConfig): void {
+  try {
+    const json = localStorage.getItem(PRESETS_KEY);
+    const presets = json ? JSON.parse(json) : {};
+    presets[name] = config;
+    localStorage.setItem(PRESETS_KEY, JSON.stringify(presets));
+  } catch (err) {
+    console.warn('[Critterium] Save preset failed:', err);
+  }
+}
+
+function loadPreset(name: string): CritteriumConfig | null {
+  try {
+    const json = localStorage.getItem(PRESETS_KEY);
+    if (!json) return null;
+    const presets = JSON.parse(json);
+    return presets[name] ?? null;
+  } catch { return null; }
+}
+
+function deletePreset(name: string): void {
+  try {
+    const json = localStorage.getItem(PRESETS_KEY);
+    if (!json) return;
+    const presets = JSON.parse(json);
+    delete presets[name];
+    localStorage.setItem(PRESETS_KEY, JSON.stringify(presets));
+  } catch { /* ignore */ }
+}
+
 // ─── Error boundary ──────────────────────────────────────────
 
 let freezeDetected = false;
@@ -208,10 +250,50 @@ function onError(err: unknown): void {
   }
 }
 
+// ─── Build initial species values for controls ───────────────
+
+function buildInitialSpeciesValues(): Array<Record<string, number>> {
+  return SPECIES_CONFIGS.map((sp) => ({
+    count: sp.count,
+    radius: sp.radius,
+    initialSpeed: sp.initialSpeed,
+    maxSpeed: sp.maxSpeed,
+    maxEnergy: sp.energy.maxEnergy,
+    initialEnergy: sp.energy.initialEnergy,
+    reproductionCost: sp.energy.reproductionCost,
+    movementCostPerSec: sp.energy.movementCostPerSec,
+    idleDrainPerSec: sp.energy.idleDrainPerSec,
+    maxAgeSec: sp.lifecycle.maxAgeSec,
+    starvationDamagePerSec: sp.lifecycle.starvationDamagePerSec,
+    reproductionCooldownSec: sp.lifecycle.reproductionCooldownSec,
+    sicknessDurationSec: sp.lifecycle.sicknessDurationSec,
+    contagionRadius: sp.lifecycle.contagionRadius,
+    // Diet encoded as boolean flags
+    ...Object.fromEntries([...sp.diet.canEat].map((j) => ['canEat_' + j, 1])),
+    ...Object.fromEntries([...sp.diet.infectionVulnerability].map((j) => ['infectionVuln_' + j, 1])),
+  }));
+}
+
+function buildInitialMatrixValues(
+  matrix: InteractionMatrix,
+  n: number,
+): Array<Array<{ strength: number; radius: number; falloff: string } | null>> {
+  const result: Array<Array<{ strength: number; radius: number; falloff: string } | null>> = [];
+  for (let i = 0; i < n; i++) {
+    const row: Array<{ strength: number; radius: number; falloff: string } | null> = [];
+    for (let j = 0; j < n; j++) {
+      const entry = matrix.get(i, j);
+      row.push(entry ? { strength: entry.strength, radius: entry.radius, falloff: entry.falloff } : null);
+    }
+    result.push(row);
+  }
+  return result;
+}
+
 // ─── Main ─────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  // 1. Check for autosave (CRT-13)
+  // 1. Check for autosave
   let eco: EcosystemWorld;
   let interactionMatrix: InteractionMatrix;
   let useAutosave = false;
@@ -240,6 +322,12 @@ async function main(): Promise<void> {
   const pairwiseForce = new PairwiseForce(interactionMatrix);
   const dragForce = new DragForce(0.8);
   const wanderForce = new WanderForce(40, 2.5);
+  const pointerForce = new PointerForce(200, 150, 'linear');
+
+  // Active force tracking
+  let dragEnabled = true;
+  let wanderEnabled = true;
+  let pointerEnabled = false;
 
   // 3. Spatial hash grid
   const grid = new SpatialHashGrid(
@@ -263,7 +351,8 @@ async function main(): Promise<void> {
   }
 
   // 5. Simulation loop with freeze detection
-  const FIXED_DT = 1 / 60;
+  const BASE_DT = 1 / 60;
+  let speedMultiplier = 1;
   const MAX_FRAME_DT = 0.1;
   const MAX_ACCUMULATOR_STEPS = 5;
   const FREEZE_THRESHOLD_MS = 500;
@@ -274,7 +363,9 @@ async function main(): Promise<void> {
   let paused = false;
 
   function getCurrentConfig(): CritteriumConfig {
-    return serializeConfig(eco, interactionMatrix, [dragForce, wanderForce]);
+    const activeForces = [dragForce, wanderForce];
+    if (pointerEnabled) activeForces.push(pointerForce);
+    return serializeConfig(eco, interactionMatrix, activeForces);
   }
 
   function doAutosave(): void {
@@ -284,6 +375,21 @@ async function main(): Promise<void> {
     } catch {
       // Silently ignore autosave failures
     }
+  }
+
+  function getEffectiveDt(): number {
+    return BASE_DT * speedMultiplier;
+  }
+
+  function applyForces(dt: number): void {
+    // Rebuild spatial hash
+    grid.rebuild(eco.world);
+
+    // Apply active forces
+    pairwiseForce.apply(eco.world, grid, dt);
+    if (dragEnabled) dragForce.apply(eco.world, grid, dt);
+    if (wanderEnabled) wanderForce.apply(eco.world, grid, dt);
+    if (pointerEnabled) pointerForce.apply(eco.world, grid, dt);
   }
 
   function loop(now: number): void {
@@ -315,35 +421,30 @@ async function main(): Promise<void> {
         consecutiveSlowFrames = 0;
       }
 
+      const dt = getEffectiveDt();
       accumulator += frameDt;
 
       let stepsThisFrame = 0;
-      while (accumulator >= FIXED_DT && stepsThisFrame < MAX_ACCUMULATOR_STEPS) {
-        // Rebuild spatial hash
-        grid.rebuild(eco.world);
-
-        // Apply forces
-        pairwiseForce.apply(eco.world, grid, FIXED_DT);
-        dragForce.apply(eco.world, grid, FIXED_DT);
-        wanderForce.apply(eco.world, grid, FIXED_DT);
+      while (accumulator >= dt && stepsThisFrame < MAX_ACCUMULATOR_STEPS) {
+        applyForces(dt);
 
         // Step physics
-        eco.world.step(FIXED_DT);
+        eco.world.step(dt);
 
         // Process ecosystem systems
-        eco.processLifecycle(FIXED_DT);
+        eco.processLifecycle(dt);
         processEating(eco);
         processReproduction(eco);
-        processInfection(eco, FIXED_DT);
+        processInfection(eco, dt);
 
-        totalSimTime += FIXED_DT;
-        accumulator -= FIXED_DT;
+        totalSimTime += dt;
+        accumulator -= dt;
         stepsThisFrame++;
         stepCount++;
       }
 
       // If accumulator is still large, drain it to prevent death spiral
-      if (accumulator > FIXED_DT * 3) {
+      if (accumulator > dt * 3) {
         accumulator = 0;
       }
 
@@ -356,32 +457,105 @@ async function main(): Promise<void> {
     }
   }
 
-  // 6. Wire controls panel (CRT-12)
+  // 6. Wire pointer/touch events
+  const canvas = renderer.app.canvas as HTMLCanvasElement;
+  let pointerDown = false;
+
+  function updatePointerFromEvent(e: MouseEvent | Touch): void {
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+    pointerForce.setPosition(x, y, true);
+  }
+
+  canvas.addEventListener('mousedown', (e) => {
+    if (!pointerEnabled) return;
+    pointerDown = true;
+    updatePointerFromEvent(e);
+  });
+  canvas.addEventListener('mousemove', (e) => {
+    if (!pointerDown || !pointerEnabled) return;
+    updatePointerFromEvent(e);
+  });
+  window.addEventListener('mouseup', () => {
+    pointerDown = false;
+    pointerForce.setPosition(0, 0, false);
+  });
+  canvas.addEventListener('touchstart', (e) => {
+    if (!pointerEnabled) return;
+    e.preventDefault();
+    pointerDown = true;
+    if (e.touches[0]) updatePointerFromEvent(e.touches[0]);
+  }, { passive: false });
+  canvas.addEventListener('touchmove', (e) => {
+    if (!pointerEnabled) return;
+    e.preventDefault();
+    if (e.touches[0]) updatePointerFromEvent(e.touches[0]);
+  }, { passive: false });
+  canvas.addEventListener('touchend', () => {
+    pointerDown = false;
+    pointerForce.setPosition(0, 0, false);
+  });
+
+  // 7. Build initial values for controls
+  const nSpecies = SPECIES_CONFIGS.length;
+  const initialMatrixValues = buildInitialMatrixValues(interactionMatrix, nSpecies);
+  const initialSpeciesValues = buildInitialSpeciesValues();
+
+  // Track matrix values for onMatrixChange
+  const matrixState: Array<Array<{ strength: number; radius: number; falloff: string } | null>> =
+    initialMatrixValues.map(row => row.map(cell => cell ? { ...cell } : null));
+
+  // 8. Wire controls panel
   const controlsPanel = createControlsPanel({
-    speciesCount: 3,
+    speciesCount: nSpecies,
     speciesNames: [...SPECIES_NAMES],
+    speciesColors: SPECIES_CONFIGS.map(s => s.color),
+    initialSpeciesValues,
+    initialMatrixValues,
+    initialForceValues: {
+      drag: { coefficient: 0.8, _enabled: 1 },
+      wander: { strength: 40, rate: 2.5, _enabled: 1 },
+      pointer: { strength: 200, radius: 150, falloff: 0, _enabled: 0 },
+      _popCap: CONFIG.populationCap,
+    },
+
     onTogglePause: (p: boolean) => {
       paused = p;
-      if (p) {
-        doAutosave();
-      }
+      if (p) doAutosave();
     },
+
     onReset: () => {
       eco = new EcosystemWorld(CONFIG);
       interactionMatrix = buildInteractionMatrix();
+      (pairwiseForce as { matrix: InteractionMatrix }).matrix = interactionMatrix;
       grid.rebuild(eco.world);
       clearAutosave();
     },
+
     onReseed: () => {
       const newSeed = Math.floor(Math.random() * 2147483647);
       const newConfig = { ...CONFIG, seed: newSeed };
       eco = new EcosystemWorld(newConfig);
       interactionMatrix = buildInteractionMatrix();
+      (pairwiseForce as { matrix: InteractionMatrix }).matrix = interactionMatrix;
       grid.rebuild(eco.world);
     },
+
+    onSpeedChange: (multiplier: number) => {
+      speedMultiplier = multiplier;
+    },
+
     onPopulationCapChange: (cap: number) => {
       (eco.config as { populationCap: number }).populationCap = cap;
     },
+
+    onForceToggle: (forceId: string, enabled: boolean) => {
+      if (forceId === 'drag') dragEnabled = enabled;
+      else if (forceId === 'wander') wanderEnabled = enabled;
+      else if (forceId === 'pointer') pointerEnabled = enabled;
+    },
+
     onForceChange: (forceId: string, param: string, value: number) => {
       if (forceId === 'drag' && param === 'coefficient') {
         (dragForce.params as Record<string, unknown>).coefficient = value;
@@ -389,38 +563,125 @@ async function main(): Promise<void> {
         (wanderForce.params as Record<string, unknown>).strength = value;
       } else if (forceId === 'wander' && param === 'rate') {
         (wanderForce.params as Record<string, unknown>).rate = value;
+      } else if (forceId === 'pointer' && param === 'strength') {
+        (pointerForce.params as Record<string, unknown>).strength = value;
+      } else if (forceId === 'pointer' && param === 'radius') {
+        (pointerForce.params as Record<string, unknown>).radius = value;
+      } else if (forceId === 'pointer' && param.startsWith('falloff_')) {
+        const falloff = param.replace('falloff_', '');
+        (pointerForce.params as Record<string, unknown>).falloff = falloff;
       }
     },
-    onMatrixChange: (i: number, j: number, strength: number) => {
-      const existing = interactionMatrix.get(i, j);
-      if (existing) {
-        interactionMatrix.set(i, j, { ...existing, strength });
-      } else {
-        interactionMatrix.set(i, j, { strength, radius: 100, falloff: 'linear' });
+
+    onMatrixChange: (i: number, j: number, strength: number, radius: number, falloff: string) => {
+      const entry: InteractionEntry = { strength, radius, falloff };
+      interactionMatrix.set(i, j, entry);
+      // Update tracked state
+      if (!matrixState[i]) matrixState[i] = [];
+      matrixState[i][j] = { strength, radius, falloff };
+
+      // Also update InteractionRuleMatrix if it exists on the config
+      // The rule matrix uses enabledForces based on strength sign
+      const ruleIdx = eco.config.interactionRules?.[i]?.[j];
+      if (ruleIdx) {
+        ruleIdx.strength = strength;
+        ruleIdx.radius = radius;
+        ruleIdx.falloff = falloff as 'linear' | 'inverse' | 'constant';
       }
     },
+
     onRandomizeMatrix: () => {
-      interactionMatrix = new InteractionMatrix(3);
-      for (let i = 0; i < 3; i++) {
-        for (let j = 0; j < 3; j++) {
-          if (i === j) continue;
+      const n = interactionMatrix.numTypes;
+      interactionMatrix = new InteractionMatrix(n);
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
           const str = Math.round((Math.random() - 0.5) * 200);
           if (Math.abs(str) > 10) {
-            interactionMatrix.set(i, j, {
+            const entry = {
               strength: str,
               radius: 50 + Math.random() * 100,
-              falloff: 'linear',
-            });
+              falloff: 'linear' as const,
+            };
+            interactionMatrix.set(i, j, entry);
+            if (!matrixState[i]) matrixState[i] = [];
+            matrixState[i][j] = { ...entry };
+          } else {
+            if (matrixState[i]) matrixState[i][j] = null;
           }
         }
       }
-      // Update pairwiseForce's matrix reference
       (pairwiseForce as { matrix: InteractionMatrix }).matrix = interactionMatrix;
     },
+
+    onClearMatrix: () => {
+      const n = interactionMatrix.numTypes;
+      interactionMatrix = new InteractionMatrix(n);
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+          if (matrixState[i]) matrixState[i][j] = null;
+        }
+      }
+      (pairwiseForce as { matrix: InteractionMatrix }).matrix = interactionMatrix;
+    },
+
+    onSpeciesChange: (speciesIndex: number, param: string, value: number | string | boolean) => {
+      if (speciesIndex < 0 || speciesIndex >= eco.config.species.length) return;
+      const sp = eco.config.species[speciesIndex];
+      if (!sp) return;
+
+      if (param === 'name' && typeof value === 'string') {
+        sp.name = value;
+      } else if (param === 'color' && typeof value === 'string') {
+        sp.color = value;
+      } else if (param === 'count' && typeof value === 'number') {
+        // Count change requires restart
+        if (confirm(`Change ${sp.name} count to ${value}? This will restart the simulation.`)) {
+          sp.count = value;
+          eco = new EcosystemWorld(eco.config);
+          grid.rebuild(eco.world);
+        }
+      } else if (param === 'radius' && typeof value === 'number') {
+        sp.radius = value;
+      } else if (param === 'initialSpeed' && typeof value === 'number') {
+        sp.initialSpeed = value;
+      } else if (param === 'maxSpeed' && typeof value === 'number') {
+        sp.maxSpeed = value;
+      } else if (param === 'maxEnergy' && typeof value === 'number') {
+        sp.energy.maxEnergy = value;
+      } else if (param === 'initialEnergy' && typeof value === 'number') {
+        sp.energy.initialEnergy = value;
+      } else if (param === 'reproductionCost' && typeof value === 'number') {
+        sp.energy.reproductionCost = value;
+      } else if (param === 'movementCostPerSec' && typeof value === 'number') {
+        sp.energy.movementCostPerSec = value;
+      } else if (param === 'idleDrainPerSec' && typeof value === 'number') {
+        sp.energy.idleDrainPerSec = value;
+      } else if (param === 'maxAgeSec' && typeof value === 'number') {
+        sp.lifecycle.maxAgeSec = value;
+      } else if (param === 'starvationDamagePerSec' && typeof value === 'number') {
+        sp.lifecycle.starvationDamagePerSec = value;
+      } else if (param === 'reproductionCooldownSec' && typeof value === 'number') {
+        sp.lifecycle.reproductionCooldownSec = value;
+      } else if (param === 'sicknessDurationSec' && typeof value === 'number') {
+        sp.lifecycle.sicknessDurationSec = value;
+      } else if (param === 'contagionRadius' && typeof value === 'number') {
+        sp.lifecycle.contagionRadius = value;
+      } else if (param.startsWith('canEat_') && typeof value === 'boolean') {
+        const targetIdx = parseInt(param.replace('canEat_', ''));
+        if (value) sp.diet.canEat.add(targetIdx);
+        else sp.diet.canEat.delete(targetIdx);
+      } else if (param.startsWith('infectionVuln_') && typeof value === 'boolean') {
+        const targetIdx = parseInt(param.replace('infectionVuln_', ''));
+        if (value) sp.diet.infectionVulnerability.add(targetIdx);
+        else sp.diet.infectionVulnerability.delete(targetIdx);
+      }
+    },
+
     onExport: () => {
       const config = getCurrentConfig();
       exportConfig(config, 'critterium-config.json');
     },
+
     onImport: async () => {
       const imported = await importConfig();
       if (imported) {
@@ -436,6 +697,46 @@ async function main(): Promise<void> {
         }
       }
     },
+
+    onSavePreset: (name: string) => {
+      const config = getCurrentConfig();
+      savePreset(name, config);
+    },
+
+    onLoadPreset: (name: string) => {
+      const config = loadPreset(name);
+      if (config) {
+        try {
+          const validated = deserializeConfig(config as any);
+          const applied = applyConfig(validated);
+          eco = applied.eco;
+          interactionMatrix = applied.matrix;
+          (pairwiseForce as { matrix: InteractionMatrix }).matrix = interactionMatrix;
+          grid.rebuild(eco.world);
+        } catch (err) {
+          console.error('[Critterium] Load preset failed:', err);
+        }
+      }
+    },
+
+    onDeletePreset: (name: string) => {
+      deletePreset(name);
+    },
+
+    getSavedPresets: () => getSavedPresets(),
+    getConfig: () => getCurrentConfig(),
+    applyImportedConfig: (config: CritteriumConfig) => {
+      try {
+        const validated = deserializeConfig(config as any);
+        const applied = applyConfig(validated);
+        eco = applied.eco;
+        interactionMatrix = applied.matrix;
+        (pairwiseForce as { matrix: InteractionMatrix }).matrix = interactionMatrix;
+        grid.rebuild(eco.world);
+      } catch (err) {
+        console.error('[Critterium] Apply config failed:', err);
+      }
+    },
   });
 
   // Mount controls panel
@@ -443,11 +744,9 @@ async function main(): Promise<void> {
     appEl.appendChild(controlsPanel);
   }
 
-  // 7. Autosave wiring (CRT-13)
+  // 9. Autosave wiring
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      doAutosave();
-    }
+    if (document.hidden) doAutosave();
   });
 
   window.addEventListener('beforeunload', () => {
