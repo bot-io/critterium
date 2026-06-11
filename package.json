@@ -9,6 +9,7 @@
   "scripts": {
     "build": "npm run build --workspaces",
     "test": "npm run test --workspaces",
+    "test:bench": "vitest run packages/core/src/benchmark.test.ts",
     "lint": "npm run lint --workspaces",
     "format:check": "prettier --check .",
     "format": "prettier --write .",
