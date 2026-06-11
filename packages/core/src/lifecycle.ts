@@ -12,8 +12,8 @@
  */
 
 import { type EcosystemWorld, type LifecycleResult } from './ecosystem-world.js';
-import { processEating, type EatingResult } from './eating.js';
-import { ALIVE, DEAD, NOT_INFECTED } from './ecosystem.js';
+import { type EatingResult } from './eating.js';
+import { DEAD, NOT_INFECTED } from './ecosystem.js';
 
 /** Combined result from one full ecosystem step. */
 export interface EcosystemStepResult {
@@ -57,7 +57,7 @@ export function processReproduction(eco: EcosystemWorld): number {
  *
  * Returns count of infection deaths.
  */
-export function processInfection(eco: EcosystemWorld, dt: number): number {
+export function processInfection(eco: EcosystemWorld, _dt: number): number {
   let diedInfection = 0;
   const { world, eco: state, species } = eco;
   const hwm = eco.highWaterMark;

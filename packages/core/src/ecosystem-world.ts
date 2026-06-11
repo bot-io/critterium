@@ -10,13 +10,10 @@
 
 import {
   World,
-  SimLoop,
   createRng,
   type SimulationConfig,
-  type ParticleTypeConfig,
 } from './index.js';
 import {
-  ALIVE,
   DEAD,
   NOT_INFECTED,
   EcosystemState,
@@ -291,26 +288,6 @@ export class EcosystemWorld {
       seed: this.world.seed,
       simTime: this.world.simTime,
     };
-  }
-
-  /** Grow ecosystem arrays to new capacity. */
-  private growArrays(newCapacity: number): void {
-    const oldEco = this.eco;
-    // We need to re-create with larger capacity
-    // Since EcosystemState arrays are readonly, we create a new one and copy
-    // This is a rare operation (only when spawning beyond initial allocation)
-    const newEco = new EcosystemState(newCapacity);
-    newEco.energy.set(oldEco.energy);
-    newEco.age.set(oldEco.age);
-    newEco.health.set(oldEco.health);
-    newEco.alive.set(oldEco.alive);
-    newEco.reproductionCooldown.set(oldEco.reproductionCooldown);
-    newEco.infectedBy.set(oldEco.infectedBy);
-    newEco.infectionTime.set(oldEco.infectionTime);
-    // Replace internal reference (need to cast away readonly)
-    (this as { eco: EcosystemState }).eco = newEco;
-    // Grow free list to match
-    this.freeList.grow(newCapacity);
   }
 
   /** Ensure world arrays can hold up to `capacity` particles. */

@@ -8,7 +8,7 @@
  * CRT-11: Config schema v1 + serialization
  */
 
-import { InteractionMatrix, type InteractionEntry, type FalloffType } from './index.js';
+import { InteractionMatrix, type FalloffType } from './index.js';
 import {
   type EcosystemConfig,
   type SpeciesConfig,
@@ -16,13 +16,8 @@ import {
   type LifecycleConfig,
   type DietConfig,
   ALIVE,
-  DEAD,
-  NOT_INFECTED,
-  defaultEnergyConfig,
-  defaultLifecycleConfig,
-  defaultDietConfig,
 } from './ecosystem.js';
-import { EcosystemWorld, type EcosystemWorldSnapshot } from './ecosystem-world.js';
+import { EcosystemWorld } from './ecosystem-world.js';
 
 // ─── JSON-serializable config types ────────────────────────────
 

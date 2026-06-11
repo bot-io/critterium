@@ -11,7 +11,6 @@
  */
 
 import {
-  World,
   SpatialHashGrid,
   InteractionMatrix,
   PairwiseForce,
@@ -22,19 +21,13 @@ import {
   // Ecosystem barrel re-exports
   type EcosystemConfig,
   type SpeciesConfig,
-  type EcosystemState,
   defaultEnergyConfig,
   defaultLifecycleConfig,
   defaultDietConfig,
-  ALIVE,
-  DEAD,
   EcosystemWorld,
   processEating,
   processReproduction,
   processInfection,
-  InteractionRuleMatrix,
-  FORCE_FLAGS,
-  forceFlags,
   // Config schema
   serializeConfig,
   deserializeConfig,
@@ -42,7 +35,7 @@ import {
   type CritteriumConfig,
 } from '@critterium/core';
 import { CritteriumRenderer, type SpeciesVisual } from '@critterium/render';
-import { createControlsPanel, type ControlsPanelOptions } from './controls.js';
+import { createControlsPanel } from './controls.js';
 import { autosave, loadAutosave, clearAutosave, exportConfig, importConfig } from './persistence.js';
 
 // ─── Species Definitions ─────────────────────────────────────
@@ -236,7 +229,6 @@ function deletePreset(name: string): void {
 // ─── Error boundary ──────────────────────────────────────────
 
 let freezeDetected = false;
-let lastLoopTime = performance.now();
 let consecutiveSlowFrames = 0;
 
 function onError(err: unknown): void {
@@ -363,7 +355,7 @@ async function main(): Promise<void> {
   let paused = false;
 
   function getCurrentConfig(): CritteriumConfig {
-    const activeForces = [dragForce, wanderForce];
+    const activeForces: Array<{ readonly id: string; readonly params: Record<string, unknown> }> = [dragForce, wanderForce];
     if (pointerEnabled) activeForces.push(pointerForce);
     return serializeConfig(eco, interactionMatrix, activeForces);
   }
@@ -517,7 +509,7 @@ async function main(): Promise<void> {
       drag: { coefficient: 0.8, _enabled: 1 },
       wander: { strength: 40, rate: 2.5, _enabled: 1 },
       pointer: { strength: 200, radius: 150, falloff: 0, _enabled: 0 },
-      _popCap: CONFIG.populationCap,
+      _popCap: CONFIG.populationCap as unknown as Record<string, number>,
     },
 
     onTogglePause: (p: boolean) => {
@@ -574,7 +566,7 @@ async function main(): Promise<void> {
     },
 
     onMatrixChange: (i: number, j: number, strength: number, radius: number, falloff: string) => {
-      const entry: InteractionEntry = { strength, radius, falloff };
+      const entry: InteractionEntry = { strength, radius, falloff: falloff as 'linear' | 'inverse' | 'constant' };
       interactionMatrix.set(i, j, entry);
       // Update tracked state
       if (!matrixState[i]) matrixState[i] = [];

@@ -14,7 +14,8 @@
  * - Instant eating (touch → gone)
  */
 
-import { MAX_TYPES } from './index.js';
+// MAX_TYPES reserved for future use
+// import { MAX_TYPES } from './index.js';
 
 // ─── Constants ───────────────────────────────────────────────────
 
@@ -150,9 +151,9 @@ export class EcosystemState {
   /** Initialize a particle slot for a living creature. */
   initParticle(
     index: number,
-    speciesIndex: number,
+    _speciesIndex: number,
     species: SpeciesConfig,
-    rng: () => number,
+    _rng: () => number,
   ): void {
     this.alive[index] = ALIVE;
     this.energy[index] = species.energy.initialEnergy;

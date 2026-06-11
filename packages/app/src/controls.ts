@@ -204,10 +204,6 @@ function el(tag: string, cls?: string): HTMLElement {
   return e;
 }
 
-function txt(parent: HTMLElement, text: string): void {
-  parent.appendChild(document.createTextNode(text));
-}
-
 function makeSlider(
   label: string, min: number, max: number, step: number, initial: number,
   onChange: (v: number) => void,
@@ -379,7 +375,7 @@ function buildSimSection(opts: ControlsPanelOptions): HTMLElement {
     }));
 
     // Population cap slider
-    const capInit = opts.initialForceValues?.['_popCap'] ?? 600;
+    const capInit = (opts.initialForceValues?.['_popCap'] as unknown as number | undefined) ?? 600;
     body.appendChild(makeSlider('Pop Cap', 50, 2000, 50, capInit, (v) => {
       opts.onPopulationCapChange?.(v);
     }));
@@ -530,22 +526,22 @@ function buildForcesSection(opts: ControlsPanelOptions): HTMLElement {
 
   return makeSection('Forces', (body) => {
     // Drag
-    const dragEnabled = fv['drag']?.['_enabled'] !== false;
+    const dragEnabled = (fv['drag']?.['_enabled'] ?? 1) !== 0;
     body.appendChild(makeToggle('Drag', dragEnabled, (on) => opts.onForceToggle?.('drag', on)));
     body.appendChild(makeSlider('  Coeff', 0, 5, 0.1, fv['drag']?.['coefficient'] ?? 0.8, (v) => opts.onForceChange?.('drag', 'coefficient', v)));
 
     // Wander
-    const wanderEnabled = fv['wander']?.['_enabled'] !== false;
+    const wanderEnabled = (fv['wander']?.['_enabled'] ?? 1) !== 0;
     body.appendChild(makeToggle('Wander', wanderEnabled, (on) => opts.onForceToggle?.('wander', on)));
     body.appendChild(makeSlider('  Str', 0, 200, 1, fv['wander']?.['strength'] ?? 40, (v) => opts.onForceChange?.('wander', 'strength', v)));
     body.appendChild(makeSlider('  Rate', 0, 10, 0.1, fv['wander']?.['rate'] ?? 2.5, (v) => opts.onForceChange?.('wander', 'rate', v)));
 
     // Pointer
-    const pointerEnabled = fv['pointer']?.['_enabled'] === true;
+    const pointerEnabled = (fv['pointer']?.['_enabled'] ?? 0) !== 0;
     body.appendChild(makeToggle('Pointer', pointerEnabled, (on) => opts.onForceToggle?.('pointer', on)));
     body.appendChild(makeSlider('  Str', -500, 500, 5, fv['pointer']?.['strength'] ?? 200, (v) => opts.onForceChange?.('pointer', 'strength', v)));
     body.appendChild(makeSlider('  Radius', 10, 400, 5, fv['pointer']?.['radius'] ?? 150, (v) => opts.onForceChange?.('pointer', 'radius', v)));
-    body.appendChild(makeFalloffSelect(fv['pointer']?.['falloff'] ?? 'linear', (v) => {
+    body.appendChild(makeFalloffSelect((fv['pointer']?.['falloff'] as unknown as string) ?? 'linear', (v) => {
       // Store falloff as a special param via onForceChange with string value mapped to number
       // Since onForceChange expects number, encode falloff as a special call
       opts.onForceChange?.('pointer', 'falloff_' + v, 0);

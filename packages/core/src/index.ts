@@ -301,14 +301,11 @@ export class SpatialHashGrid {
   // next[particleIndex] = next particle in the same cell's linked list, or -1
   private next: Int32Array;
 
-  private readonly capacity: number;
-
   constructor(width: number, height: number, cellSize: number, maxParticles: number) {
     this.cellSize = cellSize;
     this.invCellSize = 1 / cellSize;
     this.cols = Math.ceil(width / cellSize);
     this.rows = Math.ceil(height / cellSize);
-    this.capacity = maxParticles;
 
     const numCells = this.cols * this.rows;
     this.head = new Int32Array(numCells);
