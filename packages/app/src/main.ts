@@ -39,6 +39,7 @@ import { createControlsPanel } from './controls.js';
 import { autosave, loadAutosave, clearAutosave, exportConfig, importConfig } from './persistence.js';
 import { getBuiltinPreset } from './presets.js';
 import { PopulationGraph } from './population-graph.js';
+import { AdaptiveQuality } from './adaptive-quality.js';
 
 // ─── Species Definitions ─────────────────────────────────────
 
@@ -244,6 +245,19 @@ function onError(err: unknown): void {
   }
 }
 
+/** Show a non-blocking performance warning toast. */
+function showPerfWarning(): void {
+  const toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);padding:8px 16px;background:rgba(200,120,0,0.9);color:#fff;font:13px "SF Mono","Fira Code","Consolas",monospace;border-radius:6px;z-index:9999;pointer-events:none;transition:opacity 1s ease-out;white-space:nowrap;';
+  toast.textContent = '⚠ Low performance detected — effects reduced';
+  document.body.appendChild(toast);
+  // Auto-dismiss after 4 seconds
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 1000);
+  }, 4000);
+}
+
 // ─── Build initial species values for controls ───────────────
 
 function buildInitialSpeciesValues(): Array<Record<string, number>> {
@@ -364,6 +378,30 @@ async function main(): Promise<void> {
     maxHistorySec: 30,
   });
 
+  // 4d. Adaptive quality system
+  const adaptiveQuality = new AdaptiveQuality();
+  let lowQualityStartTime = -1;
+  let perfWarningShown = false;
+
+  adaptiveQuality.onChange((level, settings) => {
+    console.log(`[Critterium] Quality changed to ${level}`);
+
+    // Apply quality settings to renderer
+    renderer.renderSkip = settings.renderSkip;
+    renderer.effectsEnabled = settings.effectsEnabled;
+    renderer.sicknessRingsEnabled = settings.sicknessRingsEnabled;
+    renderer.energyOpacityEnabled = settings.energyOpacityEnabled;
+
+    // Track when quality went to 'low'
+    if (level === 'low') {
+      lowQualityStartTime = performance.now() / 1000;
+      perfWarningShown = false;
+    } else {
+      lowQualityStartTime = -1;
+      perfWarningShown = false;
+    }
+  });
+
   // 5. Simulation loop with freeze detection
   const BASE_DT = 1 / 60;
   let speedMultiplier = 1;
@@ -479,7 +517,10 @@ async function main(): Promise<void> {
       }
 
       // Update population graph (pass typed array directly)
-      popGraph.update(speciesCounts, frameDt);
+      // Respect adaptive quality graphEnabled setting
+      if (adaptiveQuality.quality.graphEnabled) {
+        popGraph.update(speciesCounts, frameDt);
+      }
 
       // Update FPS counter
       fpsFrameCount++;
@@ -487,6 +528,19 @@ async function main(): Promise<void> {
       if (fpsTimer >= 0.5) {
         const fps = Math.round(fpsFrameCount / fpsTimer);
         fpsEl.textContent = `FPS: ${fps}`;
+
+        // Feed FPS to adaptive quality system (every 0.5s)
+        adaptiveQuality.update(fps);
+
+        // Check for sustained low FPS warning
+        if (lowQualityStartTime > 0 && !perfWarningShown) {
+          const now = performance.now() / 1000;
+          if (now - lowQualityStartTime >= 5 && fps < 20) {
+            perfWarningShown = true;
+            showPerfWarning();
+          }
+        }
+
         fpsFrameCount = 0;
         fpsTimer = 0;
       }
