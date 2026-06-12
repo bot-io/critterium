@@ -896,6 +896,123 @@ async function main(): Promise<void> {
       }
     },
 
+    onAddSpecies: () => {
+      const idx = liveConfig.species.length;
+      const defaultColor = ['#44cc44', '#ff4444', '#4488ff', '#cc44cc', '#ffaa00', '#44cccc'][idx % 6];
+      const newSpecies: SpeciesConfig = {
+        name: `Species ${idx}`,
+        count: 50,
+        color: defaultColor,
+        radius: 3,
+        initialSpeed: 50,
+        maxSpeed: 100,
+        energy: defaultEnergyConfig(),
+        lifecycle: defaultLifecycleConfig(),
+        diet: defaultDietConfig(),
+      };
+      liveConfig.species.push(newSpecies);
+
+      // Expand matrix state for new species
+      for (const row of matrixState) {
+        row.push(null);
+      }
+      matrixState.push(Array(matrixState.length + 1).fill(null));
+
+      // Expand interaction rules
+      for (const row of liveConfig.interactionRules) {
+        row.push(null);
+      }
+      liveConfig.interactionRules.push(Array(liveConfig.interactionRules.length + 1).fill(null));
+
+      // Save pending config and reload to rebuild UI
+      const pendingConfig = serializeConfig(eco, interactionMatrix, []);
+      pendingConfig.species = liveConfig.species.map((sp, i) => ({
+        name: sp.name,
+        count: sp.count,
+        color: sp.color,
+        radius: sp.radius,
+        initialSpeed: sp.initialSpeed,
+        maxSpeed: sp.maxSpeed,
+        energy: {
+          maxEnergy: sp.energy.maxEnergy,
+          initialEnergy: sp.energy.initialEnergy,
+          movementCostPerSec: sp.energy.movementCostPerSec,
+          reproductionCost: sp.energy.reproductionCost,
+          idleDrainPerSec: sp.energy.idleDrainPerSec,
+          energyGainPerPrey: [...sp.energy.energyGainPerPrey],
+        },
+        lifecycle: {
+          maxAgeSec: sp.lifecycle.maxAgeSec,
+          starvationDamagePerSec: sp.lifecycle.starvationDamagePerSec,
+          reproductionCooldownSec: sp.lifecycle.reproductionCooldownSec,
+          sicknessDurationSec: sp.lifecycle.sicknessDurationSec,
+          contagionRadius: sp.lifecycle.contagionRadius,
+        },
+        diet: {
+          canEat: [...sp.diet.canEat],
+          infectionVulnerability: [...sp.diet.infectionVulnerability],
+        },
+      }));
+      pendingConfig.interactionMatrix = matrixState.map(row => [...row]);
+      pendingConfig.simulation.width = window.innerWidth;
+      pendingConfig.simulation.height = window.innerHeight;
+      localStorage.setItem('critterium-pending-preset', JSON.stringify(pendingConfig));
+      window.location.reload();
+    },
+
+    onRemoveSpecies: (speciesIndex: number) => {
+      if (liveConfig.species.length <= 1) return;
+      if (speciesIndex < 0 || speciesIndex >= liveConfig.species.length) return;
+
+      // Remove species from liveConfig
+      liveConfig.species.splice(speciesIndex, 1);
+
+      // Remove row from matrix state and interaction rules
+      matrixState.splice(speciesIndex, 1);
+      for (const row of matrixState) {
+        row.splice(speciesIndex, 1);
+      }
+      liveConfig.interactionRules.splice(speciesIndex, 1);
+      for (const row of liveConfig.interactionRules) {
+        row.splice(speciesIndex, 1);
+      }
+
+      // Save pending config and reload to rebuild UI
+      const pendingConfig = serializeConfig(eco, interactionMatrix, []);
+      pendingConfig.species = liveConfig.species.map((sp, i) => ({
+        name: sp.name,
+        count: sp.count,
+        color: sp.color,
+        radius: sp.radius,
+        initialSpeed: sp.initialSpeed,
+        maxSpeed: sp.maxSpeed,
+        energy: {
+          maxEnergy: sp.energy.maxEnergy,
+          initialEnergy: sp.energy.initialEnergy,
+          movementCostPerSec: sp.energy.movementCostPerSec,
+          reproductionCost: sp.energy.reproductionCost,
+          idleDrainPerSec: sp.energy.idleDrainPerSec,
+          energyGainPerPrey: [...sp.energy.energyGainPerPrey],
+        },
+        lifecycle: {
+          maxAgeSec: sp.lifecycle.maxAgeSec,
+          starvationDamagePerSec: sp.lifecycle.starvationDamagePerSec,
+          reproductionCooldownSec: sp.lifecycle.reproductionCooldownSec,
+          sicknessDurationSec: sp.lifecycle.sicknessDurationSec,
+          contagionRadius: sp.lifecycle.contagionRadius,
+        },
+        diet: {
+          canEat: [...sp.diet.canEat],
+          infectionVulnerability: [...sp.diet.infectionVulnerability],
+        },
+      }));
+      pendingConfig.interactionMatrix = matrixState.map(row => [...row]);
+      pendingConfig.simulation.width = window.innerWidth;
+      pendingConfig.simulation.height = window.innerHeight;
+      localStorage.setItem('critterium-pending-preset', JSON.stringify(pendingConfig));
+      window.location.reload();
+    },
+
     onExport: () => {
       const config = getCurrentConfig();
       exportConfig(config, 'critterium-config.json');

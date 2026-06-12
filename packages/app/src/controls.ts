@@ -23,6 +23,8 @@ export interface ControlsPanelOptions {
   onRandomizeMatrix?: () => void;
   onClearMatrix?: () => void;
   onSpeciesChange?: (speciesIndex: number, param: string, value: number | string | boolean) => void;
+  onAddSpecies?: () => void;
+  onRemoveSpecies?: (speciesIndex: number) => void;
   onExport?: () => void;
   onImport?: () => void;
   onSavePreset?: (name: string) => void;
@@ -474,6 +476,14 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
     const colors = opts.speciesColors ?? Array.from({ length: n }, (_, i) => ['#44cc44', '#ff4444', '#cc44cc'][i % 3]);
     const initVals = opts.initialSpeciesValues ?? [];
 
+    // Add Species button at top
+    const addRow = el('div', 'crit-row');
+    const addBtn = el('button', 'crit-btn');
+    addBtn.textContent = '+ Add Species';
+    addBtn.addEventListener('click', () => opts.onAddSpecies?.());
+    addRow.appendChild(addBtn);
+    body.appendChild(addRow);
+
     for (let si = 0; si < n; si++) {
       const speciesIdx = si;
       const color = colors[si] ?? '#888';
@@ -509,6 +519,19 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
         opts.onSpeciesChange?.(speciesIdx, 'color', colorInput.value);
       });
       hdr.appendChild(colorInput);
+
+      // Remove species button (only if more than 1 species)
+      if (n > 1) {
+        const removeBtn = el('button', 'crit-btn crit-btn-small crit-btn-danger');
+        removeBtn.textContent = '✕';
+        removeBtn.title = 'Remove species';
+        removeBtn.style.marginLeft = 'auto';
+        removeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          opts.onRemoveSpecies?.(speciesIdx);
+        });
+        hdr.appendChild(removeBtn);
+      }
 
       const subBody = el('div', 'crit-section-body');
       hdr.addEventListener('click', (e) => {

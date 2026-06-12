@@ -16,6 +16,8 @@ function makeOptions(overrides: Partial<ControlsPanelOptions> = {}): ControlsPan
     onRandomizeMatrix: vi.fn(),
     onClearMatrix: vi.fn(),
     onSpeciesChange: vi.fn(),
+    onAddSpecies: vi.fn(),
+    onRemoveSpecies: vi.fn(),
     onExport: vi.fn(),
     onImport: vi.fn(),
     onSavePreset: vi.fn(),
@@ -268,5 +270,57 @@ describe('controls panel', () => {
     const panel = createControlsPanel(makeOptions());
     const sliders = panel.querySelectorAll('input[type="range"]');
     expect(sliders.length).toBeGreaterThan(0);
+  });
+
+  // ─── Add/Remove Species Tests ────────────────────────────────
+
+  it('has an "Add Species" button in the Species section', () => {
+    const panel = createControlsPanel(makeOptions());
+    const addBtn = Array.from(panel.querySelectorAll('.crit-btn')).find(
+      (b) => b.textContent?.includes('Add Species'),
+    );
+    expect(addBtn).toBeDefined();
+  });
+
+  it('"Add Species" button fires onAddSpecies callback', () => {
+    const opts = makeOptions();
+    const panel = createControlsPanel(opts);
+    const addBtn = Array.from(panel.querySelectorAll('.crit-btn')).find(
+      (b) => b.textContent?.includes('Add Species'),
+    ) as HTMLElement;
+    expect(addBtn).toBeDefined();
+    addBtn.click();
+    expect(opts.onAddSpecies).toHaveBeenCalled();
+  });
+
+  it('shows remove buttons on each species when count > 1', () => {
+    const panel = createControlsPanel(makeOptions({ speciesCount: 3 }));
+    const removeBtns = Array.from(panel.querySelectorAll('.crit-btn-danger')).filter(
+      (b) => b.textContent?.includes('✕'),
+    );
+    expect(removeBtns.length).toBe(3);
+  });
+
+  it('does not show remove buttons when only 1 species', () => {
+    const panel = createControlsPanel(
+      makeOptions({ speciesCount: 1, speciesNames: ['Solo'], speciesColors: ['#ff0000'] }),
+    );
+    const removeBtns = Array.from(panel.querySelectorAll('.crit-btn-danger')).filter(
+      (b) => b.textContent?.includes('✕'),
+    );
+    expect(removeBtns.length).toBe(0);
+  });
+
+  it('remove species button fires onRemoveSpecies with correct index', () => {
+    const opts = makeOptions({ speciesCount: 3, speciesNames: ['A', 'B', 'C'] });
+    const panel = createControlsPanel(opts);
+    // Get species headers — the remove button is inside the header
+    const speciesHdrs = panel.querySelectorAll('.crit-species-hdr');
+    expect(speciesHdrs.length).toBe(3);
+    // Click the remove button of the second species
+    const secondRemoveBtn = speciesHdrs[1].querySelector('.crit-btn-danger') as HTMLElement;
+    expect(secondRemoveBtn).toBeDefined();
+    secondRemoveBtn.click();
+    expect(opts.onRemoveSpecies).toHaveBeenCalledWith(1);
   });
 });
