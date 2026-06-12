@@ -36,14 +36,11 @@ export interface JsonLifecycleConfig {
   maxAgeSec: number;
   starvationDamagePerSec: number;
   reproductionCooldownSec: number;
-  sicknessDurationSec: number;
-  contagionRadius: number;
 }
 
 /** JSON-serializable diet config (arrays instead of Sets). */
 export interface JsonDietConfig {
   canEat: number[];
-  infectionVulnerability: number[];
 }
 
 /** JSON-serializable species definition. */
@@ -94,7 +91,6 @@ export interface JsonSnapshot {
   simTime: number;
   energy: number[];
   alive: number[];
-  infectionState: number[];
 }
 
 /** The full config schema v1. */
@@ -145,8 +141,6 @@ function lifecycleToJson(lc: LifecycleConfig): JsonLifecycleConfig {
     maxAgeSec: lc.maxAgeSec,
     starvationDamagePerSec: lc.starvationDamagePerSec,
     reproductionCooldownSec: lc.reproductionCooldownSec,
-    sicknessDurationSec: lc.sicknessDurationSec,
-    contagionRadius: lc.contagionRadius,
   };
 }
 
@@ -156,8 +150,6 @@ function jsonToLifecycle(json: JsonLifecycleConfig): LifecycleConfig {
     maxAgeSec: json.maxAgeSec,
     starvationDamagePerSec: json.starvationDamagePerSec,
     reproductionCooldownSec: json.reproductionCooldownSec,
-    sicknessDurationSec: json.sicknessDurationSec,
-    contagionRadius: json.contagionRadius,
   };
 }
 
@@ -165,7 +157,6 @@ function jsonToLifecycle(json: JsonLifecycleConfig): LifecycleConfig {
 function dietToJson(diet: DietConfig): JsonDietConfig {
   return {
     canEat: [...diet.canEat],
-    infectionVulnerability: [...diet.infectionVulnerability],
   };
 }
 
@@ -173,7 +164,6 @@ function dietToJson(diet: DietConfig): JsonDietConfig {
 function jsonToDiet(json: JsonDietConfig): DietConfig {
   return {
     canEat: new Set(json.canEat),
-    infectionVulnerability: new Set(json.infectionVulnerability),
   };
 }
 
@@ -329,7 +319,6 @@ function serializeSnapshot(eco: EcosystemWorld): JsonSnapshot {
   const typeArr: number[] = [];
   const energyArr: number[] = [];
   const aliveArr: number[] = [];
-  const infectionArr: number[] = [];
 
   for (let i = 0; i < hwm; i++) {
     xArr.push(snap.world.x[i]);
@@ -339,7 +328,6 @@ function serializeSnapshot(eco: EcosystemWorld): JsonSnapshot {
     typeArr.push(snap.world.type[i]);
     energyArr.push(snap.eco.energy[i]);
     aliveArr.push(snap.eco.alive[i]);
-    infectionArr.push(snap.eco.infectedBy[i]);
   }
 
   return {
@@ -352,7 +340,6 @@ function serializeSnapshot(eco: EcosystemWorld): JsonSnapshot {
     simTime: snap.simTime,
     energy: energyArr,
     alive: aliveArr,
-    infectionState: infectionArr,
   };
 }
 
@@ -457,7 +444,7 @@ function validateSpecies(sp: Record<string, unknown>, index: number): void {
 
 /** Validate a snapshot object. */
 function validateSnapshot(snap: Record<string, unknown>): void {
-  const arrFields = ['x', 'y', 'vx', 'vy', 'type', 'energy', 'alive', 'infectionState'];
+  const arrFields = ['x', 'y', 'vx', 'vy', 'type', 'energy', 'alive'];
   for (const field of arrFields) {
     if (!Array.isArray(snap[field])) {
       throw new Error(`snapshot.${field} must be an array`);
@@ -610,8 +597,6 @@ function restoreSnapshot(eco: EcosystemWorld, snapshot: JsonSnapshot): void {
     (newEco as { health: Float32Array }).health.set(ecoState.health);
     (newEco as { alive: Uint8Array }).alive.set(ecoState.alive);
     (newEco as { reproductionCooldown: Float32Array }).reproductionCooldown.set(ecoState.reproductionCooldown);
-    (newEco as { infectedBy: Int8Array }).infectedBy.set(ecoState.infectedBy);
-    (newEco as { infectionTime: Float32Array }).infectionTime.set(ecoState.infectionTime);
     (eco as { eco: typeof ecoState }).eco = newEco;
   }
 
@@ -619,7 +604,6 @@ function restoreSnapshot(eco: EcosystemWorld, snapshot: JsonSnapshot): void {
   for (let i = 0; i < hwm; i++) {
     es.energy[i] = snapshot.energy[i];
     es.alive[i] = snapshot.alive[i];
-    es.infectedBy[i] = snapshot.infectionState[i];
   }
 
   // Recount alive

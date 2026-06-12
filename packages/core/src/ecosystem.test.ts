@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   MAX_SPECIES,
-  NOT_INFECTED,
   ALIVE,
   DEAD,
   EcosystemState,
@@ -39,9 +38,6 @@ describe('Constants', () => {
   it('MAX_SPECIES is 12', () => {
     expect(MAX_SPECIES).toBe(12);
   });
-  it('NOT_INFECTED is -1', () => {
-    expect(NOT_INFECTED).toBe(-1);
-  });
   it('ALIVE is 1, DEAD is 0', () => {
     expect(ALIVE).toBe(1);
     expect(DEAD).toBe(0);
@@ -58,21 +54,12 @@ describe('EcosystemState', () => {
     expect(state.health.length).toBe(100);
     expect(state.alive.length).toBe(100);
     expect(state.reproductionCooldown.length).toBe(100);
-    expect(state.infectedBy.length).toBe(100);
-    expect(state.infectionTime.length).toBe(100);
   });
 
   it('initializes all alive to DEAD by default', () => {
     const state = new EcosystemState(10);
     for (let i = 0; i < 10; i++) {
       expect(state.alive[i]).toBe(0);
-    }
-  });
-
-  it('initializes all infectedBy to NOT_INFECTED by default', () => {
-    const state = new EcosystemState(10);
-    for (let i = 0; i < 10; i++) {
-      expect(state.infectedBy[i]).toBe(NOT_INFECTED);
     }
   });
 });
@@ -89,8 +76,6 @@ describe('EcosystemState.initParticle', () => {
     expect(state.energy[0]).toBe(75);
     expect(state.age[0]).toBe(0);
     expect(state.health[0]).toBe(1.0);
-    expect(state.infectedBy[0]).toBe(NOT_INFECTED);
-    expect(state.infectionTime[0]).toBe(0);
   });
 
   it('sets reproduction cooldown to species cooldown', () => {
@@ -126,7 +111,6 @@ describe('EcosystemState.kill', () => {
     state.kill(0);
     expect(state.alive[0]).toBe(DEAD);
     expect(state.energy[0]).toBe(0);
-    expect(state.infectedBy[0]).toBe(NOT_INFECTED);
   });
 
   it('clears all state for the killed particle', () => {
@@ -134,16 +118,12 @@ describe('EcosystemState.kill', () => {
     const species = testSpecies();
     const rng = createRng(42);
     state.initParticle(0, 0, species, rng);
-    state.infectedBy[0] = 2;
-    state.infectionTime[0] = 5;
     state.energy[0] = 80;
     state.kill(0);
     expect(state.energy[0]).toBe(0);
     expect(state.age[0]).toBe(0);
     expect(state.health[0]).toBe(0);
     expect(state.reproductionCooldown[0]).toBe(0);
-    expect(state.infectedBy[0]).toBe(NOT_INFECTED);
-    expect(state.infectionTime[0]).toBe(0);
   });
 });
 
@@ -242,7 +222,6 @@ describe('defaultLifecycleConfig', () => {
     expect(cfg.maxAgeSec).toBe(60);
     expect(cfg.starvationDamagePerSec).toBe(10);
     expect(cfg.reproductionCooldownSec).toBe(5);
-    expect(cfg.sicknessDurationSec).toBe(10);
   });
 });
 
@@ -250,7 +229,6 @@ describe('defaultDietConfig', () => {
   it('provides empty sets by default', () => {
     const cfg = defaultDietConfig();
     expect(cfg.canEat.size).toBe(0);
-    expect(cfg.infectionVulnerability.size).toBe(0);
   });
 });
 

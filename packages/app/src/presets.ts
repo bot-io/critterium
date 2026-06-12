@@ -33,7 +33,7 @@ function preset(
 
 const CLASSIC: EcosystemPreset = preset(
   'Classic',
-  'The default ecosystem: Prey flocks and flees, Predator hunts, Parasite infects.',
+  'The default ecosystem: Prey flocks and flees, Predator hunts.',
   {
     version: 1,
     simulation: {
@@ -57,18 +57,15 @@ const CLASSIC: EcosystemPreset = preset(
           movementCostPerSec: 2,
           reproductionCost: 20,
           idleDrainPerSec: 1,
-          energyGainPerPrey: [0, 0, 0],
+          energyGainPerPrey: [0, 0],
         },
         lifecycle: {
           maxAgeSec: 40,
           starvationDamagePerSec: 8,
           reproductionCooldownSec: 3,
-          sicknessDurationSec: 8,
-          contagionRadius: 15,
         },
         diet: {
           canEat: [],
-          infectionVulnerability: [2],
         },
       },
       {
@@ -84,53 +81,22 @@ const CLASSIC: EcosystemPreset = preset(
           movementCostPerSec: 3,
           reproductionCost: 50,
           idleDrainPerSec: 2,
-          energyGainPerPrey: [40, 0, 0],
+          energyGainPerPrey: [40, 0],
         },
         lifecycle: {
           maxAgeSec: 60,
           starvationDamagePerSec: 5,
           reproductionCooldownSec: 8,
-          sicknessDurationSec: 0,
-          contagionRadius: 0,
         },
         diet: {
           canEat: [0],
-          infectionVulnerability: [],
-        },
-      },
-      {
-        name: 'Parasite',
-        count: 40,
-        color: '#cc44cc',
-        radius: 4,
-        initialSpeed: 40,
-        maxSpeed: 80,
-        energy: {
-          maxEnergy: 100,
-          initialEnergy: 50,
-          movementCostPerSec: 1,
-          reproductionCost: 30,
-          idleDrainPerSec: 1.5,
-          energyGainPerPrey: [0, 0, 0],
-        },
-        lifecycle: {
-          maxAgeSec: 30,
-          starvationDamagePerSec: 10,
-          reproductionCooldownSec: 5,
-          sicknessDurationSec: 0,
-          contagionRadius: 25,
-        },
-        diet: {
-          canEat: [],
-          infectionVulnerability: [],
         },
       },
     ],
     interactionMatrix: [
-      /*         Prey     Predator  Parasite */
-      /* Prey     */ [{ strength: 30, radius: 80, falloff: 'linear' }, { strength: -80, radius: 120, falloff: 'linear' }, { strength: -40, radius: 80, falloff: 'linear' }],
-      /* Predator */ [{ strength: 60, radius: 150, falloff: 'linear' }, { strength: -20, radius: 50, falloff: 'linear' }, null],
-      /* Parasite */ [{ strength: 50, radius: 120, falloff: 'linear' }, null, { strength: -15, radius: 40, falloff: 'linear' }],
+      /*         Prey     Predator */
+      /* Prey     */ [{ strength: 30, radius: 80, falloff: 'linear' }, { strength: -80, radius: 120, falloff: 'linear' }],
+      /* Predator */ [{ strength: 60, radius: 150, falloff: 'linear' }, { strength: -20, radius: 50, falloff: 'linear' }],
     ],
     forces: {
       drag: { coefficient: 0.8 },
@@ -173,12 +139,9 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
           maxAgeSec: 20,
           starvationDamagePerSec: 5,
           reproductionCooldownSec: 2,
-          sicknessDurationSec: 0,
-          contagionRadius: 0,
         },
         diet: {
           canEat: [],
-          infectionVulnerability: [],
         },
       },
       {
@@ -200,12 +163,9 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
           maxAgeSec: 30,
           starvationDamagePerSec: 6,
           reproductionCooldownSec: 4,
-          sicknessDurationSec: 0,
-          contagionRadius: 0,
         },
         diet: {
           canEat: [0],
-          infectionVulnerability: [],
         },
       },
       {
@@ -227,12 +187,9 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
           maxAgeSec: 50,
           starvationDamagePerSec: 6,
           reproductionCooldownSec: 6,
-          sicknessDurationSec: 0,
-          contagionRadius: 0,
         },
         diet: {
           canEat: [1],
-          infectionVulnerability: [],
         },
       },
       {
@@ -254,12 +211,9 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
           maxAgeSec: 80,
           starvationDamagePerSec: 4,
           reproductionCooldownSec: 12,
-          sicknessDurationSec: 0,
-          contagionRadius: 0,
         },
         diet: {
           canEat: [2],
-          infectionVulnerability: [],
         },
       },
       {
@@ -281,12 +235,9 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
           maxAgeSec: 200,
           starvationDamagePerSec: 2,
           reproductionCooldownSec: 30,
-          sicknessDurationSec: 0,
-          contagionRadius: 0,
         },
         diet: {
           canEat: [3],
-          infectionVulnerability: [],
         },
       },
     ],
@@ -339,12 +290,9 @@ const SWARM_INTELLIGENCE: EcosystemPreset = preset(
           maxAgeSec: 120,
           starvationDamagePerSec: 1,
           reproductionCooldownSec: 10,
-          sicknessDurationSec: 0,
-          contagionRadius: 0,
         },
         diet: {
           canEat: [],
-          infectionVulnerability: [],
         },
       },
       {
@@ -366,12 +314,9 @@ const SWARM_INTELLIGENCE: EcosystemPreset = preset(
           maxAgeSec: 80,
           starvationDamagePerSec: 1,
           reproductionCooldownSec: 5,
-          sicknessDurationSec: 0,
-          contagionRadius: 0,
         },
         diet: {
           canEat: [],
-          infectionVulnerability: [],
         },
       },
     ],
@@ -421,12 +366,9 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
           maxAgeSec: 100,
           starvationDamagePerSec: 4,
           reproductionCooldownSec: 15,
-          sicknessDurationSec: 0,
-          contagionRadius: 0,
         },
         diet: {
           canEat: [1, 2, 3],
-          infectionVulnerability: [],
         },
       },
       {
@@ -448,12 +390,9 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
           maxAgeSec: 80,
           starvationDamagePerSec: 5,
           reproductionCooldownSec: 10,
-          sicknessDurationSec: 0,
-          contagionRadius: 0,
         },
         diet: {
           canEat: [2, 3],
-          infectionVulnerability: [],
         },
       },
       {
@@ -475,12 +414,9 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
           maxAgeSec: 50,
           starvationDamagePerSec: 6,
           reproductionCooldownSec: 5,
-          sicknessDurationSec: 0,
-          contagionRadius: 0,
         },
         diet: {
           canEat: [],
-          infectionVulnerability: [],
         },
       },
       {
@@ -502,12 +438,9 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
           maxAgeSec: 25,
           starvationDamagePerSec: 4,
           reproductionCooldownSec: 2,
-          sicknessDurationSec: 0,
-          contagionRadius: 0,
         },
         diet: {
           canEat: [],
-          infectionVulnerability: [],
         },
       },
     ],
@@ -559,12 +492,9 @@ const SICK_WORLD: EcosystemPreset = preset(
           maxAgeSec: 60,
           starvationDamagePerSec: 5,
           reproductionCooldownSec: 5,
-          sicknessDurationSec: 10,
-          contagionRadius: 20,
         },
         diet: {
           canEat: [],
-          infectionVulnerability: [2],
         },
       },
       {
@@ -586,12 +516,9 @@ const SICK_WORLD: EcosystemPreset = preset(
           maxAgeSec: 100,
           starvationDamagePerSec: 2,
           reproductionCooldownSec: 8,
-          sicknessDurationSec: 0,
-          contagionRadius: 30,
         },
         diet: {
           canEat: [],
-          infectionVulnerability: [],
         },
       },
       {
@@ -613,12 +540,9 @@ const SICK_WORLD: EcosystemPreset = preset(
           maxAgeSec: 120,
           starvationDamagePerSec: 1,
           reproductionCooldownSec: 0,
-          sicknessDurationSec: 0,
-          contagionRadius: 25,
         },
         diet: {
           canEat: [],
-          infectionVulnerability: [],
         },
       },
       {
@@ -640,12 +564,9 @@ const SICK_WORLD: EcosystemPreset = preset(
           maxAgeSec: 50,
           starvationDamagePerSec: 6,
           reproductionCooldownSec: 8,
-          sicknessDurationSec: 0,
-          contagionRadius: 0,
         },
         diet: {
           canEat: [],
-          infectionVulnerability: [],
         },
       },
     ],
@@ -697,12 +618,9 @@ const ZEN_GARDEN: EcosystemPreset = preset(
           maxAgeSec: 150,
           starvationDamagePerSec: 0.5,
           reproductionCooldownSec: 15,
-          sicknessDurationSec: 0,
-          contagionRadius: 0,
         },
         diet: {
           canEat: [],
-          infectionVulnerability: [],
         },
       },
       {
@@ -724,12 +642,9 @@ const ZEN_GARDEN: EcosystemPreset = preset(
           maxAgeSec: 300,
           starvationDamagePerSec: 0.3,
           reproductionCooldownSec: 40,
-          sicknessDurationSec: 0,
-          contagionRadius: 0,
         },
         diet: {
           canEat: [],
-          infectionVulnerability: [],
         },
       },
       {
@@ -751,12 +666,9 @@ const ZEN_GARDEN: EcosystemPreset = preset(
           maxAgeSec: 200,
           starvationDamagePerSec: 0.2,
           reproductionCooldownSec: 20,
-          sicknessDurationSec: 0,
-          contagionRadius: 0,
         },
         diet: {
           canEat: [],
-          infectionVulnerability: [],
         },
       },
     ],

@@ -2,8 +2,8 @@
  * Critterium — App Entry Point
  *
  * Bootstraps the simulation core and renderer.
- * Three species: prey (green), predator (red), parasite (purple).
- * Predator eats prey. Parasite infects prey. Prey flocks with prey.
+ * Two species: prey (green), predator (red).
+ * Predator eats prey. Prey flocks with prey.
  *
  * Full controls panel with: Simulation, Species, Forces, Matrix, Actions.
  * PointerForce wired to mouse/touch.
@@ -18,6 +18,7 @@ import {
   WanderForce,
   PointerForce,
   type InteractionEntry,
+  type FalloffType,
   // Ecosystem barrel re-exports
   type EcosystemConfig,
   type SpeciesConfig,
@@ -27,7 +28,6 @@ import {
   EcosystemWorld,
   processEating,
   processReproduction,
-  processInfection,
   // Config schema
   serializeConfig,
   deserializeConfig,
@@ -43,7 +43,7 @@ import { AdaptiveQuality } from './adaptive-quality.js';
 
 // ─── Species Definitions ─────────────────────────────────────
 
-const SPECIES_NAMES = ['Prey', 'Predator', 'Parasite'] as const;
+const SPECIES_NAMES = ['Prey', 'Predator'] as const;
 
 const SPECIES_CONFIGS: SpeciesConfig[] = [
   // 0: Prey — green, fast breeder
@@ -60,21 +60,18 @@ const SPECIES_CONFIGS: SpeciesConfig[] = [
       reproductionCost: 20,
       movementCostPerSec: 1,
       idleDrainPerSec: 0,
-      energyGainPerPrey: [0, 0, 0],
+      energyGainPerPrey: [0, 0],
     }),
     lifecycle: defaultLifecycleConfig({
       maxAgeSec: 101,
       starvationDamagePerSec: 8,
       reproductionCooldownSec: 3,
-      sicknessDurationSec: 8,
-      contagionRadius: 15,
     }),
     diet: defaultDietConfig({
       canEat: new Set<number>(),
-      infectionVulnerability: new Set<number>(),
     }),
   },
-  // 1: Predator — red, hunts prey, infected by parasite
+  // 1: Predator — red, hunts prey
   {
     name: 'Predator',
     count: 40,
@@ -88,46 +85,15 @@ const SPECIES_CONFIGS: SpeciesConfig[] = [
       reproductionCost: 20,
       movementCostPerSec: 3,
       idleDrainPerSec: 2,
-      energyGainPerPrey: [40, 0, 0],
+      energyGainPerPrey: [40, 0],
     }),
     lifecycle: defaultLifecycleConfig({
       maxAgeSec: 60,
       starvationDamagePerSec: 5,
       reproductionCooldownSec: 8,
-      sicknessDurationSec: 23,
-      contagionRadius: 0,
     }),
     diet: defaultDietConfig({
       canEat: new Set([0]),
-      infectionVulnerability: new Set<number>(),
-    }),
-  },
-  // 2: Parasite — purple, infects predator
-  {
-    name: 'Parasite',
-    count: 40,
-    color: '#cc44cc',
-    radius: 4,
-    initialSpeed: 40,
-    maxSpeed: 80,
-    energy: defaultEnergyConfig({
-      maxEnergy: 100,
-      initialEnergy: 50,
-      reproductionCost: 100,
-      movementCostPerSec: 1,
-      idleDrainPerSec: 1.5,
-      energyGainPerPrey: [0, 0, 0],
-    }),
-    lifecycle: defaultLifecycleConfig({
-      maxAgeSec: 30,
-      starvationDamagePerSec: 10,
-      reproductionCooldownSec: 5,
-      sicknessDurationSec: 0,
-      contagionRadius: 25,
-    }),
-    diet: defaultDietConfig({
-      canEat: new Set<number>(),
-      infectionVulnerability: new Set([1]),
     }),
   },
 ];
@@ -142,18 +108,12 @@ const CONFIG: EcosystemConfig = {
   populationCap: 600,
   species: SPECIES_CONFIGS,
   interactionRules: [
-    // [prey→*]: attract own, flee predator, flee parasite
+    // [prey→*]: attract own, flee predator
     [{ enabledForces: new Set(['attract']), radius: 80, strength: 25, falloff: 'linear' },
-     { enabledForces: new Set(['attract']), radius: 120, strength: -80, falloff: 'linear' },
-     { enabledForces: new Set(['attract']), radius: 80, strength: -40, falloff: 'linear' }],
-    // [predator→*]: chase prey, repel own, ignore parasite
+     { enabledForces: new Set(['attract']), radius: 120, strength: -80, falloff: 'linear' }],
+    // [predator→*]: chase prey, repel own
     [{ enabledForces: new Set(['attract']), radius: 150, strength: 60, falloff: 'linear' },
-     { enabledForces: new Set(['attract']), radius: 50, strength: -20, falloff: 'linear' },
-     null],
-    // [parasite→*]: seek prey, seek predator, repel own
-    [{ enabledForces: new Set(['attract']), radius: 120, strength: 50, falloff: 'linear' },
-     null,
-     { enabledForces: new Set(['attract']), radius: 40, strength: -15, falloff: 'linear' }],
+     { enabledForces: new Set(['attract']), radius: 50, strength: -20, falloff: 'linear' }],
   ],
 };
 
@@ -162,13 +122,12 @@ const CONFIG: EcosystemConfig = {
 const SPECIES_VISUALS: SpeciesVisual[] = [
   { color: 0x44cc44, radius: 3 },  // Prey: green
   { color: 0xff4444, radius: 5 },  // Predator: red
-  { color: 0xcc44cc, radius: 4 },  // Parasite: purple
 ];
 
 // ─── Interaction Matrix (for physics forces) ─────────────────
 
 function buildInteractionMatrix(): InteractionMatrix {
-  const matrix = new InteractionMatrix(3);
+  const matrix = new InteractionMatrix(2);
 
   // Prey ↔ Prey: mild flocking (attract at distance, repel close)
   matrix.set(0, 0, { strength: 30, radius: 80, falloff: 'linear' });
@@ -176,20 +135,11 @@ function buildInteractionMatrix(): InteractionMatrix {
   // Prey → Predator: flee (repel)
   matrix.set(0, 1, { strength: -80, radius: 120, falloff: 'linear' });
 
-  // Prey → Parasite: mild flee
-  matrix.set(0, 2, { strength: -40, radius: 80, falloff: 'linear' });
-
   // Predator → Prey: chase (attract)
   matrix.set(1, 0, { strength: 60, radius: 150, falloff: 'linear' });
 
   // Predator ↔ Predator: mild spacing (repel)
   matrix.set(1, 1, { strength: -20, radius: 50, falloff: 'linear' });
-
-  // Parasite → Prey: seek (attract)
-  matrix.set(2, 0, { strength: 50, radius: 120, falloff: 'linear' });
-
-  // Parasite ↔ Parasite: mild spacing
-  matrix.set(2, 2, { strength: -15, radius: 40, falloff: 'linear' });
 
   return matrix;
 }
@@ -208,7 +158,6 @@ function deepCloneSpeciesConfig(species: SpeciesConfig[]): SpeciesConfig[] {
     lifecycle: { ...sp.lifecycle },
     diet: {
       canEat: new Set(sp.diet.canEat),
-      infectionVulnerability: new Set(sp.diet.infectionVulnerability),
     },
   }));
 }
@@ -311,11 +260,8 @@ function buildSpeciesValues(species: readonly SpeciesConfig[]): Array<Record<str
     maxAgeSec: sp.lifecycle.maxAgeSec,
     starvationDamagePerSec: sp.lifecycle.starvationDamagePerSec,
     reproductionCooldownSec: sp.lifecycle.reproductionCooldownSec,
-    sicknessDurationSec: sp.lifecycle.sicknessDurationSec,
-    contagionRadius: sp.lifecycle.contagionRadius,
     // Diet encoded as boolean flags
     ...Object.fromEntries([...sp.diet.canEat].map((j) => ['canEat_' + j, 1])),
-    ...Object.fromEntries([...sp.diet.infectionVulnerability].map((j) => ['infectionVuln_' + j, 1])),
   }));
 }
 
@@ -497,7 +443,7 @@ async function main(): Promise<void> {
       for (let j = 0; j < n; j++) {
         const cell = matrixState[i]?.[j];
         if (cell) {
-          interactionMatrix.set(i, j, { ...cell });
+          interactionMatrix.set(i, j, { strength: cell.strength, radius: cell.radius, falloff: cell.falloff as FalloffType });
         }
       }
     }
@@ -594,7 +540,6 @@ async function main(): Promise<void> {
         eco.processLifecycle(dt);
         processEating(eco);
         processReproduction(eco);
-        processInfection(eco, dt);
 
         // Population overflow protection: force-kill excess particles
         if (eco.aliveCount > liveConfig.populationCap * 1.5) {
@@ -841,7 +786,6 @@ async function main(): Promise<void> {
       } else if (param === 'color' && typeof value === 'string') {
         sp.color = value;
       } else if (param === 'count' && typeof value === 'number') {
-        // Count change: update liveConfig and rebuild simulation (no confirm dialog)
         sp.count = value;
         rebuildSimulation();
       } else if (param === 'radius' && typeof value === 'number') {
@@ -877,21 +821,10 @@ async function main(): Promise<void> {
       } else if (param === 'reproductionCooldownSec' && typeof value === 'number') {
         sp.lifecycle.reproductionCooldownSec = value;
         rebuildSimulation();
-      } else if (param === 'sicknessDurationSec' && typeof value === 'number') {
-        sp.lifecycle.sicknessDurationSec = value;
-        rebuildSimulation();
-      } else if (param === 'contagionRadius' && typeof value === 'number') {
-        sp.lifecycle.contagionRadius = value;
-        rebuildSimulation();
       } else if (param.startsWith('canEat_') && typeof value === 'boolean') {
         const targetIdx = parseInt(param.replace('canEat_', ''));
         if (value) sp.diet.canEat.add(targetIdx);
         else sp.diet.canEat.delete(targetIdx);
-        rebuildSimulation();
-      } else if (param.startsWith('infectionVuln_') && typeof value === 'boolean') {
-        const targetIdx = parseInt(param.replace('infectionVuln_', ''));
-        if (value) sp.diet.infectionVulnerability.add(targetIdx);
-        else sp.diet.infectionVulnerability.delete(targetIdx);
         rebuildSimulation();
       }
     },

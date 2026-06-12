@@ -105,7 +105,6 @@ describe('serializeConfig', () => {
     expect(config.species[0].initialSpeed).toBe(50);
     expect(config.species[0].maxSpeed).toBe(100);
     expect(config.species[0].diet.canEat).toEqual([1]);
-    expect(config.species[0].diet.infectionVulnerability).toEqual([]);
 
     expect(config.species[1].name).toBe('Blue');
     expect(config.species[1].count).toBe(30);
@@ -160,7 +159,6 @@ describe('serializeConfig', () => {
     expect(config.snapshot!.type.length).toBe(50);
     expect(config.snapshot!.energy.length).toBe(50);
     expect(config.snapshot!.alive.length).toBe(50);
-    expect(config.snapshot!.infectionState.length).toBe(50);
     expect(config.snapshot!.seed).toBe(123);
     expect(typeof config.snapshot!.simTime).toBe('number');
   });
@@ -250,7 +248,7 @@ describe('deserializeConfig', () => {
 
   it('validates snapshot arrays', () => {
     const config = makeMinimalConfig();
-    config.snapshot = { x: 'not-array', y: [], vx: [], vy: [], type: [], seed: 0, simTime: 0, energy: [], alive: [], infectionState: [] } as any;
+    config.snapshot = { x: 'not-array', y: [], vx: [], vy: [], type: [], seed: 0, simTime: 0, energy: [], alive: [] } as any;
     expect(() => deserializeConfig(config)).toThrow('snapshot.x must be an array');
   });
 });
@@ -291,7 +289,6 @@ describe('round-trip serialization', () => {
       expect(restored.species[i].initialSpeed).toBe(config.species[i].initialSpeed);
       expect(restored.species[i].maxSpeed).toBe(config.species[i].maxSpeed);
       expect(restored.species[i].diet.canEat).toEqual(config.species[i].diet.canEat);
-      expect(restored.species[i].diet.infectionVulnerability).toEqual(config.species[i].diet.infectionVulnerability);
     }
   });
 
@@ -349,7 +346,6 @@ describe('round-trip serialization', () => {
     expect(restored.snapshot!.type).toEqual(config.snapshot!.type);
     expect(restored.snapshot!.energy).toEqual(config.snapshot!.energy);
     expect(restored.snapshot!.alive).toEqual(config.snapshot!.alive);
-    expect(restored.snapshot!.infectionState).toEqual(config.snapshot!.infectionState);
     expect(restored.snapshot!.seed).toBe(config.snapshot!.seed);
     expect(restored.snapshot!.simTime).toBe(config.snapshot!.simTime);
   });
@@ -492,12 +488,9 @@ function makeMinimalConfig(): CritteriumConfig {
           maxAgeSec: 30,
           starvationDamagePerSec: 10,
           reproductionCooldownSec: 5,
-          sicknessDurationSec: 10,
-          contagionRadius: 20,
         },
         diet: {
           canEat: [],
-          infectionVulnerability: [],
         },
       },
     ],

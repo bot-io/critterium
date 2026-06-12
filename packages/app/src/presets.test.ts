@@ -137,18 +137,6 @@ describe('presets', () => {
     }
   });
 
-  it('diet.infectionVulnerability indices are valid species indices', () => {
-    for (const p of BUILTIN_PRESETS) {
-      const n = p.config.species.length;
-      for (const sp of p.config.species) {
-        for (const idx of sp.diet.infectionVulnerability) {
-          expect(idx).toBeGreaterThanOrEqual(0);
-          expect(idx).toBeLessThan(n);
-        }
-      }
-    }
-  });
-
   it('forces object has drag and wander', () => {
     for (const p of BUILTIN_PRESETS) {
       expect(p.config.forces.drag).toBeDefined();

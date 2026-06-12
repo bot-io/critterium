@@ -4,7 +4,7 @@
  * Extends the base World with lifecycle management:
  * - Free-list for dead particle slot reuse
  * - Spawn/kill with population cap
- * - EcosystemState companion (energy, age, health, infection)
+ * - EcosystemState companion (energy, age, health)
  * - Per-frame lifecycle processing
  */
 
@@ -15,7 +15,6 @@ import {
 } from './index.js';
 import {
   DEAD,
-  NOT_INFECTED,
   EcosystemState,
   FreeList,
   type EcosystemConfig,
@@ -221,16 +220,6 @@ export class EcosystemWorld {
         this.kill(i);
         result.diedOldAge++;
         continue;
-      }
-
-      // Sickness death
-      if (this.eco.infectedBy[i] !== NOT_INFECTED && species.lifecycle.sicknessDurationSec > 0) {
-        this.eco.infectionTime[i] += dt;
-        if (this.eco.infectionTime[i] >= species.lifecycle.sicknessDurationSec) {
-          this.kill(i);
-          result.diedStarvation++; // count as sickness death
-          continue;
-        }
       }
 
       // Reproduction cooldown tick

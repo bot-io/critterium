@@ -2,14 +2,12 @@
  * Critterium — Ecosystem Data Model
  *
  * Extends the base simulation with per-particle energy, lifecycle,
- * diet, and infection state. All data in typed arrays — zero
- * per-particle objects.
+ * and diet state. All data in typed arrays — zero per-particle objects.
  *
  * Design decisions (D14–D20):
  * - Full energy budget: movement costs, eating gains, reproduction costs
  * - Binary fission reproduction
- * - 4 death types: old age, starvation, eaten (instant), sickness
- * - Sickness is a species type that infects on contact
+ * - 3 death types: old age, starvation, eaten (instant)
  * - Hard population cap
  * - Instant eating (touch → gone)
  */
@@ -19,11 +17,8 @@
 
 // ─── Constants ───────────────────────────────────────────────────
 
-/** Maximum number of species (updated from 16 to 12 per D2). */
+/** Maximum number of species (updated from 12 per D2). */
 export const MAX_SPECIES = 12;
-
-/** Sentinel value for "not infected". */
-export const NOT_INFECTED = -1;
 
 /** Sentinel value for "dead/free slot". */
 export const DEAD = 0;
@@ -55,18 +50,12 @@ export interface LifecycleConfig {
   starvationDamagePerSec: number;
   /** Cooldown in sim-seconds between reproductions. */
   reproductionCooldownSec: number;
-  /** Seconds after infection before dying. 0 = immune to sickness death. */
-  sicknessDurationSec: number;
-  /** Radius within which an infected particle spreads sickness. 0 = no contagion. */
-  contagionRadius: number;
 }
 
 /** Diet configuration per species. */
 export interface DietConfig {
   /** Set of species indices this species can eat. */
   canEat: Set<number>;
-  /** Set of species indices that can infect this species. */
-  infectionVulnerability: Set<number>;
 }
 
 /** Full species configuration. */
@@ -83,7 +72,7 @@ export interface SpeciesConfig {
   energy: EnergyConfig;
   /** Lifecycle parameters. */
   lifecycle: LifecycleConfig;
-  /** Diet and infection parameters. */
+  /** Diet parameters. */
   diet: DietConfig;
 }
 
@@ -132,10 +121,6 @@ export class EcosystemState {
   readonly alive: Uint8Array;
   // Reproduction cooldown (seconds remaining)
   readonly reproductionCooldown: Float32Array;
-  // Infection source species (-1 = not infected)
-  readonly infectedBy: Int8Array;
-  // Time since infection (sim-seconds)
-  readonly infectionTime: Float32Array;
 
   constructor(capacity: number) {
     this.capacity = capacity;
@@ -144,8 +129,6 @@ export class EcosystemState {
     this.health = new Float32Array(capacity);
     this.alive = new Uint8Array(capacity);
     this.reproductionCooldown = new Float32Array(capacity);
-    this.infectedBy = new Int8Array(capacity).fill(NOT_INFECTED);
-    this.infectionTime = new Float32Array(capacity);
   }
 
   /** Initialize a particle slot for a living creature. */
@@ -160,8 +143,6 @@ export class EcosystemState {
     this.age[index] = 0;
     this.health[index] = 1.0; // full health
     this.reproductionCooldown[index] = species.lifecycle.reproductionCooldownSec; // start on cooldown
-    this.infectedBy[index] = NOT_INFECTED;
-    this.infectionTime[index] = 0;
   }
 
   /** Mark a particle as dead (free its slot). */
@@ -171,8 +152,6 @@ export class EcosystemState {
     this.age[index] = 0;
     this.health[index] = 0;
     this.reproductionCooldown[index] = 0;
-    this.infectedBy[index] = NOT_INFECTED;
-    this.infectionTime[index] = 0;
   }
 
   /** Snapshot the ecosystem state (copies). */
@@ -183,8 +162,6 @@ export class EcosystemState {
       health: new Float32Array(this.health),
       alive: new Uint8Array(this.alive),
       reproductionCooldown: new Float32Array(this.reproductionCooldown),
-      infectedBy: new Int8Array(this.infectedBy),
-      infectionTime: new Float32Array(this.infectionTime),
       capacity: this.capacity,
     };
   }
@@ -197,8 +174,6 @@ export interface EcosystemSnapshot {
   health: Float32Array;
   alive: Uint8Array;
   reproductionCooldown: Float32Array;
-  infectedBy: Int8Array;
-  infectionTime: Float32Array;
   capacity: number;
 }
 
@@ -270,17 +245,14 @@ export function defaultLifecycleConfig(overrides?: Partial<LifecycleConfig>): Li
     maxAgeSec: 60,
     starvationDamagePerSec: 10,
     reproductionCooldownSec: 5,
-    sicknessDurationSec: 10,
-    contagionRadius: 20,
     ...overrides,
   };
 }
 
-/** Default diet config — eats nothing, vulnerable to nothing. */
+/** Default diet config — eats nothing. */
 export function defaultDietConfig(overrides?: Partial<DietConfig>): DietConfig {
   return {
     canEat: new Set(),
-    infectionVulnerability: new Set(),
     ...overrides,
   };
 }
