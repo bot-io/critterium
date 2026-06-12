@@ -37,6 +37,7 @@ import {
 import { CritteriumRenderer, type SpeciesVisual } from '@critterium/render';
 import { createControlsPanel } from './controls.js';
 import { autosave, loadAutosave, clearAutosave, exportConfig, importConfig } from './persistence.js';
+import { getBuiltinPreset } from './presets.js';
 
 // ─── Species Definitions ─────────────────────────────────────
 
@@ -713,6 +714,41 @@ async function main(): Promise<void> {
 
     onDeletePreset: (name: string) => {
       deletePreset(name);
+    },
+
+    onLoadBuiltinPreset: (name: string) => {
+      const preset = getBuiltinPreset(name);
+      if (!preset) {
+        console.warn('[Critterium] Unknown built-in preset:', name);
+        return;
+      }
+      try {
+        // Override simulation dimensions to current viewport
+        const cfg = {
+          ...preset.config,
+          simulation: {
+            ...preset.config.simulation,
+            width: window.innerWidth,
+            height: window.innerHeight,
+          },
+        };
+        const validated = deserializeConfig(cfg as any);
+        const applied = applyConfig(validated);
+        eco = applied.eco;
+        interactionMatrix = applied.matrix;
+        (pairwiseForce as { matrix: InteractionMatrix }).matrix = interactionMatrix;
+        grid.rebuild(eco.world);
+        // Also update drag and wander forces from preset
+        if (cfg.forces?.drag) {
+          (dragForce.params as Record<string, unknown>).coefficient = cfg.forces.drag.coefficient;
+        }
+        if (cfg.forces?.wander) {
+          (wanderForce.params as Record<string, unknown>).strength = cfg.forces.wander.strength;
+          (wanderForce.params as Record<string, unknown>).rate = cfg.forces.wander.rate;
+        }
+      } catch (err) {
+        console.error('[Critterium] Load built-in preset failed:', err);
+      }
     },
 
     getSavedPresets: () => getSavedPresets(),

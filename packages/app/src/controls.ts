@@ -7,6 +7,7 @@
  */
 
 import type { CritteriumConfig } from '@critterium/core';
+import { BUILTIN_PRESET_NAMES } from './presets.js';
 
 // ─── Options Interface ────────────────────────────────────────
 
@@ -27,6 +28,7 @@ export interface ControlsPanelOptions {
   onSavePreset?: (name: string) => void;
   onLoadPreset?: (name: string) => void;
   onDeletePreset?: (name: string) => void;
+  onLoadBuiltinPreset?: (name: string) => void;
   getSavedPresets?: () => string[];
   getConfig?: () => CritteriumConfig;
   applyImportedConfig?: (config: CritteriumConfig) => void;
@@ -657,6 +659,42 @@ function buildActionsSection(opts: ControlsPanelOptions): HTMLElement {
     importBtn.addEventListener('click', () => opts.onImport?.());
     ioRow.appendChild(importBtn);
     body.appendChild(ioRow);
+
+    // Built-in Presets dropdown
+    const builtinRow = el('div', 'crit-preset-row');
+    const builtinLabel = el('span', 'crit-label');
+    builtinLabel.textContent = 'Presets';
+    builtinLabel.style.minWidth = '50px';
+    const builtinSelect = document.createElement('select');
+    builtinSelect.className = 'crit-preset-select';
+    {
+      const placeholder = document.createElement('option');
+      placeholder.textContent = 'Choose a preset...';
+      placeholder.disabled = true;
+      placeholder.selected = true;
+      builtinSelect.appendChild(placeholder);
+      for (const name of BUILTIN_PRESET_NAMES) {
+        const o = document.createElement('option');
+        o.value = name;
+        o.textContent = name;
+        builtinSelect.appendChild(o);
+      }
+    }
+    const builtinLoadBtn = el('button', 'crit-btn crit-btn-small');
+    builtinLoadBtn.textContent = '▶ Load';
+    builtinLoadBtn.addEventListener('click', () => {
+      const name = builtinSelect.value;
+      if (name) opts.onLoadBuiltinPreset?.(name);
+    });
+    builtinRow.appendChild(builtinLabel);
+    builtinRow.appendChild(builtinSelect);
+    builtinRow.appendChild(builtinLoadBtn);
+    body.appendChild(builtinRow);
+
+    // Divider
+    const divider = el('div');
+    divider.style.cssText = 'border-top:1px solid rgba(255,255,255,0.08); margin:6px 0;';
+    body.appendChild(divider);
 
     // Save Preset
     const saveRow = el('div', 'crit-preset-row');
