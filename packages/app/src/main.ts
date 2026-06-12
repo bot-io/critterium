@@ -875,11 +875,26 @@ async function main(): Promise<void> {
 
   // 9. Autosave wiring
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) doAutosave();
+    if (document.hidden) {
+      doAutosave();
+    }
   });
 
   window.addEventListener('beforeunload', () => {
     doAutosave();
+  });
+
+  // 10. Capacitor pause/resume (mobile background handling)
+  document.addEventListener('pause', () => {
+    paused = true;
+    doAutosave();
+    console.log('[Critterium] Paused (app backgrounded)');
+  });
+  document.addEventListener('resume', () => {
+    paused = false;
+    lastTime = performance.now();
+    accumulator = 0;
+    console.log('[Critterium] Resumed (app foregrounded)');
   });
 
   console.log('Critterium — a living world in your pocket');
