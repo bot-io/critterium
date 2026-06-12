@@ -4,7 +4,7 @@
  * Autosave to localStorage, and export/import config files.
  */
 
-import type { CritteriumConfig } from '@critterium/core';
+import { type CritteriumConfig, deserializeConfig } from '@critterium/core';
 
 const AUTOSAVE_KEY = 'critterium-autosave';
 
@@ -95,12 +95,9 @@ export function importConfig(): Promise<CritteriumConfig | null> {
       try {
         const text = await file.text();
         const parsed = JSON.parse(text);
-        if (parsed.version !== 1) {
-          console.warn('[Critterium] Imported config has unsupported version:', parsed.version);
-          resolve(null);
-          return;
-        }
-        resolve(parsed as CritteriumConfig);
+        // Full validation via deserializeConfig
+        const validated = deserializeConfig(parsed);
+        resolve(validated);
       } catch (err) {
         console.error('[Critterium] Import failed:', err);
         resolve(null);

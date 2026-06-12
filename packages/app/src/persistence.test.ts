@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { autosave, loadAutosave, clearAutosave, exportConfig, importConfig } from './persistence.js';
+import { deserializeConfig } from '@critterium/core';
 
 const AUTOSAVE_KEY = 'critterium-autosave';
 
@@ -198,6 +199,154 @@ describe('persistence', () => {
     expect(result).toBeInstanceOf(Promise);
   });
 
+  it('importConfig resolves null for invalid JSON file', async () => {
+    const origCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tag) => {
+      const el = origCreateElement(tag);
+      if (tag === 'input') {
+        el.click = () => {
+          // Create a mock File object and simulate onchange
+          const mockFile = {
+            text: () => Promise.resolve('not valid json{'),
+          } as unknown as File;
+          Object.defineProperty(el, 'files', {
+            value: { 0: mockFile, length: 1, item: (i: number) => mockFile },
+            configurable: true,
+          });
+          el.dispatchEvent(new Event('change'));
+        };
+      }
+      return el;
+    });
+    vi.spyOn(document.body, 'appendChild').mockImplementation((n) => n);
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const result = await importConfig();
+
+    expect(result).toBeNull();
+    expect(errorSpy).toHaveBeenCalled();
+
+    vi.restoreAllMocks();
+  });
+
+  it('importConfig resolves null for config with wrong version', async () => {
+    const wrongVersion = JSON.stringify({ version: 2, simulation: {}, species: [], interactionMatrix: [], forces: {} });
+    const origCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tag) => {
+      const el = origCreateElement(tag);
+      if (tag === 'input') {
+        el.click = () => {
+          const mockFile = {
+            text: () => Promise.resolve(wrongVersion),
+          } as unknown as File;
+          Object.defineProperty(el, 'files', {
+            value: { 0: mockFile, length: 1, item: (i: number) => mockFile },
+            configurable: true,
+          });
+          el.dispatchEvent(new Event('change'));
+        };
+      }
+      return el;
+    });
+    vi.spyOn(document.body, 'appendChild').mockImplementation((n) => n);
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const result = await importConfig();
+
+    expect(result).toBeNull();
+
+    vi.restoreAllMocks();
+  });
+
+  it('importConfig resolves null for config missing required fields', async () => {
+    const incomplete = JSON.stringify({ version: 1 }); // missing simulation, species, etc.
+    const origCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tag) => {
+      const el = origCreateElement(tag);
+      if (tag === 'input') {
+        el.click = () => {
+          const mockFile = {
+            text: () => Promise.resolve(incomplete),
+          } as unknown as File;
+          Object.defineProperty(el, 'files', {
+            value: { 0: mockFile, length: 1, item: (i: number) => mockFile },
+            configurable: true,
+          });
+          el.dispatchEvent(new Event('change'));
+        };
+      }
+      return el;
+    });
+    vi.spyOn(document.body, 'appendChild').mockImplementation((n) => n);
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const result = await importConfig();
+
+    expect(result).toBeNull();
+
+    vi.restoreAllMocks();
+  });
+
+  it('importConfig resolves validated config for valid file', async () => {
+    const validJson = JSON.stringify(sampleConfig);
+    const origCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tag) => {
+      const el = origCreateElement(tag);
+      if (tag === 'input') {
+        el.click = () => {
+          const mockFile = {
+            text: () => Promise.resolve(validJson),
+          } as unknown as File;
+          Object.defineProperty(el, 'files', {
+            value: { 0: mockFile, length: 1, item: (i: number) => mockFile },
+            configurable: true,
+          });
+          el.dispatchEvent(new Event('change'));
+        };
+      }
+      return el;
+    });
+    vi.spyOn(document.body, 'appendChild').mockImplementation((n) => n);
+
+    const result = await importConfig();
+
+    expect(result).not.toBeNull();
+    expect(result!.version).toBe(1);
+    expect(result!.simulation.width).toBe(800);
+    expect(result!.simulation.height).toBe(600);
+    expect(result!.simulation.boundaryMode).toBe('wrap');
+    expect(result!.species).toHaveLength(1);
+    expect(result!.species[0].name).toBe('Prey');
+
+    vi.restoreAllMocks();
+  });
+
+  it('importConfig resolves null when no file selected (empty file list)', async () => {
+    const origCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tag) => {
+      const el = origCreateElement(tag);
+      if (tag === 'input') {
+        el.click = () => {
+          // Simulate onchange with empty file list
+          Object.defineProperty(el, 'files', {
+            value: { length: 0, item: () => null },
+            configurable: true,
+          });
+          el.dispatchEvent(new Event('change'));
+        };
+      }
+      return el;
+    });
+    vi.spyOn(document.body, 'appendChild').mockImplementation((n) => n);
+
+    const result = await importConfig();
+    expect(result).toBeNull();
+
+    vi.restoreAllMocks();
+  });
+
+  // ─── export + import round-trip ───
+
   it('roundtrip: autosave then loadAutosave preserves config', () => {
     autosave(sampleConfig);
     const loaded = loadAutosave();
@@ -209,5 +358,98 @@ describe('persistence', () => {
     expect(loadAutosave()).not.toBeNull();
     clearAutosave();
     expect(loadAutosave()).toBeNull();
+  });
+
+  it('roundtrip: export produces JSON that importConfig validates', async () => {
+    // Capture the blob content from exportConfig
+    let capturedBlobContent: string | null = null;
+
+    const createObjectURLSpy = vi.fn((_blob: Blob) => {
+      // Read the blob content synchronously for verification
+      // We can't easily await here, so store the blob
+      return 'blob:http://localhost/fake';
+    });
+    const revokeObjectURLSpy = vi.fn();
+    vi.stubGlobal('URL', {
+      createObjectURL: createObjectURLSpy,
+      revokeObjectURL: revokeObjectURLSpy,
+    });
+
+    let capturedDownload = '';
+    const origCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tag) => {
+      const el = origCreateElement(tag);
+      if (tag === 'a') {
+        el.click = vi.fn();
+        Object.defineProperty(el, 'download', {
+          set(v: string) { capturedDownload = v; },
+          get() { return capturedDownload; },
+        });
+      }
+      return el;
+    });
+    vi.spyOn(document.body, 'appendChild').mockImplementation((n) => n);
+    vi.spyOn(document.body, 'removeChild').mockImplementation((n) => n);
+
+    // Export
+    exportConfig(sampleConfig, 'roundtrip-test');
+    expect(capturedDownload).toBe('roundtrip-test.json');
+
+    // Verify blob was created with correct content
+    expect(createObjectURLSpy).toHaveBeenCalledTimes(1);
+    const blob = createObjectURLSpy.mock.calls[0][0] as Blob;
+
+    // Read blob content and validate via importConfig path
+    const blobText = await blob.text();
+    const parsed = JSON.parse(blobText);
+    expect(parsed.version).toBe(1);
+    expect(parsed.simulation.width).toBe(800);
+
+    // Validate via deserializeConfig (same path as importConfig now uses)
+    const validated = deserializeConfig(parsed);
+    expect(validated.version).toBe(1);
+    expect(validated.simulation.boundaryMode).toBe('wrap');
+    expect(validated.species).toHaveLength(1);
+
+    vi.restoreAllMocks();
+  });
+
+  it('exportConfig does not duplicate .json extension', () => {
+    const createObjectURLSpy = vi.fn(() => 'blob:http://localhost/fake');
+    const revokeObjectURLSpy = vi.fn();
+    vi.stubGlobal('URL', { createObjectURL: createObjectURLSpy, revokeObjectURL: revokeObjectURLSpy });
+
+    let capturedDownload = '';
+    const origCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tag) => {
+      const el = origCreateElement(tag);
+      if (tag === 'a') {
+        el.click = vi.fn();
+        Object.defineProperty(el, 'download', {
+          set(v: string) { capturedDownload = v; },
+          get() { return capturedDownload; },
+        });
+      }
+      return el;
+    });
+    vi.spyOn(document.body, 'appendChild').mockImplementation((n) => n);
+    vi.spyOn(document.body, 'removeChild').mockImplementation((n) => n);
+
+    exportConfig(sampleConfig, 'already.json');
+    expect(capturedDownload).toBe('already.json');
+
+    vi.restoreAllMocks();
+  });
+
+  it('exportConfig handles errors gracefully', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.stubGlobal('Blob', class {
+      constructor() { throw new Error('Blob not available'); }
+    });
+
+    expect(() => exportConfig(sampleConfig, 'test')).not.toThrow();
+    expect(errorSpy).toHaveBeenCalled();
+
+    vi.restoreAllMocks();
   });
 });
