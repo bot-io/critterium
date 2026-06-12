@@ -6,7 +6,7 @@
  *
  * Quality tiers:
  * - High (FPS >= 45): All effects enabled, no render skipping
- * - Medium (FPS 25-45): Disable sickness rings and energy opacity
+ * - Medium (FPS 25-45): Disable energy opacity
  * - Low (FPS < 25): Disable all effects, disable graph, render skip 2
  *
  * Features:
@@ -19,7 +19,7 @@
 // ─── Quality Settings ────────────────────────────────────────
 
 export interface QualitySettings {
-  /** Particle effects: death/birth/sickness effects enabled */
+  /** Particle effects: death/birth effects enabled */
   effectsEnabled: boolean;
   /** Population graph updates */
   graphEnabled: boolean;
@@ -27,8 +27,6 @@ export interface QualitySettings {
   reductionFactor: number;
   /** Render all particles, or skip every Nth for cheap rendering */
   renderSkip: number;
-  /** Sickness ring rendering */
-  sicknessRingsEnabled: boolean;
   /** Energy-based opacity (cheap but adds overhead) */
   energyOpacityEnabled: boolean;
 }
@@ -40,7 +38,6 @@ const QUALITY_HIGH: QualitySettings = {
   graphEnabled: true,
   reductionFactor: 1,
   renderSkip: 1,
-  sicknessRingsEnabled: true,
   energyOpacityEnabled: true,
 };
 
@@ -49,7 +46,6 @@ const QUALITY_MEDIUM: QualitySettings = {
   graphEnabled: true,
   reductionFactor: 0.75,
   renderSkip: 1,
-  sicknessRingsEnabled: false,
   energyOpacityEnabled: false,
 };
 
@@ -58,7 +54,6 @@ const QUALITY_LOW: QualitySettings = {
   graphEnabled: false,
   reductionFactor: 0.5,
   renderSkip: 2,
-  sicknessRingsEnabled: false,
   energyOpacityEnabled: false,
 };
 

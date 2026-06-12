@@ -14,7 +14,6 @@ describe('AdaptiveQuality', () => {
     expect(aq.quality.effectsEnabled).toBe(true);
     expect(aq.quality.graphEnabled).toBe(true);
     expect(aq.quality.renderSkip).toBe(1);
-    expect(aq.quality.sicknessRingsEnabled).toBe(true);
     expect(aq.quality.energyOpacityEnabled).toBe(true);
   });
 
@@ -66,7 +65,6 @@ describe('AdaptiveQuality', () => {
       aq.update(30);
     }
     expect(aq.level).toBe('medium');
-    expect(aq.quality.sicknessRingsEnabled).toBe(false);
     expect(aq.quality.energyOpacityEnabled).toBe(false);
     expect(aq.quality.effectsEnabled).toBe(true);
     expect(aq.quality.graphEnabled).toBe(true);

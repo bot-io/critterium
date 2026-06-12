@@ -7,7 +7,7 @@ const EXPECTED_PRESET_NAMES = [
   'Plankton Bloom',
   'Swarm Intelligence',
   'Predator Arena',
-  'Sick World',
+  'Tiny Pond',
   'Zen Garden',
 ];
 

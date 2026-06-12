@@ -8,11 +8,10 @@ describe('app sanity', () => {
   it('main.ts imports are structured correctly', () => {
     // Verify the main module can be parsed (structure check)
     // Full integration testing via Playwright e2e tests
-    const speciesNames = ['Prey', 'Predator', 'Parasite'];
-    expect(speciesNames).toHaveLength(3);
+    const speciesNames = ['Prey', 'Predator'];
+    expect(speciesNames).toHaveLength(2);
     expect(speciesNames[0]).toBe('Prey');
     expect(speciesNames[1]).toBe('Predator');
-    expect(speciesNames[2]).toBe('Parasite');
   });
 
   it('interaction matrix is asymmetric (chase/flee)', () => {
@@ -27,16 +26,13 @@ describe('app sanity', () => {
     expect(preyToPredator).not.toBe(-predatorToPrey); // not symmetric
   });
 
-  it('default 3-type config has documented interaction matrix', () => {
+  it('default 2-type config has documented interaction matrix', () => {
     // This test validates the documented matrix in main.ts comments
     const matrix = {
       'prey-prey': { strength: 30, radius: 80 },
       'prey-predator': { strength: -80, radius: 120 },
-      'prey-parasite': { strength: -40, radius: 80 },
       'predator-prey': { strength: 60, radius: 150 },
       'predator-predator': { strength: -20, radius: 50 },
-      'parasite-prey': { strength: 50, radius: 120 },
-      'parasite-parasite': { strength: -15, radius: 40 },
     };
 
     // Prey flock together
@@ -47,8 +43,6 @@ describe('app sanity', () => {
     expect(matrix['predator-prey'].strength).toBeGreaterThan(0);
     // Predators space out from each other
     expect(matrix['predator-predator'].strength).toBeLessThan(0);
-    // Parasites seek prey
-    expect(matrix['parasite-prey'].strength).toBeGreaterThan(0);
     // Asymmetry: predator chases prey, prey flees predator
     expect(matrix['predator-prey'].radius).toBeGreaterThan(matrix['prey-predator'].radius);
   });

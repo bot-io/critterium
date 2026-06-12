@@ -458,128 +458,78 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
   },
 );
 
-// ─── 5. Sick World ───────────────────────────────────────────
+// ─── 5. Tiny Pond ────────────────────────────────────────────
 
-const SICK_WORLD: EcosystemPreset = preset(
-  'Sick World',
-  'Infection outbreak: Zombies chase the Healthy, Carriers spread silently, Healers try to cure.',
+const TINY_POND: EcosystemPreset = preset(
+  'Tiny Pond',
+  'Small ecosystem: Minnows school for safety while Bass pick off stragglers.',
   {
     version: 1,
     simulation: {
-      width: 800,
-      height: 600,
+      width: 400,
+      height: 300,
       boundaryMode: 'wrap',
-      seed: 666,
-      populationCap: 350,
+      seed: 13,
+      populationCap: 200,
     },
     species: [
       {
-        name: 'Healthy',
-        count: 150,
-        color: '#44cc44',
-        radius: 4,
+        name: 'Minnows',
+        count: 80,
+        color: '#88bbff',
+        radius: 2,
         initialSpeed: 50,
         maxSpeed: 90,
         energy: {
-          maxEnergy: 100,
-          initialEnergy: 60,
-          movementCostPerSec: 1.5,
-          reproductionCost: 25,
-          idleDrainPerSec: 1,
-          energyGainPerPrey: [0, 0, 0, 0],
+          maxEnergy: 50,
+          initialEnergy: 30,
+          movementCostPerSec: 1,
+          reproductionCost: 10,
+          idleDrainPerSec: 0.5,
+          energyGainPerPrey: [0, 0],
         },
         lifecycle: {
-          maxAgeSec: 60,
-          starvationDamagePerSec: 5,
-          reproductionCooldownSec: 5,
+          maxAgeSec: 30,
+          starvationDamagePerSec: 6,
+          reproductionCooldownSec: 2,
         },
         diet: {
           canEat: [],
         },
       },
       {
-        name: 'Carriers',
-        count: 50,
-        color: '#dddd44',
-        radius: 4,
-        initialSpeed: 35,
-        maxSpeed: 70,
-        energy: {
-          maxEnergy: 150,
-          initialEnergy: 100,
-          movementCostPerSec: 0.5,
-          reproductionCost: 30,
-          idleDrainPerSec: 0.3,
-          energyGainPerPrey: [0, 0, 0, 0],
-        },
-        lifecycle: {
-          maxAgeSec: 100,
-          starvationDamagePerSec: 2,
-          reproductionCooldownSec: 8,
-        },
-        diet: {
-          canEat: [],
-        },
-      },
-      {
-        name: 'Zombies',
-        count: 20,
-        color: '#aa2222',
-        radius: 5,
-        initialSpeed: 30,
-        maxSpeed: 60,
+        name: 'Bass',
+        count: 8,
+        color: '#336633',
+        radius: 6,
+        initialSpeed: 40,
+        maxSpeed: 80,
         energy: {
           maxEnergy: 200,
-          initialEnergy: 150,
-          movementCostPerSec: 0.5,
-          reproductionCost: 50,
-          idleDrainPerSec: 0.5,
-          energyGainPerPrey: [0, 0, 0, 0],
-        },
-        lifecycle: {
-          maxAgeSec: 120,
-          starvationDamagePerSec: 1,
-          reproductionCooldownSec: 0,
-        },
-        diet: {
-          canEat: [],
-        },
-      },
-      {
-        name: 'Healers',
-        count: 30,
-        color: '#44dddd',
-        radius: 3,
-        initialSpeed: 55,
-        maxSpeed: 100,
-        energy: {
-          maxEnergy: 80,
-          initialEnergy: 50,
+          initialEnergy: 120,
           movementCostPerSec: 2,
-          reproductionCost: 30,
+          reproductionCost: 60,
           idleDrainPerSec: 1.5,
-          energyGainPerPrey: [0, 0, 0, 0],
+          energyGainPerPrey: [0, 25],
         },
         lifecycle: {
-          maxAgeSec: 50,
-          starvationDamagePerSec: 6,
-          reproductionCooldownSec: 8,
+          maxAgeSec: 80,
+          starvationDamagePerSec: 3,
+          reproductionCooldownSec: 15,
         },
         diet: {
-          canEat: [],
+          canEat: [0],
         },
       },
     ],
     interactionMatrix: [
-      /*          Healthy  Carriers Zombies  Healers */
-      /* Healthy */ [null, null, { strength: -70, radius: 100, falloff: 'linear' }, { strength: 30, radius: 80, falloff: 'linear' }],
-      /* Carriers*/ [null, null, null, null],
-      /* Zombies */ [{ strength: 80, radius: 150, falloff: 'linear' }, null, { strength: -20, radius: 50, falloff: 'linear' }, { strength: -40, radius: 80, falloff: 'linear' }],
-      /* Healers */ [null, { strength: 50, radius: 100, falloff: 'linear' }, { strength: 60, radius: 120, falloff: 'linear' }, null],
+      /*         Minnows  Bass */
+      /* Minnows */ [{ strength: 40, radius: 60, falloff: 'linear' }, { strength: -100, radius: 100, falloff: 'linear' }],
+      /* Bass    */ [{ strength: 70, radius: 150, falloff: 'linear' }, { strength: -30, radius: 60, falloff: 'linear' }],
     ],
     forces: {
-      drag: { coefficient: 0.8 },
-      wander: { strength: 35, rate: 2 },
+      drag: { coefficient: 0.7 },
+      wander: { strength: 25, rate: 2 },
     },
   },
 );
@@ -692,7 +642,7 @@ export const BUILTIN_PRESETS: EcosystemPreset[] = [
   PLANKTON_BLOOM,
   SWARM_INTELLIGENCE,
   PREDATOR_ARENA,
-  SICK_WORLD,
+  TINY_POND,
   ZEN_GARDEN,
 ];
 

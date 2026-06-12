@@ -96,9 +96,6 @@ export class CritteriumRenderer {
   /** Whether particle effects (death/birth) are enabled. */
   effectsEnabled: boolean = true;
 
-  /** Whether sickness ring rendering is enabled. */
-  sicknessRingsEnabled: boolean = true;
-
   /** Whether energy-based opacity modulation is enabled. */
   energyOpacityEnabled: boolean = true;
 
@@ -336,10 +333,8 @@ export class CritteriumRenderer {
       this.sprites[i].visible = false;
     }
 
-    // Draw sickness rings (batched)
-    if (this.sicknessRingsEnabled) {
-      this.drawSicknessRings(world, eco);
-    } else if (this.sicknessGfx) {
+    // Clear any stale sickness graphics
+    if (this.sicknessGfx) {
       this.sicknessGfx.clear();
     }
 

@@ -394,7 +394,6 @@ async function main(): Promise<void> {
     // Apply quality settings to renderer
     renderer.renderSkip = settings.renderSkip;
     renderer.effectsEnabled = settings.effectsEnabled;
-    renderer.sicknessRingsEnabled = settings.sicknessRingsEnabled;
     renderer.energyOpacityEnabled = settings.energyOpacityEnabled;
 
     // Track when quality went to 'low'

@@ -109,8 +109,6 @@ export function resetAllSliders(opts: {
     setSliderValue(`species.${si}.maxAgeSec`, iv['maxAgeSec'] ?? 60);
     setSliderValue(`species.${si}.starvationDamagePerSec`, iv['starvationDamagePerSec'] ?? 10);
     setSliderValue(`species.${si}.reproductionCooldownSec`, iv['reproductionCooldownSec'] ?? 5);
-    setSliderValue(`species.${si}.sicknessDurationSec`, iv['sicknessDurationSec'] ?? 10);
-    setSliderValue(`species.${si}.contagionRadius`, iv['contagionRadius'] ?? 20);
   }
 }
 
@@ -556,8 +554,6 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
         sub.appendChild(makeSlider('Max Age', 0, 300, 1, iv['maxAgeSec'] ?? 60, (v) => opts.onSpeciesChange?.(speciesIdx, 'maxAgeSec', v), `species.${si}.maxAgeSec`));
         sub.appendChild(makeSlider('Starv Dmg/s', 0, 50, 0.5, iv['starvationDamagePerSec'] ?? 10, (v) => opts.onSpeciesChange?.(speciesIdx, 'starvationDamagePerSec', v), `species.${si}.starvationDamagePerSec`));
         sub.appendChild(makeSlider('Repro CD', 0, 30, 0.5, iv['reproductionCooldownSec'] ?? 5, (v) => opts.onSpeciesChange?.(speciesIdx, 'reproductionCooldownSec', v), `species.${si}.reproductionCooldownSec`));
-        sub.appendChild(makeSlider('Sick Dur', 0, 60, 1, iv['sicknessDurationSec'] ?? 10, (v) => opts.onSpeciesChange?.(speciesIdx, 'sicknessDurationSec', v), `species.${si}.sicknessDurationSec`));
-        sub.appendChild(makeSlider('Contagion R', 0, 100, 1, iv['contagionRadius'] ?? 20, (v) => opts.onSpeciesChange?.(speciesIdx, 'contagionRadius', v), `species.${si}.contagionRadius`));
       }));
 
       // Diet sub-section
@@ -568,14 +564,6 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
           const canEatInitial = !!(iv['canEat_' + j]);
           sub.appendChild(makeToggle(`Eat ${names[j]}`, canEatInitial, (on) => {
             opts.onSpeciesChange?.(speciesIdx, 'canEat_' + j, on);
-          }));
-        }
-        // Vulnerable to infection toggles
-        for (let j = 0; j < n; j++) {
-          if (j === si) continue;
-          const vulnInitial = !!(iv['infectionVuln_' + j]);
-          sub.appendChild(makeToggle(`Infect ${names[j]}`, vulnInitial, (on) => {
-            opts.onSpeciesChange?.(speciesIdx, 'infectionVuln_' + j, on);
           }));
         }
       }));
