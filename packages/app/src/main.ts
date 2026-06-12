@@ -883,16 +883,60 @@ async function main(): Promise<void> {
         diet: defaultDietConfig({ canEat: new Set<number>() }),
       };
       liveConfig.species.push(newSpecies);
-      // Expand interaction matrix state to accommodate new species
       nSpecies = liveConfig.species.length;
+      // Extend all existing species' energyGainPerPrey arrays for the new species count
+      for (const sp of liveConfig.species) {
+        while (sp.energy.energyGainPerPrey.length < nSpecies) {
+          sp.energy.energyGainPerPrey.push(0);
+        }
+      }
+      // Expand interaction matrix state to accommodate new species
       while (matrixState.length < nSpecies) {
         matrixState.push(new Array(nSpecies).fill(null));
       }
       for (const row of matrixState) {
         while (row.length < nSpecies) row.push(null);
       }
-      // Full reload to rebuild UI with new species count
-      localStorage.setItem('critterium-pending-preset', JSON.stringify(getCurrentConfig()));
+      // Build a fresh config from liveConfig + expanded matrixState instead of
+      // using getCurrentConfig() which reads from the OLD eco/interactionMatrix
+      // that are still sized for the previous species count.
+      const pendingConfig = {
+        version: 1 as const,
+        simulation: {
+          width: liveConfig.width,
+          height: liveConfig.height,
+          boundaryMode: liveConfig.boundaryMode,
+          seed: liveConfig.seed,
+          populationCap: liveConfig.populationCap,
+        },
+        species: liveConfig.species.map(sp => ({
+          name: sp.name,
+          count: sp.count,
+          color: sp.color,
+          radius: sp.radius,
+          initialSpeed: sp.initialSpeed,
+          maxSpeed: sp.maxSpeed,
+          energy: {
+            maxEnergy: sp.energy.maxEnergy,
+            initialEnergy: sp.energy.initialEnergy,
+            movementCostPerSec: sp.energy.movementCostPerSec,
+            reproductionCost: sp.energy.reproductionCost,
+            idleDrainPerSec: sp.energy.idleDrainPerSec,
+            energyGainPerPrey: [...sp.energy.energyGainPerPrey],
+          },
+          lifecycle: {
+            maxAgeSec: sp.lifecycle.maxAgeSec,
+            starvationDamagePerSec: sp.lifecycle.starvationDamagePerSec,
+            reproductionCooldownSec: sp.lifecycle.reproductionCooldownSec,
+          },
+          diet: { canEat: [...sp.diet.canEat] },
+        })),
+        interactionMatrix: matrixState.map(row =>
+          row.map(cell => cell ? { strength: cell.strength, radius: cell.radius, falloff: cell.falloff } : null)
+        ),
+        forces: { drag: { id: 'drag', params: { strength: dragForce.params.strength } }, wander: { id: 'wander', params: { strength: wanderForce.params.strength } } },
+      };
+      localStorage.setItem('critterium-pending-preset', JSON.stringify(pendingConfig));
       window.location.reload();
     },
 
