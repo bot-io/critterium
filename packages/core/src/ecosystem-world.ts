@@ -252,8 +252,8 @@ export class EcosystemWorld {
     // Deduct energy
     this.eco.energy[index] -= species.energy.reproductionCost;
 
-    // Reset cooldown
-    this.eco.reproductionCooldown[index] = species.lifecycle.reproductionCooldownSec;
+    // Reset cooldown (minimum 1s to prevent infinite reproduction)
+    this.eco.reproductionCooldown[index] = Math.max(1, species.lifecycle.reproductionCooldownSec);
 
     // Spawn child near parent
     const offsetX = (this.rng() - 0.5) * 20;
