@@ -294,20 +294,22 @@ async function main(): Promise<void> {
   let liveConfig = deepCloneConfig(CONFIG);
 
   // Check for pending preset from a species-count-changing preset load
+  let hasPendingPreset = false;
+  let pendingCritConfig: CritteriumConfig | null = null;
   const pendingPresetJson = localStorage.getItem('critterium-pending-preset');
   if (pendingPresetJson) {
     localStorage.removeItem('critterium-pending-preset');
     try {
       const pendingCfg = JSON.parse(pendingPresetJson);
-      const validated = deserializeConfig(pendingCfg as any);
-      liveConfig = validated;
+      pendingCritConfig = deserializeConfig(pendingCfg as any);
+      hasPendingPreset = true;
       console.log('[Critterium] Loaded pending preset');
     } catch (err) {
       console.warn('[Critterium] Failed to load pending preset:', err);
     }
   }
 
-  if (savedConfig && !pendingPresetJson) {
+  if (savedConfig && !hasPendingPreset) {
     try {
       const validated = deserializeConfig(savedConfig as any);
       const applied = applyConfig(validated);
@@ -318,6 +320,20 @@ async function main(): Promise<void> {
       clearAutosave();
     } catch {
       console.warn('[Critterium] Autosave restore failed, starting fresh');
+      eco = new EcosystemWorld(liveConfig);
+      interactionMatrix = buildInteractionMatrix();
+    }
+  } else if (hasPendingPreset && pendingCritConfig) {
+    // Pending preset from a species-count-changing switch — use applyConfig
+    // to build a properly-sized InteractionMatrix instead of the hardcoded 2×2 one
+    try {
+      const applied = applyConfig(pendingCritConfig);
+      eco = applied.eco;
+      interactionMatrix = applied.matrix;
+      liveConfig = deepCloneConfig(eco.config);
+      console.log('[Critterium] Applied pending preset');
+    } catch (err) {
+      console.warn('[Critterium] Pending preset apply failed, starting fresh:', err);
       eco = new EcosystemWorld(liveConfig);
       interactionMatrix = buildInteractionMatrix();
     }
@@ -939,6 +955,23 @@ async function main(): Promise<void> {
         accumulator = 0;
         lastTime = performance.now();
         clearAutosave();
+
+        // Update controls panel to reflect new preset values
+        resetAllSliders({
+          speciesValues: buildSpeciesValues(liveConfig.species),
+          simValues: { speed: speedMultiplier, popCap: liveConfig.populationCap },
+          forceValues: {
+            drag: { coefficient: (dragForce.params as Record<string, unknown>).coefficient as number },
+            wander: {
+              strength: (wanderForce.params as Record<string, unknown>).strength as number,
+              rate: (wanderForce.params as Record<string, unknown>).rate as number,
+            },
+            pointer: {
+              strength: (pointerForce.params as Record<string, unknown>).strength as number,
+              radius: (pointerForce.params as Record<string, unknown>).radius as number,
+            },
+          },
+        });
       } catch (err) {
         console.error('[Critterium] Load built-in preset failed:', err);
       }
