@@ -172,14 +172,58 @@ export class World {
     }
   }
 
+  /**
+   * Soft boundary repulsion margin (pixels). Particles within this distance
+   * of a wall in bounce mode receive a gentle inward velocity impulse,
+   * counteracting the asymmetric inter-particle repulsion that causes
+   * edge clustering.
+   */
+  static readonly BOUNCE_MARGIN = 30;
+
+  /**
+   * Soft boundary repulsion impulse strength (velocity units per step).
+   * Applied with quadratic falloff: strongest at the wall, zero at the margin.
+   */
+  static readonly BOUNCE_REPULSION = 10;
+
   /** Apply boundary conditions (bounce or wrap). */
   applyBoundaries(): void {
+    const margin = World.BOUNCE_MARGIN;
+    const strength = World.BOUNCE_REPULSION;
+
     for (let i = 0; i < this.count; i++) {
       if (this.boundaryMode === 'bounce') {
+        // Hard bounce: reflect position and velocity at boundaries
         if (this.x[i] < 0) { this.x[i] = -this.x[i]; this.vx[i] = -this.vx[i]; }
         if (this.x[i] > this.width) { this.x[i] = 2 * this.width - this.x[i]; this.vx[i] = -this.vx[i]; }
         if (this.y[i] < 0) { this.y[i] = -this.y[i]; this.vy[i] = -this.vy[i]; }
         if (this.y[i] > this.height) { this.y[i] = 2 * this.height - this.y[i]; this.vy[i] = -this.vy[i]; }
+
+        // Soft boundary repulsion: gentle inward push near walls to prevent
+        // edge clustering. Particles near the wall receive an asymmetric
+        // inward impulse that counteracts the net outward push from having
+        // all their neighbors on the interior side.
+        const distToLeft = this.x[i];
+        const distToRight = this.width - this.x[i];
+        const distToTop = this.y[i];
+        const distToBottom = this.height - this.y[i];
+
+        if (distToLeft < margin) {
+          const t = 1 - distToLeft / margin;
+          this.vx[i] += t * t * strength;
+        }
+        if (distToRight < margin) {
+          const t = 1 - distToRight / margin;
+          this.vx[i] -= t * t * strength;
+        }
+        if (distToTop < margin) {
+          const t = 1 - distToTop / margin;
+          this.vy[i] += t * t * strength;
+        }
+        if (distToBottom < margin) {
+          const t = 1 - distToBottom / margin;
+          this.vy[i] -= t * t * strength;
+        }
       } else {
         // wrap
         this.x[i] = ((this.x[i] % this.width) + this.width) % this.width;

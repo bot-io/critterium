@@ -23,6 +23,7 @@ export interface ControlsPanelOptions {
   onRandomizeMatrix?: () => void;
   onClearMatrix?: () => void;
   onSpeciesChange?: (speciesIndex: number, param: string, value: number | string | boolean) => void;
+  onAddSpecies?: () => void;
   onExport?: () => void;
   onImport?: () => void;
   onSavePreset?: (name: string) => void;
@@ -241,6 +242,22 @@ const STYLES = `
   }
   .crit-species-hdr:hover { filter: brightness(1.2); }
 
+  .crit-species-tab-bar {
+    display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px;
+  }
+  .crit-species-tab {
+    padding: 3px 8px; font-size: 10px; min-height: 24px;
+  }
+  .crit-species-tab.active {
+    background: rgba(100,180,255,0.25); border-color: #6af; color: #6af;
+  }
+  .crit-btn-add-species {
+    border-color: rgba(80,200,80,0.3); color: #6c6;
+  }
+  .crit-btn-add-species:hover {
+    background: rgba(80,200,80,0.15);
+  }
+
   .crit-subsection { margin-left: 12px; margin-bottom: 4px; }
   .crit-subsection-hdr {
     font-size: 10px; color: #777; text-transform: uppercase; letter-spacing: 0.5px;
@@ -440,12 +457,14 @@ function buildSimSection(opts: ControlsPanelOptions): HTMLElement {
     btnRow.appendChild(pauseBtn);
 
     const resetBtn = el('button', 'crit-btn');
-    resetBtn.textContent = '↺ Reset';
+    resetBtn.textContent = '↺ Reload Preset';
+    resetBtn.title = 'Reload current preset defaults';
     resetBtn.addEventListener('click', () => opts.onReset?.());
     btnRow.appendChild(resetBtn);
 
     const reseedBtn = el('button', 'crit-btn');
-    reseedBtn.textContent = '🎲 Seed';
+    reseedBtn.textContent = '🎲 Reseed';
+    reseedBtn.title = 'Regenerate Population — respawn particles with current settings';
     reseedBtn.addEventListener('click', () => opts.onReseed?.());
     btnRow.appendChild(reseedBtn);
     body.appendChild(btnRow);
@@ -472,48 +491,66 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
     const colors = opts.speciesColors ?? Array.from({ length: n }, (_, i) => ['#44cc44', '#ff4444', '#cc44cc'][i % 3]);
     const initVals = opts.initialSpeciesValues ?? [];
 
+    // Tab bar for species selection
+    const tabBar = el('div', 'crit-species-tab-bar');
+    let activeTab = 0;
+
+    const tabButtons: HTMLButtonElement[] = [];
+    for (let si = 0; si < n; si++) {
+      const tabBtn = el('button', 'crit-btn crit-btn-small crit-species-tab') as HTMLButtonElement;
+      tabBtn.textContent = names[si];
+      tabBtn.style.borderLeftColor = colors[si];
+      tabBtn.style.borderLeft = `3px solid ${colors[si]}`;
+      const idx = si;
+      tabBtn.addEventListener('click', () => {
+        activeTab = idx;
+        updateTabVisibility();
+      });
+      tabBar.appendChild(tabBtn);
+      tabButtons.push(tabBtn);
+    }
+
+    // Add Species button
+    const addBtn = el('button', 'crit-btn crit-btn-small crit-btn-add-species');
+    addBtn.textContent = '+ Add Species';
+    addBtn.addEventListener('click', () => opts.onAddSpecies?.());
+    tabBar.appendChild(addBtn);
+
+    body.appendChild(tabBar);
+
+    // Container for species panels (only active one visible)
+    const panelsContainer = el('div', 'crit-species-panels');
+
     for (let si = 0; si < n; si++) {
       const speciesIdx = si;
       const color = colors[si] ?? '#888';
       const iv = initVals[si] ?? {};
 
-      // Species collapsible sub-panel
-      const subPanel = el('div', 'crit-section');
-      const hdr = el('div', 'crit-species-hdr');
-      hdr.style.borderLeftColor = color;
-      hdr.style.background = hexToRgba(color, 0.1);
+      const panel = el('div', 'crit-species-panel');
 
-      const arrow = el('span', 'crit-section-arrow');
-      arrow.textContent = '▼';
-      hdr.appendChild(arrow);
-
-      // Name input
-      const nameInput = document.createElement('input');
-      nameInput.type = 'text';
-      nameInput.className = 'crit-name-input';
-      nameInput.value = names[si];
-      nameInput.addEventListener('change', () => {
-        opts.onSpeciesChange?.(speciesIdx, 'name', nameInput.value);
-      });
-      hdr.appendChild(nameInput);
-
-      // Color picker
+      // Name + color row
+      const nameRow = el('div', 'crit-row');
       const colorInput = document.createElement('input');
       colorInput.type = 'color';
       colorInput.value = color;
       colorInput.addEventListener('input', () => {
-        hdr.style.borderLeftColor = colorInput.value;
-        hdr.style.background = hexToRgba(colorInput.value, 0.1);
         opts.onSpeciesChange?.(speciesIdx, 'color', colorInput.value);
       });
-      hdr.appendChild(colorInput);
+      nameRow.appendChild(colorInput);
 
-      const subBody = el('div', 'crit-section-body');
-      hdr.addEventListener('click', (e) => {
-        if ((e.target as HTMLElement).tagName === 'INPUT') return;
-        const isCollapsed = subBody.classList.toggle('collapsed');
-        arrow.textContent = isCollapsed ? '▶' : '▼';
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.className = 'crit-name-input';
+      nameInput.value = names[si];
+      nameInput.style.flex = '1';
+      nameInput.style.width = 'auto';
+      nameInput.addEventListener('change', () => {
+        opts.onSpeciesChange?.(speciesIdx, 'name', nameInput.value);
+        // Update tab button text
+        if (tabButtons[speciesIdx]) tabButtons[speciesIdx].textContent = nameInput.value;
       });
+      nameRow.appendChild(nameInput);
+      panel.appendChild(nameRow);
 
       // Count slider + Apply button
       const countRow = el('div', 'crit-row');
@@ -524,7 +561,6 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
       const countVal = el('span', 'crit-value');
       countVal.textContent = countSlider.value;
       countSlider.addEventListener('input', () => { countVal.textContent = countSlider.value; });
-      // Register count slider
       registerSlider(`species.${si}.count`, countSlider, countVal);
       countRow.appendChild(countLbl); countRow.appendChild(countSlider); countRow.appendChild(countVal);
       const applyBtn = el('button', 'crit-btn crit-btn-small');
@@ -533,15 +569,15 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
         opts.onSpeciesChange?.(speciesIdx, 'count', parseInt(countSlider.value));
       });
       countRow.appendChild(applyBtn);
-      subBody.appendChild(countRow);
+      panel.appendChild(countRow);
 
       // Basic sliders
-      subBody.appendChild(makeSlider('Radius', 1, 10, 0.5, iv['radius'] ?? 3, (v) => opts.onSpeciesChange?.(speciesIdx, 'radius', v), `species.${si}.radius`));
-      subBody.appendChild(makeSlider('Init Speed', 0, 200, 1, iv['initialSpeed'] ?? 50, (v) => opts.onSpeciesChange?.(speciesIdx, 'initialSpeed', v), `species.${si}.initialSpeed`));
-      subBody.appendChild(makeSlider('Max Speed', 10, 300, 1, iv['maxSpeed'] ?? 100, (v) => opts.onSpeciesChange?.(speciesIdx, 'maxSpeed', v), `species.${si}.maxSpeed`));
+      panel.appendChild(makeSlider('Radius', 1, 10, 0.5, iv['radius'] ?? 3, (v) => opts.onSpeciesChange?.(speciesIdx, 'radius', v), `species.${si}.radius`));
+      panel.appendChild(makeSlider('Init Speed', 0, 200, 1, iv['initialSpeed'] ?? 50, (v) => opts.onSpeciesChange?.(speciesIdx, 'initialSpeed', v), `species.${si}.initialSpeed`));
+      panel.appendChild(makeSlider('Max Speed', 10, 300, 1, iv['maxSpeed'] ?? 100, (v) => opts.onSpeciesChange?.(speciesIdx, 'maxSpeed', v), `species.${si}.maxSpeed`));
 
       // Energy sub-section
-      subBody.appendChild(buildSubSection('Energy', (sub) => {
+      panel.appendChild(buildSubSection('Energy', (sub) => {
         sub.appendChild(makeSlider('Max Energy', 10, 500, 5, iv['maxEnergy'] ?? 100, (v) => opts.onSpeciesChange?.(speciesIdx, 'maxEnergy', v), `species.${si}.maxEnergy`));
         sub.appendChild(makeSlider('Init Energy', 5, 250, 5, iv['initialEnergy'] ?? 50, (v) => opts.onSpeciesChange?.(speciesIdx, 'initialEnergy', v), `species.${si}.initialEnergy`));
         sub.appendChild(makeSlider('Repro Cost', 5, 200, 5, iv['reproductionCost'] ?? 40, (v) => opts.onSpeciesChange?.(speciesIdx, 'reproductionCost', v), `species.${si}.reproductionCost`));
@@ -550,28 +586,54 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
       }));
 
       // Lifecycle sub-section
-      subBody.appendChild(buildSubSection('Lifecycle', (sub) => {
+      panel.appendChild(buildSubSection('Lifecycle', (sub) => {
         sub.appendChild(makeSlider('Max Age', 0, 300, 1, iv['maxAgeSec'] ?? 60, (v) => opts.onSpeciesChange?.(speciesIdx, 'maxAgeSec', v), `species.${si}.maxAgeSec`));
         sub.appendChild(makeSlider('Starv Dmg/s', 0, 50, 0.5, iv['starvationDamagePerSec'] ?? 10, (v) => opts.onSpeciesChange?.(speciesIdx, 'starvationDamagePerSec', v), `species.${si}.starvationDamagePerSec`));
         sub.appendChild(makeSlider('Repro CD', 0, 30, 0.5, iv['reproductionCooldownSec'] ?? 5, (v) => opts.onSpeciesChange?.(speciesIdx, 'reproductionCooldownSec', v), `species.${si}.reproductionCooldownSec`));
       }));
 
-      // Diet sub-section
-      subBody.appendChild(buildSubSection('Diet', (sub) => {
-        // Can eat toggles
+      // Diet sub-section — checkboxes for each other species
+      panel.appendChild(buildSubSection('Diet', (sub) => {
         for (let j = 0; j < n; j++) {
           if (j === si) continue;
           const canEatInitial = !!(iv['canEat_' + j]);
-          sub.appendChild(makeToggle(`Eat ${names[j]}`, canEatInitial, (on) => {
-            opts.onSpeciesChange?.(speciesIdx, 'canEat_' + j, on);
-          }));
+          const checkboxRow = el('div', 'crit-row');
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.checked = canEatInitial;
+          checkbox.style.cursor = 'pointer';
+          checkbox.style.accentColor = colors[j] ?? '#6af';
+          checkbox.addEventListener('change', () => {
+            opts.onSpeciesChange?.(speciesIdx, 'canEat_' + j, checkbox.checked);
+          });
+          checkboxRow.appendChild(checkbox);
+          const lbl = el('span', 'crit-label');
+          lbl.textContent = `Eat ${names[j]}`;
+          lbl.style.cursor = 'pointer';
+          lbl.addEventListener('click', () => {
+            checkbox.checked = !checkbox.checked;
+            opts.onSpeciesChange?.(speciesIdx, 'canEat_' + j, checkbox.checked);
+          });
+          checkboxRow.appendChild(lbl);
+          sub.appendChild(checkboxRow);
         }
       }));
 
-      subPanel.appendChild(hdr);
-      subPanel.appendChild(subBody);
-      body.appendChild(subPanel);
+      panelsContainer.appendChild(panel);
     }
+
+    body.appendChild(panelsContainer);
+
+    function updateTabVisibility(): void {
+      for (let i = 0; i < tabButtons.length; i++) {
+        tabButtons[i].classList.toggle('active', i === activeTab);
+      }
+      const panels = panelsContainer.querySelectorAll('.crit-species-panel');
+      panels.forEach((p, idx) => {
+        (p as HTMLElement).style.display = idx === activeTab ? '' : 'none';
+      });
+    }
+    updateTabVisibility();
   });
 }
 
@@ -642,17 +704,25 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
     btnRow.appendChild(clearBtn);
     body.appendChild(btnRow);
 
+    // Label explaining row/col meaning
+    const legend = el('div');
+    legend.style.cssText = 'font-size:9px; color:#777; margin:4px 0 2px 0; line-height:1.4;';
+    legend.textContent = 'Row = source (feels force)  ·  Column = target (exerts force)';
+    body.appendChild(legend);
+
     // Grid
     const grid = el('div', 'crit-matrix-grid');
     grid.style.gridTemplateColumns = `44px repeat(${n}, 1fr)`;
 
-    // Header row
+    // Header row — corner label + column species names
     const corner = el('div', 'crit-matrix-header');
+    corner.textContent = 'src \\ tgt';
+    corner.title = 'Row = source species (feels force), Column = target species (exerts force)';
     grid.appendChild(corner);
     for (let j = 0; j < n; j++) {
       const hdr = el('div', 'crit-matrix-header');
       hdr.textContent = names[j].substring(0, 5);
-      hdr.title = names[j];
+      hdr.title = `Target: ${names[j]} (exerts force)`;
       grid.appendChild(hdr);
     }
 
@@ -660,7 +730,7 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
     for (let i = 0; i < n; i++) {
       const rowLbl = el('div', 'crit-matrix-header');
       rowLbl.textContent = names[i].substring(0, 5);
-      rowLbl.title = names[i];
+      rowLbl.title = `Source: ${names[i]} (feels force)`;
       grid.appendChild(rowLbl);
 
       for (let j = 0; j < n; j++) {
@@ -676,14 +746,14 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
         // Click cell to cycle: +25, -25
         const ii = i, jj = j;
         let currentStr = initStr;
+        let currentRadius = init?.radius ?? 100;
         cell.addEventListener('click', () => {
           currentStr += 25;
           if (currentStr > 100) currentStr = -100;
           valLabel.textContent = String(currentStr);
           updateCellColor(cell, currentStr);
-          const radius = init?.radius ?? 100;
           const falloff = init?.falloff ?? 'linear';
-          opts.onMatrixChange?.(ii, jj, currentStr, radius, falloff);
+          opts.onMatrixChange?.(ii, jj, currentStr, currentRadius, falloff);
         });
         // Right-click to decrease
         cell.addEventListener('contextmenu', (e) => {
@@ -692,9 +762,8 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
           if (currentStr < -100) currentStr = 100;
           valLabel.textContent = String(currentStr);
           updateCellColor(cell, currentStr);
-          const radius = init?.radius ?? 100;
           const falloff = init?.falloff ?? 'linear';
-          opts.onMatrixChange?.(ii, jj, currentStr, radius, falloff);
+          opts.onMatrixChange?.(ii, jj, currentStr, currentRadius, falloff);
         });
 
         grid.appendChild(cell);
@@ -702,6 +771,68 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
     }
 
     body.appendChild(grid);
+
+    // Per-cell radius controls with min/max sliders
+    const radiusSection = el('div');
+    radiusSection.style.cssText = 'margin-top:8px;';
+
+    const radiusTitle = el('div', 'crit-subsection-hdr');
+    radiusTitle.textContent = '▾ Cell Radius Controls';
+    radiusSection.appendChild(radiusTitle);
+
+    const radiusBody = el('div', 'crit-section-body');
+
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        const init = initMatrix?.[i]?.[j];
+        const baseRadius = init?.radius ?? 100;
+        const rowDiv = el('div', 'crit-row');
+        rowDiv.style.cssText = 'gap:4px; flex-wrap:wrap;';
+
+        const lbl = el('span', 'crit-label');
+        lbl.textContent = `${names[i].substring(0, 4)}→${names[j].substring(0, 4)}`;
+        lbl.style.minWidth = '60px';
+        rowDiv.appendChild(lbl);
+
+        // Min radius slider
+        const minSlider = document.createElement('input');
+        minSlider.type = 'range'; minSlider.min = '10'; minSlider.max = '200'; minSlider.step = '5';
+        minSlider.value = String(Math.max(10, baseRadius - 30));
+        minSlider.style.flex = '1'; minSlider.style.minWidth = '40px';
+        const minVal = el('span', 'crit-value');
+        minVal.textContent = minSlider.value;
+        minVal.style.minWidth = '24px'; minVal.style.fontSize = '9px';
+
+        // Max radius slider
+        const maxSlider = document.createElement('input');
+        maxSlider.type = 'range'; maxSlider.min = '10'; maxSlider.max = '300'; maxSlider.step = '5';
+        maxSlider.value = String(baseRadius);
+        maxSlider.style.flex = '1'; maxSlider.style.minWidth = '40px';
+        const maxVal = el('span', 'crit-value');
+        maxVal.textContent = maxSlider.value;
+        maxVal.style.minWidth = '24px'; maxVal.style.fontSize = '9px';
+
+        const ii = i, jj = j;
+        function updateRadius(): void {
+          const r = parseInt(maxSlider.value);
+          maxVal.textContent = String(r);
+          const falloff = init?.falloff ?? 'linear';
+          opts.onMatrixChange?.(ii, jj, initMatrix?.[ii]?.[jj]?.strength ?? 0, r, falloff);
+        }
+
+        minSlider.addEventListener('input', () => { minVal.textContent = minSlider.value; });
+        maxSlider.addEventListener('input', updateRadius);
+
+        rowDiv.appendChild(minSlider);
+        rowDiv.appendChild(minVal);
+        rowDiv.appendChild(maxSlider);
+        rowDiv.appendChild(maxVal);
+        radiusBody.appendChild(rowDiv);
+      }
+    }
+
+    radiusSection.appendChild(radiusBody);
+    body.appendChild(radiusSection);
   });
 }
 

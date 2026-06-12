@@ -194,40 +194,44 @@ describe('World.clampVelocities', () => {
 // ─── Boundaries ──────────────────────────────────────────────────
 
 describe('World.applyBoundaries (bounce)', () => {
-  it('bounces particles off left wall', () => {
+  it('bounces particles off left wall + soft repulsion', () => {
     const world = new World(singleTypeConfig(1));
     world.x[0] = -10;
     world.vx[0] = -50;
     world.applyBoundaries();
     expect(world.x[0]).toBe(10);
-    expect(world.vx[0]).toBe(50);
+    // Hard bounce: vx = 50, soft repulsion: x=10, margin=30, t=(1-10/30)²*10 = 4.444
+    expect(world.vx[0]).toBeCloseTo(50 + (1 - 10 / 30) ** 2 * World.BOUNCE_REPULSION, 3);
   });
 
-  it('bounces particles off right wall', () => {
+  it('bounces particles off right wall + soft repulsion', () => {
     const world = new World(singleTypeConfig(1));
     world.x[0] = 810;
     world.vx[0] = 50;
     world.applyBoundaries();
     expect(world.x[0]).toBeCloseTo(790, 3);
-    expect(world.vx[0]).toBe(-50);
+    // Hard bounce: vx = -50, distToRight=10, soft: -(1-10/30)²*10 = -4.444
+    expect(world.vx[0]).toBeCloseTo(-50 - (1 - 10 / 30) ** 2 * World.BOUNCE_REPULSION, 3);
   });
 
-  it('bounces particles off top wall', () => {
+  it('bounces particles off top wall + soft repulsion', () => {
     const world = new World(singleTypeConfig(1));
     world.y[0] = -5;
     world.vy[0] = -30;
     world.applyBoundaries();
     expect(world.y[0]).toBe(5);
-    expect(world.vy[0]).toBe(30);
+    // Hard bounce: vy = 30, distToTop=5, soft: (1-5/30)²*10 = 6.944
+    expect(world.vy[0]).toBeCloseTo(30 + (1 - 5 / 30) ** 2 * World.BOUNCE_REPULSION, 3);
   });
 
-  it('bounces particles off bottom wall', () => {
+  it('bounces particles off bottom wall + soft repulsion', () => {
     const world = new World(singleTypeConfig(1));
     world.y[0] = 610;
     world.vy[0] = 30;
     world.applyBoundaries();
     expect(world.y[0]).toBeCloseTo(590, 3);
-    expect(world.vy[0]).toBe(-30);
+    // Hard bounce: vy = -30, distToBottom=10, soft: -(1-10/30)²*10 = -4.444
+    expect(world.vy[0]).toBeCloseTo(-30 - (1 - 10 / 30) ** 2 * World.BOUNCE_REPULSION, 3);
   });
 });
 
@@ -1471,7 +1475,8 @@ describe('BoundaryForce', () => {
     boundary.apply(world, grid, 1 / 60);
 
     expect(world.x[0]).toBe(10);
-    expect(world.vx[0]).toBe(50);
+    // Soft boundary repulsion adds impulse: (1 - 10/30)² * BOUNCE_REPULSION
+    expect(world.vx[0]).toBeCloseTo(50 + (1 - 10 / 30) ** 2 * World.BOUNCE_REPULSION, 3);
   });
 
   it('applies wrap boundaries via force pipeline', () => {

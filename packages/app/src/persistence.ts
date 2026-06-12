@@ -55,24 +55,47 @@ export function clearAutosave(): void {
 
 /**
  * Export a config as a downloadable .json file.
- * Triggers a browser download.
+ * On Android/Capacitor, uses the Web Share API (or falls back to anchor download).
  */
 export function exportConfig(config: CritteriumConfig, filename: string): void {
   try {
     const json = JSON.stringify(config, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
+    const safeName = filename.endsWith('.json') ? filename : `${filename}.json`;
 
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename.endsWith('.json') ? filename : `${filename}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // On Android/Capacitor, the anchor-download trick doesn't work.
+    // Try Web Share API first (available on modern Android WebView).
+    const blob = new Blob([json], { type: 'application/json' });
+    const file = new File([blob], safeName, { type: 'application/json' });
+
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({
+        files: [file],
+        title: 'Critterium Config',
+      }).catch((err) => {
+        // User cancelled or share failed — fall back to download
+        if ((err as DOMException).name !== 'AbortError') {
+          fallbackDownload(blob, safeName);
+        }
+      });
+      return;
+    }
+
+    // Fallback: traditional anchor download (works on desktop browsers)
+    fallbackDownload(blob, safeName);
   } catch (err) {
     console.error('[Critterium] Export failed:', err);
   }
+}
+
+function fallbackDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 /**

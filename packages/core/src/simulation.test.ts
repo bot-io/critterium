@@ -318,7 +318,14 @@ describe('sim: boundaries', () => {
       types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
     w.x[0] = -5; w.y[0] = 150; w.vx[0] = -50; w.vy[0] = 0;
     w.applyBoundaries();
-    expect(w.x[0]).toBe(5); expect(w.vx[0]).toBe(50);
+    // Hard bounce reflects position to 5 and velocity to 50,
+    // then soft boundary repulsion adds inward impulse (particle is within BOUNCE_MARGIN)
+    const margin = 30;
+    const strength = 10;
+    const t = 1 - 5 / margin;
+    const expectedVx = 50 + t * t * strength;
+    expect(w.x[0]).toBe(5);
+    expect(w.vx[0]).toBeCloseTo(expectedVx, 5);
   });
 
   it('bounce reflects at right wall', () => {
@@ -326,7 +333,14 @@ describe('sim: boundaries', () => {
       types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
     w.x[0] = 410; w.y[0] = 150; w.vx[0] = 50; w.vy[0] = 0;
     w.applyBoundaries();
-    expect(w.x[0]).toBe(390); expect(w.vx[0]).toBe(-50);
+    // Hard bounce reflects position to 390 and velocity to -50,
+    // then soft boundary repulsion adds inward impulse (particle is within BOUNCE_MARGIN)
+    const margin = 30;
+    const strength = 10;
+    const t = 1 - 10 / margin;
+    const expectedVx = -50 - t * t * strength;
+    expect(w.x[0]).toBe(390);
+    expect(w.vx[0]).toBeCloseTo(expectedVx, 5);
   });
 
   it('wrap wraps position', () => {

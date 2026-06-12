@@ -375,6 +375,16 @@ async function main(): Promise<void> {
     speciesMaxEnergy,
   );
 
+  /** Sync renderer species visuals from liveConfig */
+  function syncRendererVisuals(): void {
+    const visuals: SpeciesVisual[] = liveConfig.species.map(s => {
+      const hex = s.color.replace('#', '');
+      return { color: parseInt(hex, 16), radius: s.radius };
+    });
+    renderer.updateSpeciesVisuals(visuals);
+    renderer.setSpeciesMaxEnergy(new Float32Array(liveConfig.species.map(s => s.energy.maxEnergy)));
+  }
+
   // Attach canvas to DOM
   const appEl = document.getElementById('app');
   if (appEl) {
@@ -800,11 +810,13 @@ async function main(): Promise<void> {
         sp.name = value;
       } else if (param === 'color' && typeof value === 'string') {
         sp.color = value;
+        syncRendererVisuals();
       } else if (param === 'count' && typeof value === 'number') {
         sp.count = value;
         rebuildSimulation();
       } else if (param === 'radius' && typeof value === 'number') {
         sp.radius = value;
+        syncRendererVisuals();
         rebuildSimulation();
       } else if (param === 'initialSpeed' && typeof value === 'number') {
         sp.initialSpeed = value;
@@ -842,6 +854,46 @@ async function main(): Promise<void> {
         else sp.diet.canEat.delete(targetIdx);
         rebuildSimulation();
       }
+    },
+
+    onAddSpecies: () => {
+      // Add a new default species to the config and reload
+      const newIdx = liveConfig.species.length;
+      const defaultColors = ['#44cc44', '#ff4444', '#cc44cc', '#ffcc44', '#44ccff', '#ff44cc'];
+      const newSpecies: SpeciesConfig = {
+        name: `Species ${newIdx + 1}`,
+        count: 50,
+        color: defaultColors[newIdx % defaultColors.length],
+        radius: 3,
+        initialSpeed: 50,
+        maxSpeed: 100,
+        energy: defaultEnergyConfig({
+          maxEnergy: 100,
+          initialEnergy: 50,
+          reproductionCost: 40,
+          movementCostPerSec: 2,
+          idleDrainPerSec: 1,
+          energyGainPerPrey: Array(newIdx + 1).fill(0),
+        }),
+        lifecycle: defaultLifecycleConfig({
+          maxAgeSec: 60,
+          starvationDamagePerSec: 10,
+          reproductionCooldownSec: 5,
+        }),
+        diet: defaultDietConfig({ canEat: new Set<number>() }),
+      };
+      liveConfig.species.push(newSpecies);
+      // Expand interaction matrix state to accommodate new species
+      nSpecies = liveConfig.species.length;
+      while (matrixState.length < nSpecies) {
+        matrixState.push(new Array(nSpecies).fill(null));
+      }
+      for (const row of matrixState) {
+        while (row.length < nSpecies) row.push(null);
+      }
+      // Full reload to rebuild UI with new species count
+      localStorage.setItem('critterium-pending-preset', JSON.stringify(getCurrentConfig()));
+      window.location.reload();
     },
 
     onExport: () => {

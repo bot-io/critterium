@@ -219,6 +219,13 @@ export class CritteriumRenderer {
     this.speciesMaxEnergy = maxEnergy;
   }
 
+  /** Update species visual config (color, radius) and invalidate sprite cache so particles redraw. */
+  updateSpeciesVisuals(visuals: SpeciesVisual[]): void {
+    this.speciesVisuals = visuals;
+    // Invalidate all sprite species so they get redrawn with new visuals
+    this.spriteSpecies.fill(-1);
+  }
+
   /**
    * Sync all particle positions, visibility, and colors from the world state.
    * Call once per frame. Zero allocations in hot path.

@@ -127,7 +127,7 @@ describe('controls panel', () => {
     const opts = makeOptions();
     const panel = createControlsPanel(opts);
     const resetBtn = Array.from(panel.querySelectorAll('.crit-btn')).find(
-      (b) => b.textContent?.includes('Reset'),
+      (b) => b.textContent?.includes('Reload Preset'),
     ) as HTMLElement;
     expect(resetBtn).toBeDefined();
     resetBtn.click();
@@ -138,7 +138,7 @@ describe('controls panel', () => {
     const opts = makeOptions();
     const panel = createControlsPanel(opts);
     const seedBtn = Array.from(panel.querySelectorAll('.crit-btn')).find(
-      (b) => b.textContent?.includes('Seed'),
+      (b) => b.textContent?.includes('Reseed'),
     ) as HTMLElement;
     expect(seedBtn).toBeDefined();
     seedBtn.click();
@@ -167,13 +167,13 @@ describe('controls panel', () => {
     expect(arrow.textContent).toBe('▼');
   });
 
-  it('species sub-panels match speciesCount', () => {
+  it('species tab buttons match speciesCount', () => {
     const panel = createControlsPanel(makeOptions({ speciesCount: 3 }));
-    const speciesHdrs = panel.querySelectorAll('.crit-species-hdr');
-    expect(speciesHdrs.length).toBe(3);
+    const tabBtns = panel.querySelectorAll('.crit-species-tab');
+    expect(tabBtns.length).toBe(3);
   });
 
-  it('species sub-panels with 2 species creates 2 headers', () => {
+  it('species tab buttons with 2 species creates 2 tabs', () => {
     const panel = createControlsPanel(
       makeOptions({
         speciesCount: 2,
@@ -181,8 +181,15 @@ describe('controls panel', () => {
         speciesColors: ['#ff0000', '#00ff00'],
       }),
     );
-    const speciesHdrs = panel.querySelectorAll('.crit-species-hdr');
-    expect(speciesHdrs.length).toBe(2);
+    const tabBtns = panel.querySelectorAll('.crit-species-tab');
+    expect(tabBtns.length).toBe(2);
+  });
+
+  it('Add Species button exists', () => {
+    const panel = createControlsPanel(makeOptions());
+    const addBtn = panel.querySelector('.crit-btn-add-species');
+    expect(addBtn).not.toBeNull();
+    expect(addBtn!.textContent).toContain('Add Species');
   });
 
   it('matrix grid has correct number of cells for 2 species', () => {
