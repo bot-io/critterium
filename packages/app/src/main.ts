@@ -38,6 +38,7 @@ import { CritteriumRenderer, type SpeciesVisual } from '@critterium/render';
 import { createControlsPanel } from './controls.js';
 import { autosave, loadAutosave, clearAutosave, exportConfig, importConfig } from './persistence.js';
 import { getBuiltinPreset } from './presets.js';
+import { PopulationGraph } from './population-graph.js';
 
 // ─── Species Definitions ─────────────────────────────────────
 
@@ -331,10 +332,12 @@ async function main(): Promise<void> {
   );
 
   // 4. Create renderer
+  const speciesMaxEnergy = new Float32Array(SPECIES_CONFIGS.map(s => s.energy.maxEnergy));
   const renderer = await CritteriumRenderer.create(
     SPECIES_VISUALS,
     [...SPECIES_NAMES],
     eco.config.populationCap,
+    speciesMaxEnergy,
   );
 
   // Attach canvas to DOM
@@ -342,6 +345,24 @@ async function main(): Promise<void> {
   if (appEl) {
     appEl.appendChild(renderer.app.canvas as HTMLCanvasElement);
   }
+
+  // 4b. Create always-visible FPS counter
+  const fpsEl = document.createElement('div');
+  fpsEl.style.cssText = 'position:fixed;top:8px;left:8px;font:12px "SF Mono","Fira Code","Consolas",monospace;color:#fff;background:rgba(0,0,0,0.5);padding:3px 7px;border-radius:4px;z-index:20;pointer-events:none;';
+  fpsEl.textContent = 'FPS: --';
+  document.body.appendChild(fpsEl);
+
+  // FPS tracking state
+  let fpsFrameCount = 0;
+  let fpsTimer = 0;
+
+  // 4c. Create population graph overlay
+  const popGraphCanvas = document.createElement('canvas');
+  document.body.appendChild(popGraphCanvas);
+  const popGraph = new PopulationGraph(popGraphCanvas, {
+    speciesColors: SPECIES_VISUALS.map(v => v.color),
+    maxHistorySec: 30,
+  });
 
   // 5. Simulation loop with freeze detection
   const BASE_DT = 1 / 60;
@@ -354,6 +375,9 @@ async function main(): Promise<void> {
   let totalSimTime = 0;
   let stepCount = 0;
   let paused = false;
+
+  // Pre-allocated species counts array (avoid per-frame allocation)
+  const speciesCounts = new Int32Array(SPECIES_CONFIGS.length);
 
   function getCurrentConfig(): CritteriumConfig {
     const activeForces: Array<{ readonly id: string; readonly params: Record<string, unknown> }> = [dragForce, wanderForce];
@@ -443,6 +467,29 @@ async function main(): Promise<void> {
 
       // Render
       renderer.update(eco.world, eco.eco, frameDt);
+
+      // Compute per-species counts for population graph (reuse pre-allocated array)
+      speciesCounts.fill(0);
+      const hwm = eco.highWaterMark;
+      for (let i = 0; i < hwm; i++) {
+        if (eco.eco.alive[i] !== 0) {
+          const sp = eco.world.type[i];
+          if (sp < speciesCounts.length) speciesCounts[sp]++;
+        }
+      }
+
+      // Update population graph (pass typed array directly)
+      popGraph.update(speciesCounts, frameDt);
+
+      // Update FPS counter
+      fpsFrameCount++;
+      fpsTimer += frameDt;
+      if (fpsTimer >= 0.5) {
+        const fps = Math.round(fpsFrameCount / fpsTimer);
+        fpsEl.textContent = `FPS: ${fps}`;
+        fpsFrameCount = 0;
+        fpsTimer = 0;
+      }
 
       requestAnimationFrame(loop);
     } catch (err) {
