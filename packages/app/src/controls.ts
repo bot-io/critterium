@@ -40,6 +40,80 @@ export interface ControlsPanelOptions {
   initialSpeciesValues?: Array<Record<string, number>>;
 }
 
+// ─── Slider Registry ─────────────────────────────────────────
+
+interface SliderRef {
+  slider: HTMLInputElement;
+  valueEl: HTMLElement;
+}
+
+/** Global registry of all slider elements, keyed by compound id. */
+const sliderRegistry = new Map<string, SliderRef>();
+
+/** Register a slider for later programmatic update. */
+function registerSlider(key: string, slider: HTMLInputElement, valueEl: HTMLElement): void {
+  sliderRegistry.set(key, { slider, valueEl });
+}
+
+/** Update a registered slider's value and display. */
+function setSliderValue(key: string, value: number): void {
+  const ref = sliderRegistry.get(key);
+  if (ref) {
+    ref.slider.value = String(value);
+    ref.valueEl.textContent = formatNum(value);
+  }
+}
+
+/**
+ * Reset all sliders to match the given values.
+ * `speciesValues` is indexed by species index, then param name.
+ * `simValues` contains { speed, popCap }.
+ * `forceValues` contains per-force params.
+ */
+export function resetAllSliders(opts: {
+  speciesValues: Array<Record<string, number>>;
+  simValues: { speed: number; popCap: number };
+  forceValues: Record<string, Record<string, number>>;
+}): void {
+  // Simulation sliders
+  setSliderValue('sim.speed', opts.simValues.speed);
+  setSliderValue('sim.popCap', opts.simValues.popCap);
+
+  // Force sliders
+  if (opts.forceValues['drag']) {
+    setSliderValue('force.drag.coefficient', opts.forceValues['drag']['coefficient'] ?? 0.8);
+  }
+  if (opts.forceValues['wander']) {
+    setSliderValue('force.wander.strength', opts.forceValues['wander']['strength'] ?? 40);
+    setSliderValue('force.wander.rate', opts.forceValues['wander']['rate'] ?? 2.5);
+  }
+  if (opts.forceValues['pointer']) {
+    setSliderValue('force.pointer.strength', opts.forceValues['pointer']['strength'] ?? 200);
+    setSliderValue('force.pointer.radius', opts.forceValues['pointer']['radius'] ?? 150);
+  }
+
+  // Species sliders
+  for (let si = 0; si < opts.speciesValues.length; si++) {
+    const iv = opts.speciesValues[si];
+    if (!iv) continue;
+
+    setSliderValue(`species.${si}.count`, iv['count'] ?? 80);
+    setSliderValue(`species.${si}.radius`, iv['radius'] ?? 3);
+    setSliderValue(`species.${si}.initialSpeed`, iv['initialSpeed'] ?? 50);
+    setSliderValue(`species.${si}.maxSpeed`, iv['maxSpeed'] ?? 100);
+    setSliderValue(`species.${si}.maxEnergy`, iv['maxEnergy'] ?? 100);
+    setSliderValue(`species.${si}.initialEnergy`, iv['initialEnergy'] ?? 50);
+    setSliderValue(`species.${si}.reproductionCost`, iv['reproductionCost'] ?? 40);
+    setSliderValue(`species.${si}.movementCostPerSec`, iv['movementCostPerSec'] ?? 2);
+    setSliderValue(`species.${si}.idleDrainPerSec`, iv['idleDrainPerSec'] ?? 1);
+    setSliderValue(`species.${si}.maxAgeSec`, iv['maxAgeSec'] ?? 60);
+    setSliderValue(`species.${si}.starvationDamagePerSec`, iv['starvationDamagePerSec'] ?? 10);
+    setSliderValue(`species.${si}.reproductionCooldownSec`, iv['reproductionCooldownSec'] ?? 5);
+    setSliderValue(`species.${si}.sicknessDurationSec`, iv['sicknessDurationSec'] ?? 10);
+    setSliderValue(`species.${si}.contagionRadius`, iv['contagionRadius'] ?? 20);
+  }
+}
+
 // ─── Styles ───────────────────────────────────────────────────
 
 const STYLES = `
@@ -209,6 +283,7 @@ function el(tag: string, cls?: string): HTMLElement {
 function makeSlider(
   label: string, min: number, max: number, step: number, initial: number,
   onChange: (v: number) => void,
+  registryKey?: string,
 ): HTMLElement {
   const row = el('div', 'crit-row');
   const lbl = el('span', 'crit-label');
@@ -227,6 +302,12 @@ function makeSlider(
     val.textContent = formatNum(v);
     onChange(v);
   });
+
+  // Register for programmatic reset
+  if (registryKey) {
+    registerSlider(registryKey, slider, val);
+  }
+
   row.appendChild(lbl);
   row.appendChild(slider);
   row.appendChild(val);
@@ -374,13 +455,13 @@ function buildSimSection(opts: ControlsPanelOptions): HTMLElement {
     // Speed slider
     body.appendChild(makeSlider('Speed', 0.25, 3, 0.05, 1, (v) => {
       opts.onSpeedChange?.(v);
-    }));
+    }, 'sim.speed'));
 
     // Population cap slider
     const capInit = (opts.initialForceValues?.['_popCap'] as unknown as number | undefined) ?? 600;
     body.appendChild(makeSlider('Pop Cap', 50, 2000, 50, capInit, (v) => {
       opts.onPopulationCapChange?.(v);
-    }));
+    }, 'sim.popCap'));
   });
 }
 
@@ -445,6 +526,8 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
       const countVal = el('span', 'crit-value');
       countVal.textContent = countSlider.value;
       countSlider.addEventListener('input', () => { countVal.textContent = countSlider.value; });
+      // Register count slider
+      registerSlider(`species.${si}.count`, countSlider, countVal);
       countRow.appendChild(countLbl); countRow.appendChild(countSlider); countRow.appendChild(countVal);
       const applyBtn = el('button', 'crit-btn crit-btn-small');
       applyBtn.textContent = 'Apply';
@@ -455,26 +538,26 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
       subBody.appendChild(countRow);
 
       // Basic sliders
-      subBody.appendChild(makeSlider('Radius', 1, 10, 0.5, iv['radius'] ?? 3, (v) => opts.onSpeciesChange?.(speciesIdx, 'radius', v)));
-      subBody.appendChild(makeSlider('Init Speed', 0, 200, 1, iv['initialSpeed'] ?? 50, (v) => opts.onSpeciesChange?.(speciesIdx, 'initialSpeed', v)));
-      subBody.appendChild(makeSlider('Max Speed', 10, 300, 1, iv['maxSpeed'] ?? 100, (v) => opts.onSpeciesChange?.(speciesIdx, 'maxSpeed', v)));
+      subBody.appendChild(makeSlider('Radius', 1, 10, 0.5, iv['radius'] ?? 3, (v) => opts.onSpeciesChange?.(speciesIdx, 'radius', v), `species.${si}.radius`));
+      subBody.appendChild(makeSlider('Init Speed', 0, 200, 1, iv['initialSpeed'] ?? 50, (v) => opts.onSpeciesChange?.(speciesIdx, 'initialSpeed', v), `species.${si}.initialSpeed`));
+      subBody.appendChild(makeSlider('Max Speed', 10, 300, 1, iv['maxSpeed'] ?? 100, (v) => opts.onSpeciesChange?.(speciesIdx, 'maxSpeed', v), `species.${si}.maxSpeed`));
 
       // Energy sub-section
       subBody.appendChild(buildSubSection('Energy', (sub) => {
-        sub.appendChild(makeSlider('Max Energy', 10, 500, 5, iv['maxEnergy'] ?? 100, (v) => opts.onSpeciesChange?.(speciesIdx, 'maxEnergy', v)));
-        sub.appendChild(makeSlider('Init Energy', 5, 250, 5, iv['initialEnergy'] ?? 50, (v) => opts.onSpeciesChange?.(speciesIdx, 'initialEnergy', v)));
-        sub.appendChild(makeSlider('Repro Cost', 5, 200, 5, iv['reproductionCost'] ?? 40, (v) => opts.onSpeciesChange?.(speciesIdx, 'reproductionCost', v)));
-        sub.appendChild(makeSlider('Move Cost/s', 0, 10, 0.1, iv['movementCostPerSec'] ?? 2, (v) => opts.onSpeciesChange?.(speciesIdx, 'movementCostPerSec', v)));
-        sub.appendChild(makeSlider('Idle Drain/s', 0, 10, 0.1, iv['idleDrainPerSec'] ?? 1, (v) => opts.onSpeciesChange?.(speciesIdx, 'idleDrainPerSec', v)));
+        sub.appendChild(makeSlider('Max Energy', 10, 500, 5, iv['maxEnergy'] ?? 100, (v) => opts.onSpeciesChange?.(speciesIdx, 'maxEnergy', v), `species.${si}.maxEnergy`));
+        sub.appendChild(makeSlider('Init Energy', 5, 250, 5, iv['initialEnergy'] ?? 50, (v) => opts.onSpeciesChange?.(speciesIdx, 'initialEnergy', v), `species.${si}.initialEnergy`));
+        sub.appendChild(makeSlider('Repro Cost', 5, 200, 5, iv['reproductionCost'] ?? 40, (v) => opts.onSpeciesChange?.(speciesIdx, 'reproductionCost', v), `species.${si}.reproductionCost`));
+        sub.appendChild(makeSlider('Move Cost/s', 0, 10, 0.1, iv['movementCostPerSec'] ?? 2, (v) => opts.onSpeciesChange?.(speciesIdx, 'movementCostPerSec', v), `species.${si}.movementCostPerSec`));
+        sub.appendChild(makeSlider('Idle Drain/s', 0, 10, 0.1, iv['idleDrainPerSec'] ?? 1, (v) => opts.onSpeciesChange?.(speciesIdx, 'idleDrainPerSec', v), `species.${si}.idleDrainPerSec`));
       }));
 
       // Lifecycle sub-section
       subBody.appendChild(buildSubSection('Lifecycle', (sub) => {
-        sub.appendChild(makeSlider('Max Age', 0, 300, 1, iv['maxAgeSec'] ?? 60, (v) => opts.onSpeciesChange?.(speciesIdx, 'maxAgeSec', v)));
-        sub.appendChild(makeSlider('Starv Dmg/s', 0, 50, 0.5, iv['starvationDamagePerSec'] ?? 10, (v) => opts.onSpeciesChange?.(speciesIdx, 'starvationDamagePerSec', v)));
-        sub.appendChild(makeSlider('Repro CD', 0, 30, 0.5, iv['reproductionCooldownSec'] ?? 5, (v) => opts.onSpeciesChange?.(speciesIdx, 'reproductionCooldownSec', v)));
-        sub.appendChild(makeSlider('Sick Dur', 0, 60, 1, iv['sicknessDurationSec'] ?? 10, (v) => opts.onSpeciesChange?.(speciesIdx, 'sicknessDurationSec', v)));
-        sub.appendChild(makeSlider('Contagion R', 0, 100, 1, iv['contagionRadius'] ?? 20, (v) => opts.onSpeciesChange?.(speciesIdx, 'contagionRadius', v)));
+        sub.appendChild(makeSlider('Max Age', 0, 300, 1, iv['maxAgeSec'] ?? 60, (v) => opts.onSpeciesChange?.(speciesIdx, 'maxAgeSec', v), `species.${si}.maxAgeSec`));
+        sub.appendChild(makeSlider('Starv Dmg/s', 0, 50, 0.5, iv['starvationDamagePerSec'] ?? 10, (v) => opts.onSpeciesChange?.(speciesIdx, 'starvationDamagePerSec', v), `species.${si}.starvationDamagePerSec`));
+        sub.appendChild(makeSlider('Repro CD', 0, 30, 0.5, iv['reproductionCooldownSec'] ?? 5, (v) => opts.onSpeciesChange?.(speciesIdx, 'reproductionCooldownSec', v), `species.${si}.reproductionCooldownSec`));
+        sub.appendChild(makeSlider('Sick Dur', 0, 60, 1, iv['sicknessDurationSec'] ?? 10, (v) => opts.onSpeciesChange?.(speciesIdx, 'sicknessDurationSec', v), `species.${si}.sicknessDurationSec`));
+        sub.appendChild(makeSlider('Contagion R', 0, 100, 1, iv['contagionRadius'] ?? 20, (v) => opts.onSpeciesChange?.(speciesIdx, 'contagionRadius', v), `species.${si}.contagionRadius`));
       }));
 
       // Diet sub-section
@@ -530,19 +613,19 @@ function buildForcesSection(opts: ControlsPanelOptions): HTMLElement {
     // Drag
     const dragEnabled = (fv['drag']?.['_enabled'] ?? 1) !== 0;
     body.appendChild(makeToggle('Drag', dragEnabled, (on) => opts.onForceToggle?.('drag', on)));
-    body.appendChild(makeSlider('  Coeff', 0, 5, 0.1, fv['drag']?.['coefficient'] ?? 0.8, (v) => opts.onForceChange?.('drag', 'coefficient', v)));
+    body.appendChild(makeSlider('  Coeff', 0, 5, 0.1, fv['drag']?.['coefficient'] ?? 0.8, (v) => opts.onForceChange?.('drag', 'coefficient', v), 'force.drag.coefficient'));
 
     // Wander
     const wanderEnabled = (fv['wander']?.['_enabled'] ?? 1) !== 0;
     body.appendChild(makeToggle('Wander', wanderEnabled, (on) => opts.onForceToggle?.('wander', on)));
-    body.appendChild(makeSlider('  Str', 0, 200, 1, fv['wander']?.['strength'] ?? 40, (v) => opts.onForceChange?.('wander', 'strength', v)));
-    body.appendChild(makeSlider('  Rate', 0, 10, 0.1, fv['wander']?.['rate'] ?? 2.5, (v) => opts.onForceChange?.('wander', 'rate', v)));
+    body.appendChild(makeSlider('  Str', 0, 200, 1, fv['wander']?.['strength'] ?? 40, (v) => opts.onForceChange?.('wander', 'strength', v), 'force.wander.strength'));
+    body.appendChild(makeSlider('  Rate', 0, 10, 0.1, fv['wander']?.['rate'] ?? 2.5, (v) => opts.onForceChange?.('wander', 'rate', v), 'force.wander.rate'));
 
     // Pointer
     const pointerEnabled = (fv['pointer']?.['_enabled'] ?? 0) !== 0;
     body.appendChild(makeToggle('Pointer', pointerEnabled, (on) => opts.onForceToggle?.('pointer', on)));
-    body.appendChild(makeSlider('  Str', -500, 500, 5, fv['pointer']?.['strength'] ?? 200, (v) => opts.onForceChange?.('pointer', 'strength', v)));
-    body.appendChild(makeSlider('  Radius', 10, 400, 5, fv['pointer']?.['radius'] ?? 150, (v) => opts.onForceChange?.('pointer', 'radius', v)));
+    body.appendChild(makeSlider('  Str', -500, 500, 5, fv['pointer']?.['strength'] ?? 200, (v) => opts.onForceChange?.('pointer', 'strength', v), 'force.pointer.strength'));
+    body.appendChild(makeSlider('  Radius', 10, 400, 5, fv['pointer']?.['radius'] ?? 150, (v) => opts.onForceChange?.('pointer', 'radius', v), 'force.pointer.radius'));
     body.appendChild(makeFalloffSelect((fv['pointer']?.['falloff'] as unknown as string) ?? 'linear', (v) => {
       // Store falloff as a special param via onForceChange with string value mapped to number
       // Since onForceChange expects number, encode falloff as a special call

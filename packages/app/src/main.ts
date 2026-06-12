@@ -35,7 +35,7 @@ import {
   type CritteriumConfig,
 } from '@critterium/core';
 import { CritteriumRenderer, type SpeciesVisual } from '@critterium/render';
-import { createControlsPanel } from './controls.js';
+import { createControlsPanel, resetAllSliders } from './controls.js';
 import { autosave, loadAutosave, clearAutosave, exportConfig, importConfig } from './persistence.js';
 import { getBuiltinPreset } from './presets.js';
 import { PopulationGraph } from './population-graph.js';
@@ -188,6 +188,37 @@ function buildInteractionMatrix(): InteractionMatrix {
   return matrix;
 }
 
+// ─── Deep clone helper ────────────────────────────────────────
+
+function deepCloneSpeciesConfig(species: SpeciesConfig[]): SpeciesConfig[] {
+  return species.map(sp => ({
+    name: sp.name,
+    count: sp.count,
+    color: sp.color,
+    radius: sp.radius,
+    initialSpeed: sp.initialSpeed,
+    maxSpeed: sp.maxSpeed,
+    energy: { ...sp.energy, energyGainPerPrey: [...sp.energy.energyGainPerPrey] },
+    lifecycle: { ...sp.lifecycle },
+    diet: {
+      canEat: new Set(sp.diet.canEat),
+      infectionVulnerability: new Set(sp.diet.infectionVulnerability),
+    },
+  }));
+}
+
+function deepCloneConfig(config: EcosystemConfig): EcosystemConfig {
+  return {
+    width: config.width,
+    height: config.height,
+    boundaryMode: config.boundaryMode,
+    seed: config.seed,
+    populationCap: config.populationCap,
+    species: deepCloneSpeciesConfig(config.species),
+    interactionRules: config.interactionRules,
+  };
+}
+
 // ─── Preset helpers ───────────────────────────────────────────
 
 const PRESETS_KEY = 'critterium-presets';
@@ -260,8 +291,8 @@ function showPerfWarning(): void {
 
 // ─── Build initial species values for controls ───────────────
 
-function buildInitialSpeciesValues(): Array<Record<string, number>> {
-  return SPECIES_CONFIGS.map((sp) => ({
+function buildSpeciesValues(species: readonly SpeciesConfig[]): Array<Record<string, number>> {
+  return species.map((sp) => ({
     count: sp.count,
     radius: sp.radius,
     initialSpeed: sp.initialSpeed,
@@ -282,7 +313,7 @@ function buildInitialSpeciesValues(): Array<Record<string, number>> {
   }));
 }
 
-function buildInitialMatrixValues(
+function buildMatrixValues(
   matrix: InteractionMatrix,
   n: number,
 ): Array<Array<{ strength: number; radius: number; falloff: string } | null>> {
@@ -307,6 +338,9 @@ async function main(): Promise<void> {
   let useAutosave = false;
   const savedConfig = loadAutosave();
 
+  // Live config that all control changes update
+  let liveConfig = deepCloneConfig(CONFIG);
+
   if (savedConfig) {
     try {
       const validated = deserializeConfig(savedConfig as any);
@@ -318,11 +352,11 @@ async function main(): Promise<void> {
       clearAutosave();
     } catch {
       console.warn('[Critterium] Autosave restore failed, starting fresh');
-      eco = new EcosystemWorld(CONFIG);
+      eco = new EcosystemWorld(liveConfig);
       interactionMatrix = buildInteractionMatrix();
     }
   } else {
-    eco = new EcosystemWorld(CONFIG);
+    eco = new EcosystemWorld(liveConfig);
     interactionMatrix = buildInteractionMatrix();
   }
 
@@ -406,7 +440,7 @@ async function main(): Promise<void> {
   const BASE_DT = 1 / 60;
   let speedMultiplier = 1;
   const MAX_FRAME_DT = 0.1;
-  const MAX_ACCUMULATOR_STEPS = 5;
+  const MAX_ACCUMULATOR_STEPS = 3;
   const FREEZE_THRESHOLD_MS = 500;
   let accumulator = 0;
   let lastTime = performance.now();
@@ -416,6 +450,46 @@ async function main(): Promise<void> {
 
   // Pre-allocated species counts array (avoid per-frame allocation)
   const speciesCounts = new Int32Array(SPECIES_CONFIGS.length);
+
+  // ─── Matrix state tracking ──────────────────────────────────
+  const nSpecies = SPECIES_CONFIGS.length;
+  let matrixState: Array<Array<{ strength: number; radius: number; falloff: string } | null>>;
+
+  function initMatrixState(matrix: InteractionMatrix): void {
+    matrixState = buildMatrixValues(matrix, nSpecies);
+  }
+  initMatrixState(interactionMatrix);
+
+  // ─── rebuildSimulation ──────────────────────────────────────
+  function rebuildSimulation(): void {
+    // Create new ecosystem from live config
+    eco = new EcosystemWorld(liveConfig);
+
+    // Rebuild interaction matrix from current matrix state
+    const n = matrixState.length;
+    interactionMatrix = new InteractionMatrix(n);
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        const cell = matrixState[i]?.[j];
+        if (cell) {
+          interactionMatrix.set(i, j, { ...cell });
+        }
+      }
+    }
+    (pairwiseForce as { matrix: InteractionMatrix }).matrix = interactionMatrix;
+
+    // Rebuild spatial hash
+    grid.rebuild(eco.world);
+
+    // Reset timing
+    accumulator = 0;
+    lastTime = performance.now();
+
+    // Clear stale autosave
+    clearAutosave();
+
+    console.log(`[Critterium] Simulation rebuilt: ${eco.aliveCount} particles, cap ${liveConfig.populationCap}`);
+  }
 
   function getCurrentConfig(): CritteriumConfig {
     const activeForces: Array<{ readonly id: string; readonly params: Record<string, unknown> }> = [dragForce, wanderForce];
@@ -479,6 +553,11 @@ async function main(): Promise<void> {
       const dt = getEffectiveDt();
       accumulator += frameDt;
 
+      // If accumulator is way too large, drain it immediately to prevent death spiral
+      if (accumulator > dt * 2) {
+        accumulator = dt;
+      }
+
       let stepsThisFrame = 0;
       while (accumulator >= dt && stepsThisFrame < MAX_ACCUMULATOR_STEPS) {
         applyForces(dt);
@@ -492,6 +571,21 @@ async function main(): Promise<void> {
         processReproduction(eco);
         processInfection(eco, dt);
 
+        // Population overflow protection: force-kill excess particles
+        if (eco.aliveCount > liveConfig.populationCap * 1.5) {
+          const excess = eco.aliveCount - liveConfig.populationCap;
+          let killed = 0;
+          const hwm = eco.highWaterMark;
+          // Kill oldest particles first
+          for (let i = 0; i < hwm && killed < excess; i++) {
+            if (eco.eco.alive[i] !== 0) {
+              eco.kill(i);
+              killed++;
+            }
+          }
+          console.warn(`[Critterium] Population overflow: killed ${killed} excess particles`);
+        }
+
         totalSimTime += dt;
         accumulator -= dt;
         stepsThisFrame++;
@@ -499,7 +593,7 @@ async function main(): Promise<void> {
       }
 
       // If accumulator is still large, drain it to prevent death spiral
-      if (accumulator > dt * 3) {
+      if (accumulator > dt * 2) {
         accumulator = 0;
       }
 
@@ -592,26 +686,21 @@ async function main(): Promise<void> {
   });
 
   // 7. Build initial values for controls
-  const nSpecies = SPECIES_CONFIGS.length;
-  const initialMatrixValues = buildInitialMatrixValues(interactionMatrix, nSpecies);
-  const initialSpeciesValues = buildInitialSpeciesValues();
-
-  // Track matrix values for onMatrixChange
-  const matrixState: Array<Array<{ strength: number; radius: number; falloff: string } | null>> =
-    initialMatrixValues.map(row => row.map(cell => cell ? { ...cell } : null));
+  const initialSpeciesValues = buildSpeciesValues(liveConfig.species);
+  const initialMatrixValues = buildMatrixValues(interactionMatrix, nSpecies);
 
   // 8. Wire controls panel
   const controlsPanel = createControlsPanel({
     speciesCount: nSpecies,
     speciesNames: [...SPECIES_NAMES],
-    speciesColors: SPECIES_CONFIGS.map(s => s.color),
+    speciesColors: liveConfig.species.map(s => s.color),
     initialSpeciesValues,
     initialMatrixValues,
     initialForceValues: {
       drag: { coefficient: 0.8, _enabled: 1 },
       wander: { strength: 40, rate: 2.5, _enabled: 1 },
       pointer: { strength: 200, radius: 150, falloff: 0, _enabled: 0 },
-      _popCap: CONFIG.populationCap as unknown as Record<string, number>,
+      _popCap: liveConfig.populationCap as unknown as Record<string, number>,
     },
 
     onTogglePause: (p: boolean) => {
@@ -620,20 +709,27 @@ async function main(): Promise<void> {
     },
 
     onReset: () => {
-      eco = new EcosystemWorld(CONFIG);
+      // Reset to the original CONFIG defaults
+      liveConfig = deepCloneConfig(CONFIG);
       interactionMatrix = buildInteractionMatrix();
-      (pairwiseForce as { matrix: InteractionMatrix }).matrix = interactionMatrix;
-      grid.rebuild(eco.world);
-      clearAutosave();
+      initMatrixState(interactionMatrix);
+      rebuildSimulation();
+      // Sync all UI sliders to the reset values
+      resetAllSliders({
+        speciesValues: buildSpeciesValues(liveConfig.species),
+        simValues: { speed: speedMultiplier, popCap: liveConfig.populationCap },
+        forceValues: {
+          drag: { coefficient: (dragForce.params as Record<string, unknown>).coefficient as number },
+          wander: { strength: (wanderForce.params as Record<string, unknown>).strength as number, rate: (wanderForce.params as Record<string, unknown>).rate as number },
+          pointer: { strength: (pointerForce.params as Record<string, unknown>).strength as number, radius: (pointerForce.params as Record<string, unknown>).radius as number },
+        },
+      });
     },
 
     onReseed: () => {
       const newSeed = Math.floor(Math.random() * 2147483647);
-      const newConfig = { ...CONFIG, seed: newSeed };
-      eco = new EcosystemWorld(newConfig);
-      interactionMatrix = buildInteractionMatrix();
-      (pairwiseForce as { matrix: InteractionMatrix }).matrix = interactionMatrix;
-      grid.rebuild(eco.world);
+      liveConfig.seed = newSeed;
+      rebuildSimulation();
     },
 
     onSpeedChange: (multiplier: number) => {
@@ -641,7 +737,8 @@ async function main(): Promise<void> {
     },
 
     onPopulationCapChange: (cap: number) => {
-      (eco.config as { populationCap: number }).populationCap = cap;
+      liveConfig.populationCap = cap;
+      rebuildSimulation();
     },
 
     onForceToggle: (forceId: string, enabled: boolean) => {
@@ -673,15 +770,6 @@ async function main(): Promise<void> {
       // Update tracked state
       if (!matrixState[i]) matrixState[i] = [];
       matrixState[i][j] = { strength, radius, falloff };
-
-      // Also update InteractionRuleMatrix if it exists on the config
-      // The rule matrix uses enabledForces based on strength sign
-      const ruleIdx = eco.config.interactionRules?.[i]?.[j];
-      if (ruleIdx) {
-        ruleIdx.strength = strength;
-        ruleIdx.radius = radius;
-        ruleIdx.falloff = falloff as 'linear' | 'inverse' | 'constant';
-      }
     },
 
     onRandomizeMatrix: () => {
@@ -719,8 +807,8 @@ async function main(): Promise<void> {
     },
 
     onSpeciesChange: (speciesIndex: number, param: string, value: number | string | boolean) => {
-      if (speciesIndex < 0 || speciesIndex >= eco.config.species.length) return;
-      const sp = eco.config.species[speciesIndex];
+      if (speciesIndex < 0 || speciesIndex >= liveConfig.species.length) return;
+      const sp = liveConfig.species[speciesIndex];
       if (!sp) return;
 
       if (param === 'name' && typeof value === 'string') {
@@ -728,46 +816,58 @@ async function main(): Promise<void> {
       } else if (param === 'color' && typeof value === 'string') {
         sp.color = value;
       } else if (param === 'count' && typeof value === 'number') {
-        // Count change requires restart
-        if (confirm(`Change ${sp.name} count to ${value}? This will restart the simulation.`)) {
-          sp.count = value;
-          eco = new EcosystemWorld(eco.config);
-          grid.rebuild(eco.world);
-        }
+        // Count change: update liveConfig and rebuild simulation (no confirm dialog)
+        sp.count = value;
+        rebuildSimulation();
       } else if (param === 'radius' && typeof value === 'number') {
         sp.radius = value;
+        rebuildSimulation();
       } else if (param === 'initialSpeed' && typeof value === 'number') {
         sp.initialSpeed = value;
+        rebuildSimulation();
       } else if (param === 'maxSpeed' && typeof value === 'number') {
         sp.maxSpeed = value;
+        rebuildSimulation();
       } else if (param === 'maxEnergy' && typeof value === 'number') {
         sp.energy.maxEnergy = value;
+        rebuildSimulation();
       } else if (param === 'initialEnergy' && typeof value === 'number') {
         sp.energy.initialEnergy = value;
+        rebuildSimulation();
       } else if (param === 'reproductionCost' && typeof value === 'number') {
         sp.energy.reproductionCost = value;
+        rebuildSimulation();
       } else if (param === 'movementCostPerSec' && typeof value === 'number') {
         sp.energy.movementCostPerSec = value;
+        rebuildSimulation();
       } else if (param === 'idleDrainPerSec' && typeof value === 'number') {
         sp.energy.idleDrainPerSec = value;
+        rebuildSimulation();
       } else if (param === 'maxAgeSec' && typeof value === 'number') {
         sp.lifecycle.maxAgeSec = value;
+        rebuildSimulation();
       } else if (param === 'starvationDamagePerSec' && typeof value === 'number') {
         sp.lifecycle.starvationDamagePerSec = value;
+        rebuildSimulation();
       } else if (param === 'reproductionCooldownSec' && typeof value === 'number') {
         sp.lifecycle.reproductionCooldownSec = value;
+        rebuildSimulation();
       } else if (param === 'sicknessDurationSec' && typeof value === 'number') {
         sp.lifecycle.sicknessDurationSec = value;
+        rebuildSimulation();
       } else if (param === 'contagionRadius' && typeof value === 'number') {
         sp.lifecycle.contagionRadius = value;
+        rebuildSimulation();
       } else if (param.startsWith('canEat_') && typeof value === 'boolean') {
         const targetIdx = parseInt(param.replace('canEat_', ''));
         if (value) sp.diet.canEat.add(targetIdx);
         else sp.diet.canEat.delete(targetIdx);
+        rebuildSimulation();
       } else if (param.startsWith('infectionVuln_') && typeof value === 'boolean') {
         const targetIdx = parseInt(param.replace('infectionVuln_', ''));
         if (value) sp.diet.infectionVulnerability.add(targetIdx);
         else sp.diet.infectionVulnerability.delete(targetIdx);
+        rebuildSimulation();
       }
     },
 
@@ -785,7 +885,13 @@ async function main(): Promise<void> {
           eco = applied.eco;
           interactionMatrix = applied.matrix;
           (pairwiseForce as { matrix: InteractionMatrix }).matrix = interactionMatrix;
+          initMatrixState(interactionMatrix);
           grid.rebuild(eco.world);
+          // Update liveConfig to match
+          liveConfig = deepCloneConfig(eco.config);
+          accumulator = 0;
+          lastTime = performance.now();
+          clearAutosave();
         } catch (err) {
           console.error('[Critterium] Import failed:', err);
         }
@@ -806,7 +912,13 @@ async function main(): Promise<void> {
           eco = applied.eco;
           interactionMatrix = applied.matrix;
           (pairwiseForce as { matrix: InteractionMatrix }).matrix = interactionMatrix;
+          initMatrixState(interactionMatrix);
           grid.rebuild(eco.world);
+          // Update liveConfig to match
+          liveConfig = deepCloneConfig(eco.config);
+          accumulator = 0;
+          lastTime = performance.now();
+          clearAutosave();
         } catch (err) {
           console.error('[Critterium] Load preset failed:', err);
         }
@@ -838,7 +950,10 @@ async function main(): Promise<void> {
         eco = applied.eco;
         interactionMatrix = applied.matrix;
         (pairwiseForce as { matrix: InteractionMatrix }).matrix = interactionMatrix;
+        initMatrixState(interactionMatrix);
         grid.rebuild(eco.world);
+        // Update liveConfig to match
+        liveConfig = deepCloneConfig(eco.config);
         // Also update drag and wander forces from preset
         if (cfg.forces?.drag) {
           (dragForce.params as Record<string, unknown>).coefficient = cfg.forces.drag.coefficient;
@@ -847,6 +962,9 @@ async function main(): Promise<void> {
           (wanderForce.params as Record<string, unknown>).strength = cfg.forces.wander.strength;
           (wanderForce.params as Record<string, unknown>).rate = cfg.forces.wander.rate;
         }
+        accumulator = 0;
+        lastTime = performance.now();
+        clearAutosave();
       } catch (err) {
         console.error('[Critterium] Load built-in preset failed:', err);
       }
@@ -861,7 +979,13 @@ async function main(): Promise<void> {
         eco = applied.eco;
         interactionMatrix = applied.matrix;
         (pairwiseForce as { matrix: InteractionMatrix }).matrix = interactionMatrix;
+        initMatrixState(interactionMatrix);
         grid.rebuild(eco.world);
+        // Update liveConfig to match
+        liveConfig = deepCloneConfig(eco.config);
+        accumulator = 0;
+        lastTime = performance.now();
+        clearAutosave();
       } catch (err) {
         console.error('[Critterium] Apply config failed:', err);
       }
