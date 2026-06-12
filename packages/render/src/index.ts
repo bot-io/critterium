@@ -21,7 +21,7 @@
 
 import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js';
 import type { World, EcosystemState } from '@critterium/core';
-import { DEAD, NOT_INFECTED } from '@critterium/core';
+import { DEAD } from '@critterium/core';
 
 // ─── Species visual config ────────────────────────────────────
 
@@ -303,28 +303,16 @@ export class CritteriumRenderer {
         sprite.alpha = 1.0;
       }
 
-      // Check if infected
-      const isInfected = eco.infectedBy[i] !== NOT_INFECTED;
-
-      // Only redraw if species changed or infection state changed
-      // We encode infection in the species cache by adding a large offset
-      const cacheKey = isInfected ? speciesIdx + 1000 : speciesIdx;
-      if (this.spriteSpecies[i] !== cacheKey) {
+      // Only redraw if species changed
+      if (this.spriteSpecies[i] !== speciesIdx) {
         sprite.clear();
-        // Infection aura: subtle colored ring matching infection source
-        if (isInfected) {
-          const infectionSourceSpecies = eco.infectedBy[i];
-          const infectionColor = this.speciesVisuals[infectionSourceSpecies]?.color ?? 0xff0000;
-          sprite.circle(0, 0, vis.radius + 4);
-          sprite.fill({ color: infectionColor, alpha: 0.2 });
-        }
         // Slight glow: larger translucent circle behind
         sprite.circle(0, 0, vis.radius + 2);
         sprite.fill({ color: vis.color, alpha: 0.15 });
         // Main circle
         sprite.circle(0, 0, vis.radius);
         sprite.fill({ color: vis.color, alpha: 0.85 });
-        this.spriteSpecies[i] = cacheKey;
+        this.spriteSpecies[i] = speciesIdx;
       }
     }
 
@@ -462,38 +450,6 @@ export class CritteriumRenderer {
 
   /** Single graphics object for all sickness rings (avoid per-frame allocations). */
   private sicknessGfx: Graphics | null = null;
-
-  /**
-   * Draw pulsing sickness rings for infected particles.
-   * Batched: all circles drawn, then single stroke() call for one GPU draw.
-   */
-  private drawSicknessRings(world: World, eco: EcosystemState): void {
-    // Lazily create the single sickness graphics object
-    if (!this.sicknessGfx) {
-      this.sicknessGfx = new Graphics();
-      this.sicknessContainer.addChild(this.sicknessGfx);
-    }
-
-    this.sicknessGfx.clear();
-
-    const pulse = 0.3 + 0.4 * (0.5 + 0.5 * Math.sin(this.pulsePhase));
-    const hwm = Math.min(world.x.length, this.sprites.length);
-
-    // Batch: collect all circles first, then single stroke call
-    for (let i = 0; i < hwm; i++) {
-      if (eco.alive[i] === DEAD) continue;
-      if (eco.infectedBy[i] === NOT_INFECTED) continue;
-
-      const speciesIdx = world.type[i];
-      const vis = this.speciesVisuals[speciesIdx];
-      if (!vis) continue;
-
-      this.sicknessGfx.circle(world.x[i], world.y[i], vis.radius + 3);
-    }
-
-    // Single stroke for all circles — batches into one GPU draw call
-    this.sicknessGfx.stroke({ color: 0xff0000, alpha: pulse, width: 1.5 });
-  }
 
   /** Destroy the renderer and clean up. */
   destroy(): void {
