@@ -56,14 +56,14 @@ const SPECIES_CONFIGS: SpeciesConfig[] = [
     maxSpeed: 100,
     energy: defaultEnergyConfig({
       maxEnergy: 80,
-      initialEnergy: 40,
+      initialEnergy: 100,
       reproductionCost: 20,
-      movementCostPerSec: 2,
-      idleDrainPerSec: 1,
+      movementCostPerSec: 1,
+      idleDrainPerSec: 0,
       energyGainPerPrey: [0, 0, 0],
     }),
     lifecycle: defaultLifecycleConfig({
-      maxAgeSec: 40,
+      maxAgeSec: 101,
       starvationDamagePerSec: 8,
       reproductionCooldownSec: 3,
       sicknessDurationSec: 8,
@@ -71,10 +71,10 @@ const SPECIES_CONFIGS: SpeciesConfig[] = [
     }),
     diet: defaultDietConfig({
       canEat: new Set<number>(),
-      infectionVulnerability: new Set([2]),
+      infectionVulnerability: new Set<number>(),
     }),
   },
-  // 1: Predator — red, hunts prey
+  // 1: Predator — red, hunts prey, infected by parasite
   {
     name: 'Predator',
     count: 40,
@@ -83,9 +83,9 @@ const SPECIES_CONFIGS: SpeciesConfig[] = [
     initialSpeed: 70,
     maxSpeed: 130,
     energy: defaultEnergyConfig({
-      maxEnergy: 150,
-      initialEnergy: 80,
-      reproductionCost: 50,
+      maxEnergy: 305,
+      initialEnergy: 20,
+      reproductionCost: 20,
       movementCostPerSec: 3,
       idleDrainPerSec: 2,
       energyGainPerPrey: [40, 0, 0],
@@ -94,7 +94,7 @@ const SPECIES_CONFIGS: SpeciesConfig[] = [
       maxAgeSec: 60,
       starvationDamagePerSec: 5,
       reproductionCooldownSec: 8,
-      sicknessDurationSec: 0,
+      sicknessDurationSec: 23,
       contagionRadius: 0,
     }),
     diet: defaultDietConfig({
@@ -102,7 +102,7 @@ const SPECIES_CONFIGS: SpeciesConfig[] = [
       infectionVulnerability: new Set<number>(),
     }),
   },
-  // 2: Parasite — purple, infects prey
+  // 2: Parasite — purple, infects predator
   {
     name: 'Parasite',
     count: 40,
@@ -113,7 +113,7 @@ const SPECIES_CONFIGS: SpeciesConfig[] = [
     energy: defaultEnergyConfig({
       maxEnergy: 100,
       initialEnergy: 50,
-      reproductionCost: 30,
+      reproductionCost: 100,
       movementCostPerSec: 1,
       idleDrainPerSec: 1.5,
       energyGainPerPrey: [0, 0, 0],
@@ -127,7 +127,7 @@ const SPECIES_CONFIGS: SpeciesConfig[] = [
     }),
     diet: defaultDietConfig({
       canEat: new Set<number>(),
-      infectionVulnerability: new Set<number>(),
+      infectionVulnerability: new Set([1]),
     }),
   },
 ];
@@ -142,12 +142,18 @@ const CONFIG: EcosystemConfig = {
   populationCap: 600,
   species: SPECIES_CONFIGS,
   interactionRules: [
-    // [prey][*]
-    [{ enabledForces: new Set(['attract']), radius: 80, strength: 30, falloff: 'linear' }, null, null],
-    // [predator][*]
-    [null, null, null],
-    // [parasite][*]
-    [null, null, null],
+    // [prey→*]: attract own, flee predator, flee parasite
+    [{ enabledForces: new Set(['attract']), radius: 80, strength: 25, falloff: 'linear' },
+     { enabledForces: new Set(['attract']), radius: 120, strength: -80, falloff: 'linear' },
+     { enabledForces: new Set(['attract']), radius: 80, strength: -40, falloff: 'linear' }],
+    // [predator→*]: chase prey, repel own, ignore parasite
+    [{ enabledForces: new Set(['attract']), radius: 150, strength: 60, falloff: 'linear' },
+     { enabledForces: new Set(['attract']), radius: 50, strength: -20, falloff: 'linear' },
+     null],
+    // [parasite→*]: seek prey, seek predator, repel own
+    [{ enabledForces: new Set(['attract']), radius: 120, strength: 50, falloff: 'linear' },
+     null,
+     { enabledForces: new Set(['attract']), radius: 40, strength: -15, falloff: 'linear' }],
   ],
 };
 
@@ -341,7 +347,21 @@ async function main(): Promise<void> {
   // Live config that all control changes update
   let liveConfig = deepCloneConfig(CONFIG);
 
-  if (savedConfig) {
+  // Check for pending preset from a species-count-changing preset load
+  const pendingPresetJson = localStorage.getItem('critterium-pending-preset');
+  if (pendingPresetJson) {
+    localStorage.removeItem('critterium-pending-preset');
+    try {
+      const pendingCfg = JSON.parse(pendingPresetJson);
+      const validated = deserializeConfig(pendingCfg as any);
+      liveConfig = validated;
+      console.log('[Critterium] Loaded pending preset');
+    } catch (err) {
+      console.warn('[Critterium] Failed to load pending preset:', err);
+    }
+  }
+
+  if (savedConfig && !pendingPresetJson) {
     try {
       const validated = deserializeConfig(savedConfig as any);
       const applied = applyConfig(validated);
@@ -379,11 +399,16 @@ async function main(): Promise<void> {
     eco.config.populationCap,
   );
 
-  // 4. Create renderer
-  const speciesMaxEnergy = new Float32Array(SPECIES_CONFIGS.map(s => s.energy.maxEnergy));
+  // 4. Create renderer — derive visuals from liveConfig (supports preset-loaded species)
+  const activeSpeciesNames = liveConfig.species.map(s => s.name);
+  const activeSpeciesVisuals = liveConfig.species.map(s => {
+    const hex = s.color.replace('#', '');
+    return { color: parseInt(hex, 16), radius: s.radius };
+  });
+  const speciesMaxEnergy = new Float32Array(liveConfig.species.map(s => s.energy.maxEnergy));
   const renderer = await CritteriumRenderer.create(
-    SPECIES_VISUALS,
-    [...SPECIES_NAMES],
+    activeSpeciesVisuals,
+    activeSpeciesNames,
     eco.config.populationCap,
     speciesMaxEnergy,
   );
@@ -449,10 +474,10 @@ async function main(): Promise<void> {
   let paused = false;
 
   // Pre-allocated species counts array (avoid per-frame allocation)
-  const speciesCounts = new Int32Array(SPECIES_CONFIGS.length);
+  let speciesCounts = new Int32Array(liveConfig.species.length);
 
   // ─── Matrix state tracking ──────────────────────────────────
-  const nSpecies = SPECIES_CONFIGS.length;
+  let nSpecies = liveConfig.species.length;
   let matrixState: Array<Array<{ strength: number; radius: number; falloff: string } | null>>;
 
   function initMatrixState(matrix: InteractionMatrix): void {
@@ -692,7 +717,7 @@ async function main(): Promise<void> {
   // 8. Wire controls panel
   const controlsPanel = createControlsPanel({
     speciesCount: nSpecies,
-    speciesNames: [...SPECIES_NAMES],
+    speciesNames: activeSpeciesNames,
     speciesColors: liveConfig.species.map(s => s.color),
     initialSpeciesValues,
     initialMatrixValues,
@@ -936,6 +961,23 @@ async function main(): Promise<void> {
         return;
       }
       try {
+        // If species count differs, do a full reload with the preset as initial config
+        const newCount = preset.config.species.length;
+        if (newCount !== liveConfig.species.length) {
+          const cfg = {
+            ...preset.config,
+            simulation: {
+              ...preset.config.simulation,
+              width: window.innerWidth,
+              height: window.innerHeight,
+            },
+          };
+          localStorage.setItem('critterium-pending-preset', JSON.stringify(cfg));
+          window.location.reload();
+          return;
+        }
+
+        // Same species count — fast path: hot-reload without page refresh
         // Override simulation dimensions to current viewport
         const cfg = {
           ...preset.config,
@@ -1022,7 +1064,7 @@ async function main(): Promise<void> {
   });
 
   console.log('Critterium — a living world in your pocket');
-  console.log(`Species: ${SPECIES_NAMES.join(', ')}`);
+  console.log(`Species: ${activeSpeciesNames.join(', ')}`);
   console.log(`Initial particles: ${eco.aliveCount}`);
   console.log(`World: ${eco.config.width}×${eco.config.height}`);
   if (useAutosave) {
