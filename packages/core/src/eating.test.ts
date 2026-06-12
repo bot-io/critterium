@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { processEating, type EatingResult } from './eating.js';
 import { EcosystemWorld } from './ecosystem-world.js';
+import { SpatialHashGrid } from './index.js';
 import {
   defaultEnergyConfig,
   defaultLifecycleConfig,
@@ -52,12 +53,21 @@ function predatorPreyConfig(predCount = 5, preyCount = 20, cap = 100): Ecosystem
   };
 }
 
+/** Create a grid large enough for eating tests (max eat radius = 8). */
+function makeGrid(eco: EcosystemWorld): SpatialHashGrid {
+  const maxEatRadius = 8; // predator(5) + prey(3)
+  const grid = new SpatialHashGrid(eco.world.width, eco.world.height, maxEatRadius, eco.world.count);
+  grid.rebuild(eco.world);
+  return grid;
+}
+
 // ─── Basic Eating ────────────────────────────────────────────────
 
 describe('processEating', () => {
   it('returns zero result when no overlap exists', () => {
     const eco = new EcosystemWorld(predatorPreyConfig(2, 2));
-    const result = processEating(eco);
+    const grid = makeGrid(eco);
+    const result = processEating(eco, grid);
     // Unlikely to overlap on spawn — just check types
     expect(result.killed).toBeGreaterThanOrEqual(0);
     expect(result.energyGained).toBeGreaterThanOrEqual(0);
@@ -79,7 +89,8 @@ describe('processEating', () => {
     eco.world.vy[1] = 0;
 
     expect(eco.aliveCount).toBe(2);
-    const result = processEating(eco);
+    const grid = makeGrid(eco);
+    const result = processEating(eco, grid);
     expect(result.killed).toBe(1);
     expect(eco.aliveCount).toBe(1);
     expect(eco.eco.alive[1]).toBe(DEAD);
@@ -94,7 +105,8 @@ describe('processEating', () => {
     eco.world.vx[1] = 0; eco.world.vy[1] = 0;
 
     const energyBefore = eco.eco.energy[0];
-    const result = processEating(eco);
+    const grid = makeGrid(eco);
+    const result = processEating(eco, grid);
     expect(result.energyGained).toBe(30); // energyGainPerPrey[1] = 30
     expect(eco.eco.energy[0]).toBe(energyBefore + 30);
   });
@@ -109,7 +121,8 @@ describe('processEating', () => {
     // Set predator energy near max
     eco.eco.energy[0] = 195; // max is 200, gain is 30 → would be 225 → clamped to 200
 
-    processEating(eco);
+    const grid = makeGrid(eco);
+    processEating(eco, grid);
     expect(eco.eco.energy[0]).toBe(200);
   });
 
@@ -123,7 +136,8 @@ describe('processEating', () => {
       eco.world.vx[i] = 0;
       eco.world.vy[i] = 0;
     }
-    const result = processEating(eco);
+    const grid = makeGrid(eco);
+    const result = processEating(eco, grid);
     expect(result.killed).toBe(3);
     expect(eco.aliveCount).toBe(1);
   });
@@ -138,7 +152,8 @@ describe('processEating', () => {
     // Remove predator's ability to eat, only prey processes
     eco.species[0].diet.canEat.clear();
 
-    const result = processEating(eco);
+    const grid = makeGrid(eco);
+    const result = processEating(eco, grid);
     expect(result.killed).toBe(0);
     expect(eco.aliveCount).toBe(2);
   });
@@ -155,7 +170,8 @@ describe('processEating', () => {
     // Kill one prey manually
     eco.kill(1);
 
-    const result = processEating(eco);
+    const grid = makeGrid(eco);
+    const result = processEating(eco, grid);
     expect(result.killed).toBe(1); // only the alive prey
   });
 
@@ -169,7 +185,8 @@ describe('processEating', () => {
       eco.world.vx[i] = 0;
       eco.world.vy[i] = 0;
     }
-    const result = processEating(eco);
+    const grid = makeGrid(eco);
+    const result = processEating(eco, grid);
     // Only 1 prey to eat, should be killed once
     expect(result.killed).toBe(1);
     expect(eco.aliveCount).toBe(2);
@@ -184,7 +201,8 @@ describe('processEating', () => {
     eco.world.vx[0] = 0; eco.world.vy[0] = 0;
     eco.world.vx[1] = 0; eco.world.vy[1] = 0;
 
-    const result = processEating(eco);
+    const grid = makeGrid(eco);
+    const result = processEating(eco, grid);
     expect(result.killed).toBe(0);
     expect(eco.aliveCount).toBe(2);
   });
@@ -198,7 +216,8 @@ describe('processEating', () => {
     eco.world.vx[0] = 0; eco.world.vy[0] = 0;
     eco.world.vx[1] = 0; eco.world.vy[1] = 0;
 
-    const result = processEating(eco);
+    const grid = makeGrid(eco);
+    const result = processEating(eco, grid);
     expect(result.killed).toBe(1);
   });
 
@@ -211,7 +230,8 @@ describe('processEating', () => {
     eco.world.vx[0] = 0; eco.world.vy[0] = 0;
     eco.world.vx[1] = 0; eco.world.vy[1] = 0;
 
-    const result = processEating(eco);
+    const grid = makeGrid(eco);
+    const result = processEating(eco, grid);
     expect(result.killed).toBe(0);
   });
 });
@@ -227,7 +247,8 @@ describe('eating + lifecycle integration', () => {
     eco.world.vx[0] = 0; eco.world.vy[0] = 0;
     eco.world.vx[1] = 0; eco.world.vy[1] = 0;
 
-    processEating(eco);
+    const grid = makeGrid(eco);
+    processEating(eco, grid);
     expect(eco.aliveCount).toBe(1);
 
     // Spawn a new prey (species 1)
