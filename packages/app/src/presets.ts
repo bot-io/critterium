@@ -671,6 +671,126 @@ const ZEN_GARDEN: EcosystemPreset = preset(
   },
 );
 
+// ─── 7. Rock/Paper/Scissors ───────────────────────────────────
+
+const ROCK_PAPER_SCISSORS: EcosystemPreset = preset(
+  'Rock Paper Scissors',
+  'Three species in cyclic dominance — Rock crushes Scissors, Scissors cut Paper, Paper covers Rock.',
+  {
+    version: 1,
+    simulation: {
+      width: 800,
+      height: 600,
+      boundaryMode: 'wrap',
+      seed: 99,
+      populationCap: 600,
+    },
+    species: [
+      {
+        name: 'Rock',
+        count: 60,
+        color: '#9e9eae',
+        radius: 4,
+        initialSpeed: 50,
+        maxSpeed: 100,
+        energy: {
+          maxEnergy: 80,
+          initialEnergy: 40,
+          movementCostPerSec: 2,
+          reproductionCost: 20,
+          idleDrainPerSec: 1,
+          energyGainPerPrey: [0, 0, 30],
+        },
+        lifecycle: {
+          maxAgeSec: 50,
+          starvationDamagePerSec: 6,
+          reproductionCooldownSec: 4,
+        },
+        diet: {
+          canEat: [2],
+        },
+        stamina: {
+          sprintDurationSec: 5,
+          sprintCooldownSec: 3,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.5,
+        },
+      },
+      {
+        name: 'Paper',
+        count: 60,
+        color: '#f0f0f0',
+        radius: 4,
+        initialSpeed: 50,
+        maxSpeed: 100,
+        energy: {
+          maxEnergy: 80,
+          initialEnergy: 40,
+          movementCostPerSec: 2,
+          reproductionCost: 20,
+          idleDrainPerSec: 1,
+          energyGainPerPrey: [30, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 50,
+          starvationDamagePerSec: 6,
+          reproductionCooldownSec: 4,
+        },
+        diet: {
+          canEat: [0],
+        },
+        stamina: {
+          sprintDurationSec: 5,
+          sprintCooldownSec: 3,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.5,
+        },
+      },
+      {
+        name: 'Scissors',
+        count: 60,
+        color: '#ff9933',
+        radius: 4,
+        initialSpeed: 50,
+        maxSpeed: 100,
+        energy: {
+          maxEnergy: 80,
+          initialEnergy: 40,
+          movementCostPerSec: 2,
+          reproductionCost: 20,
+          idleDrainPerSec: 1,
+          energyGainPerPrey: [0, 30, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 50,
+          starvationDamagePerSec: 6,
+          reproductionCooldownSec: 4,
+        },
+        diet: {
+          canEat: [1],
+        },
+        stamina: {
+          sprintDurationSec: 5,
+          sprintCooldownSec: 3,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.5,
+        },
+      },
+    ],
+    // Circular chase/flee: each species chases its prey, flees its predator
+    interactionMatrix: [
+      /*             Rock         Paper        Scissors  */
+      /* Rock     */ [{ strength: -20, radius: 40, falloff: 'linear' }, { strength: -60, radius: 100, falloff: 'linear' }, { strength: 50, radius: 120, falloff: 'linear' }],
+      /* Paper    */ [{ strength: 50, radius: 120, falloff: 'linear' }, { strength: -20, radius: 40, falloff: 'linear' }, { strength: -60, radius: 100, falloff: 'linear' }],
+      /* Scissors */ [{ strength: -60, radius: 100, falloff: 'linear' }, { strength: 50, radius: 120, falloff: 'linear' }, { strength: -20, radius: 40, falloff: 'linear' }],
+    ],
+    forces: {
+      drag: { coefficient: 0.8 },
+      wander: { strength: 40, rate: 2.5 },
+    },
+  },
+);
+
 // ─── Export all presets ───────────────────────────────────────
 
 export const BUILTIN_PRESETS: EcosystemPreset[] = [
@@ -680,6 +800,7 @@ export const BUILTIN_PRESETS: EcosystemPreset[] = [
   PREDATOR_ARENA,
   TINY_POND,
   ZEN_GARDEN,
+  ROCK_PAPER_SCISSORS,
 ];
 
 export const BUILTIN_PRESET_NAMES: string[] = BUILTIN_PRESETS.map((p) => p.name);
