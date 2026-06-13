@@ -908,6 +908,97 @@ const GRASSLANDS: EcosystemPreset = preset(
   },
 );
 
+// ─── 9. Birds (Murmuration) ────────────────────────────────────
+
+const BIRDS: EcosystemPreset = preset(
+  'Birds',
+  'A murmuration at dusk: hundreds of Starlings wheel as one shifting cloud while a lone Hawk picks off stragglers.',
+  {
+    version: 1,
+    simulation: {
+      width: 800,
+      height: 600,
+      boundaryMode: 'wrap',
+      seed: 314,
+      populationCap: 450,
+    },
+    species: [
+      // ── The flock: Starlings ─────────────────────────────────
+      {
+        name: 'Starlings',
+        count: 350,
+        color: '#1b1b2f',
+        radius: 2,
+        initialSpeed: 45,
+        maxSpeed: 95,
+        energy: {
+          maxEnergy: 160,
+          initialEnergy: 90,
+          movementCostPerSec: 0.4,
+          reproductionCost: 25,
+          idleDrainPerSec: 0.2,
+          energyGainPerPrey: [0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 100,
+          starvationDamagePerSec: 1,
+          reproductionCooldownSec: 6,
+        },
+        diet: {
+          canEat: [],
+        },
+        stamina: {
+          sprintDurationSec: 4,
+          sprintCooldownSec: 3,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.5,
+        },
+      },
+      // ── The predator: Hawk ───────────────────────────────────
+      {
+        name: 'Hawk',
+        count: 5,
+        color: '#8b5a2b',
+        radius: 5,
+        initialSpeed: 60,
+        maxSpeed: 115,
+        energy: {
+          maxEnergy: 180,
+          initialEnergy: 100,
+          movementCostPerSec: 2,
+          reproductionCost: 70,
+          idleDrainPerSec: 1.5,
+          energyGainPerPrey: [35, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 90,
+          starvationDamagePerSec: 4,
+          reproductionCooldownSec: 20,
+        },
+        diet: {
+          canEat: [0],
+        },
+        stamina: {
+          sprintDurationSec: 3,
+          sprintCooldownSec: 5,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.4,
+        },
+      },
+    ],
+    // src=row (how this species reacts to target col)
+    //         Starlings    Hawk
+    interactionMatrix: [
+      /* Starlings */ [{ strength: 55, radius: 100, falloff: 'linear' }, { strength: -95, radius: 140, falloff: 'linear' }],
+      /* Hawk      */ [{ strength: 70, radius: 170, falloff: 'linear' }, { strength: -35, radius: 90, falloff: 'linear' }],
+    ],
+    forces: {
+      drag: { coefficient: 0.7 },
+      wander: { strength: 25, rate: 2.5 },
+    },
+  },
+);
+
 // ─── Export all presets ───────────────────────────────────────
 
 export const BUILTIN_PRESETS: EcosystemPreset[] = [
@@ -919,6 +1010,7 @@ export const BUILTIN_PRESETS: EcosystemPreset[] = [
   ZEN_GARDEN,
   ROCK_PAPER_SCISSORS,
   GRASSLANDS,
+  BIRDS,
 ];
 
 export const BUILTIN_PRESET_NAMES: string[] = BUILTIN_PRESETS.map((p) => p.name);

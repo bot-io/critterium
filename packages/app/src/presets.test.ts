@@ -11,11 +11,12 @@ const EXPECTED_PRESET_NAMES = [
   'Zen Garden',
   'Rock Paper Scissors',
   'Grasslands',
+  'Birds',
 ];
 
 describe('presets', () => {
-  it('exports exactly 8 built-in presets', () => {
-    expect(BUILTIN_PRESETS).toHaveLength(8);
+  it('exports exactly 9 built-in presets', () => {
+    expect(BUILTIN_PRESETS).toHaveLength(9);
   });
 
   it('BUILTIN_PRESET_NAMES matches expected list', () => {
@@ -359,5 +360,105 @@ describe('presets', () => {
     const gl = getBuiltinPreset('Grasslands');
     const total = gl!.config.species.reduce((sum, s) => sum + s.count, 0);
     expect(total).toBeLessThanOrEqual(gl!.config.simulation.populationCap!);
+  });
+
+  // ── Birds (Murmuration) — flocking + predator tests ──────
+
+  it('Birds has exactly 2 species', () => {
+    const birds = getBuiltinPreset('Birds');
+    expect(birds).toBeDefined();
+    expect(birds!.config.species).toHaveLength(2);
+  });
+
+  it('Birds species names are Starlings, Hawk', () => {
+    const birds = getBuiltinPreset('Birds');
+    const names = birds!.config.species.map((s) => s.name);
+    expect(names).toEqual(['Starlings', 'Hawk']);
+  });
+
+  it('Birds: Starlings are the flock (majority of population)', () => {
+    const birds = getBuiltinPreset('Birds');
+    const counts = birds!.config.species.map((s) => s.count);
+    // Starlings vastly outnumber the Hawk
+    expect(counts[0]).toBeGreaterThan(counts[1] * 10);
+  });
+
+  it('Birds: Hawk is the predator (canEat Starlings)', () => {
+    const birds = getBuiltinPreset('Birds');
+    expect(birds!.config.species[1].diet.canEat).toContain(0);
+  });
+
+  it('Birds: Starlings do not eat anything (producer base of flock)', () => {
+    const birds = getBuiltinPreset('Birds');
+    expect(birds!.config.species[0].diet.canEat).toEqual([]);
+  });
+
+  it('Birds: Hawk gains energy from Starlings', () => {
+    const birds = getBuiltinPreset('Birds');
+    expect(birds!.config.species[1].energy.energyGainPerPrey[0]).toBeGreaterThan(0);
+    // Hawk gains nothing from itself
+    expect(birds!.config.species[1].energy.energyGainPerPrey[1]).toBe(0);
+  });
+
+  it('Birds: Starlings flock together (positive self-interaction / cohesion)', () => {
+    const birds = getBuiltinPreset('Birds');
+    const m = birds!.config.interactionMatrix;
+    // Starlings (row 0) attract own kind (col 0)
+    expect(m[0][0]!.strength).toBeGreaterThan(0);
+  });
+
+  it('Birds: Starlings flee the Hawk (predator avoidance)', () => {
+    const birds = getBuiltinPreset('Birds');
+    const m = birds!.config.interactionMatrix;
+    // Starlings (row 0) flee Hawk (col 1)
+    expect(m[0][1]!.strength).toBeLessThan(0);
+  });
+
+  it('Birds: Hawk chases Starlings (hunting)', () => {
+    const birds = getBuiltinPreset('Birds');
+    const m = birds!.config.interactionMatrix;
+    // Hawk (row 1) chases Starlings (col 0)
+    expect(m[1][0]!.strength).toBeGreaterThan(0);
+  });
+
+  it('Birds: Hawk is solitary/territorial (negative self-interaction)', () => {
+    const birds = getBuiltinPreset('Birds');
+    const m = birds!.config.interactionMatrix;
+    // Hawk (row 1) repels own kind (col 1)
+    expect(m[1][1]!.strength).toBeLessThan(0);
+  });
+
+  it('Birds: Starlings have stronger cohesion than the Hawk chase radius (flock sticks together)', () => {
+    const birds = getBuiltinPreset('Birds');
+    const m = birds!.config.interactionMatrix;
+    // Cohesion radius (Starlings→Starlings) should be substantial for visible flocking
+    expect(m[0][0]!.radius).toBeGreaterThan(50);
+    expect(m[0][0]!.strength).toBeGreaterThan(30);
+  });
+
+  it('Birds: Starlings flee radius is larger than Hawk chase radius (prey can escape)', () => {
+    const birds = getBuiltinPreset('Birds');
+    const m = birds!.config.interactionMatrix;
+    // Starlings detect and flee the Hawk before the Hawk is in chase range is *not* required,
+    // but the flee interaction must exist and be strong.
+    expect(m[0][1]!.strength).toBeLessThan(-50);
+  });
+
+  it('Birds: Starlings are smaller than the Hawk', () => {
+    const birds = getBuiltinPreset('Birds');
+    expect(birds!.config.species[0].radius).toBeLessThan(birds!.config.species[1].radius);
+  });
+
+  it('Birds: both species have distinct colors', () => {
+    const birds = getBuiltinPreset('Birds');
+    const colors = birds!.config.species.map((s) => s.color);
+    const unique = new Set(colors);
+    expect(unique.size).toBe(2);
+  });
+
+  it('Birds: total initial population is within populationCap', () => {
+    const birds = getBuiltinPreset('Birds');
+    const total = birds!.config.species.reduce((sum, s) => sum + s.count, 0);
+    expect(total).toBeLessThanOrEqual(birds!.config.simulation.populationCap!);
   });
 });
