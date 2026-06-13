@@ -1198,6 +1198,96 @@ export class VortexForce implements Force {
   }
 }
 
+// ─── Alignment (Flocking) Force ────────────────────────────────
+
+/** Alignment force parameters. */
+export interface AlignmentParams {
+  [key: string]: unknown;
+  /**
+   * Neighborhood query radius. Particles within this distance are
+   * considered neighbors whose heading is averaged.
+   * Typical range: 30–150.
+   */
+  radius: number;
+  /**
+   * Alignment strength. How strongly each particle steers toward the
+   * average heading of its neighbors.
+   * Typical range: 10–200.
+   */
+  strength: number;
+  /**
+   * When false (default), particles only align with neighbors of the
+   * SAME type. When true, heading is averaged across all types.
+   */
+  crossType: boolean;
+}
+
+/**
+ * AlignmentForce: steer toward the average heading of neighbors.
+ *
+ * Implements the classic Reynolds "alignment" flocking behavior as a
+ * standalone Force. For each particle, neighbors within `radius` are
+ * queried via the spatial hash grid (O(n)), their velocity vectors are
+ * averaged, and the particle is nudged toward the normalized average
+ * heading scaled by `strength`.
+ *
+ * By default only same-type neighbors contribute (`crossType: false`).
+ * Set `crossType: true` to align across all species.
+ *
+ * Zero allocations per step.
+ */
+export class AlignmentForce implements Force {
+  readonly id = 'alignment';
+  readonly params: AlignmentParams;
+
+  constructor(radius: number = 60, strength: number = 40, crossType: boolean = false) {
+    this.params = { radius, strength, crossType };
+  }
+
+  apply(world: World, grid: SpatialHashGrid, dt: number): void {
+    const { x, y, vx, vy, type, count } = world;
+    const { radius, strength, crossType } = this.params;
+
+    for (let i = 0; i < count; i++) {
+      const xi = x[i];
+      const yi = y[i];
+      const typeI = type[i];
+
+      let sumVx = 0;
+      let sumVy = 0;
+      let neighborCount = 0;
+
+      // selfIdx=i so co-located particles can still be neighbors
+      grid.queryRadius(
+        xi,
+        yi,
+        radius,
+        x,
+        y,
+        count,
+        (j, _dx, _dy, _distSq) => {
+          if (crossType || type[j] === typeI) {
+            sumVx += vx[j];
+            sumVy += vy[j];
+            neighborCount++;
+          }
+        },
+        i,
+      );
+
+      if (neighborCount > 0) {
+        const avgVx = sumVx / neighborCount;
+        const avgVy = sumVy / neighborCount;
+        const mag = Math.sqrt(avgVx * avgVx + avgVy * avgVy);
+        if (mag > 0.001) {
+          vx[i] += (avgVx / mag) * strength * dt;
+          vy[i] += (avgVy / mag) * strength * dt;
+        }
+      }
+    }
+  }
+}
+
 // ─── Re-exports for barrel import ────────────────────────────────
 export type {
   EcosystemConfig,
@@ -1242,3 +1332,13 @@ export type {
   JsonSnapshot,
   AppliedConfig,
 } from './config-schema.js';
+
+// Force Registry
+export {
+  createForce,
+  registerForceType,
+  getForceDescriptor,
+  listForceTypes,
+  getRegisteredTypes,
+} from './force-registry.js';
+export type { ForceFactory, ForceTypeDescriptor, ParamSchema } from './force-registry.js';
