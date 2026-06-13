@@ -333,7 +333,7 @@ async function main(): Promise<void> {
     localStorage.removeItem('critterium-pending-preset');
     try {
       const pendingCfg = JSON.parse(pendingPresetJson);
-      pendingCritConfig = deserializeConfig(pendingCfg as any);
+      pendingCritConfig = deserializeConfig(pendingCfg);
       hasPendingPreset = true;
       console.log('[Critterium] Loaded pending preset');
     } catch (err) {
@@ -343,7 +343,7 @@ async function main(): Promise<void> {
 
   if (savedConfig && !hasPendingPreset) {
     try {
-      const validated = deserializeConfig(savedConfig as any);
+      const validated = deserializeConfig(savedConfig);
       const applied = applyConfig(validated);
       eco = applied.eco;
       interactionMatrix = applied.matrix;
@@ -1216,7 +1216,7 @@ async function main(): Promise<void> {
       const imported = await importConfig();
       if (imported) {
         try {
-          const validated = deserializeConfig(imported as any);
+          const validated = deserializeConfig(imported);
           const applied = applyConfig(validated);
           eco = applied.eco;
           interactionMatrix = applied.matrix;
@@ -1243,7 +1243,7 @@ async function main(): Promise<void> {
       const config = loadPreset(name);
       if (config) {
         try {
-          const validated = deserializeConfig(config as any);
+          const validated = deserializeConfig(config);
           const applied = applyConfig(validated);
           eco = applied.eco;
           interactionMatrix = applied.matrix;
@@ -1298,7 +1298,7 @@ async function main(): Promise<void> {
             height: window.innerHeight,
           },
         };
-        const validated = deserializeConfig(cfg as any);
+        const validated = deserializeConfig(cfg);
         const applied = applyConfig(validated);
         eco = applied.eco;
         interactionMatrix = applied.matrix;
@@ -1346,7 +1346,7 @@ async function main(): Promise<void> {
     getConfig: () => getCurrentConfig(),
     applyImportedConfig: (config: CritteriumConfig) => {
       try {
-        const validated = deserializeConfig(config as any);
+        const validated = deserializeConfig(config);
         const applied = applyConfig(validated);
         eco = applied.eco;
         interactionMatrix = applied.matrix;
