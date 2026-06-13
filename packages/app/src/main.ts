@@ -167,7 +167,7 @@ function deepCloneSpeciesConfig(species: SpeciesConfig[]): SpeciesConfig[] {
     diet: {
       canEat: new Set(sp.diet.canEat),
     },
-    stamina: { ...sp.stamina },
+    stamina: sp.stamina ? { ...sp.stamina } : undefined,
   }));
 }
 

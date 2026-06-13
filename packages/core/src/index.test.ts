@@ -157,7 +157,6 @@ describe('World.clampVelocities', () => {
     world.vx[0] = 200;
     world.vy[0] = 200;
     world.clampVelocities();
-    const spd = Math.sqrt(world.vx[0] ** 2 + world.vy[1] ?? 0);
     // After clamping, speed should be at most maxSpeed
     const actualSpd = Math.sqrt(world.vx[0] ** 2 + world.vy[0] ** 2);
     expect(actualSpd).toBeLessThanOrEqual(100.001); // float tolerance
