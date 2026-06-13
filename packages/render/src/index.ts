@@ -7,15 +7,12 @@
  *
  * Visual effects:
  * - Energy-based opacity
- * - Sickness rings (pulsing red)
  * - Death expanding rings (object pool)
  * - Birth flash (object pool)
- * - Infection aura
  *
  * Performance controls:
  * - renderSkip: only render every Nth particle
  * - effectsEnabled: toggle death/birth effects
- * - sicknessRingsEnabled: toggle sickness ring rendering
  * - energyOpacityEnabled: toggle energy-based alpha
  */
 
@@ -58,7 +55,6 @@ export class CritteriumRenderer {
   readonly app: Application;
   private particleContainer!: Container;
   private effectsContainer!: Container;
-  private sicknessContainer!: Container;
   private birthFlashContainer!: Container;
   private hudContainer!: Container;
   private hudText!: Text;
@@ -92,9 +88,6 @@ export class CritteriumRenderer {
 
   /** Skip birth/death detection for one frame after reset or fresh init. */
   private skipEffectsFrame = true;
-
-  /** Pulsing phase for sickness rings. */
-  private pulsePhase = 0;
 
   /** Render skip: only render every Nth particle (1 = all, 2 = every 2nd). */
   renderSkip: number = 1;
@@ -181,10 +174,6 @@ export class CritteriumRenderer {
     this.effectsContainer.label = 'death-effects';
     this.app.stage.addChild(this.effectsContainer);
 
-    this.sicknessContainer = new Container();
-    this.sicknessContainer.label = 'sickness-rings';
-    this.app.stage.addChild(this.sicknessContainer);
-
     this.birthFlashContainer = new Container();
     this.birthFlashContainer.label = 'birth-flash';
     this.app.stage.addChild(this.birthFlashContainer);
@@ -257,9 +246,6 @@ export class CritteriumRenderer {
   update(world: World, eco: EcosystemState, dt: number): void {
     const hwm = world.x.length;
     const len = this.sprites.length;
-
-    // Advance pulse phase for sickness rings
-    this.pulsePhase += dt * 4;
 
     // Reset pre-allocated species counts (no allocation)
     const speciesCounts = this.speciesCounts;
@@ -356,11 +342,6 @@ export class CritteriumRenderer {
     // Hide sprites beyond current array length
     for (let i = hwm; i < len; i++) {
       this.sprites[i].visible = false;
-    }
-
-    // Clear any stale sickness graphics
-    if (this.sicknessGfx) {
-      this.sicknessGfx.clear();
     }
 
     // Update death effects (always run so active effects can finish)
@@ -512,9 +493,6 @@ export class CritteriumRenderer {
       effect.g.y = world.y[idx];
     }
   }
-
-  /** Single graphics object for all sickness rings (avoid per-frame allocations). */
-  private sicknessGfx: Graphics | null = null;
 
   /** Destroy the renderer and clean up. */
   destroy(): void {
