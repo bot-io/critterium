@@ -869,7 +869,7 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
         rowDiv.appendChild(maxLbl);
 
         const ii = i, jj = j;
-        function updateRadius(): void {
+        const updateRadius = (): void => {
           // Clamp: min cannot exceed max, max cannot go below min
           const minR = parseInt(minSlider.value);
           const maxR = parseInt(maxSlider.value);
@@ -1048,9 +1048,4 @@ function refreshPresetDropdown(select: HTMLSelectElement, opts: ControlsPanelOpt
 
 // ─── Utility ──────────────────────────────────────────────────
 
-function hexToRgba(hex: string, alpha: number): string {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
-}
+

@@ -455,6 +455,7 @@ async function main(): Promise<void> {
   let totalSimTime = 0;
   let stepCount = 0;
   let paused = false;
+  let extinctionCount = 0;
 
   // Pre-allocated species counts array (avoid per-frame allocation)
   let speciesCounts = new Int32Array(liveConfig.species.length);
@@ -631,6 +632,15 @@ async function main(): Promise<void> {
         accumulator -= dt;
         stepsThisFrame++;
         stepCount++;
+      }
+
+      // Extinction detection: if all particles died after sim has been running,
+      // auto-reseed from current config (avoids empty screen with no way back)
+      if (eco.aliveCount === 0 && totalSimTime > 2 && !paused) {
+        console.log('[Critterium] Extinction detected — auto-reseeding');
+        extinctionCount++;
+        rebuildSimulation();
+        totalSimTime = 0;
       }
 
       // If accumulator is still large, drain it to prevent death spiral
