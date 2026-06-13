@@ -26,5 +26,10 @@
     "@capacitor/android": "^6.2.1",
     "@capacitor/cli": "^6.2.1",
     "@capacitor/core": "^6.2.1"
+  },
+  "overrides": {
+    "vite": {
+      "esbuild": "0.28.1"
+    }
   }
 }
