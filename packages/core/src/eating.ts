@@ -12,7 +12,7 @@ import { type SpatialHashGrid } from './index.js';
 
 /** Result of a single eating step. */
 export interface EatingResult {
-  killed: number;       // total prey killed this step
+  killed: number; // total prey killed this step
   energyGained: number; // total energy gained by predators
 }
 
@@ -76,36 +76,45 @@ export function processEating(eco: EcosystemWorld, grid: SpatialHashGrid): Eatin
 
     // Query spatial hash for neighbors within max eat radius.
     // Pass selfIdx=i so co-located prey (dSq===0) are still found.
-    grid.queryRadius(x[i], y[i], maxEatRadius, x, y, count, (j, _dx, _dy, distSq) => {
-      // selfIdx already excludes self, but keep as defensive guard
-      if (j === i) return;
-      if (state.alive[j] === DEAD || eaten[j]) return;
+    grid.queryRadius(
+      x[i],
+      y[i],
+      maxEatRadius,
+      x,
+      y,
+      count,
+      (j, _dx, _dy, distSq) => {
+        // selfIdx already excludes self, but keep as defensive guard
+        if (j === i) return;
+        if (state.alive[j] === DEAD || eaten[j]) return;
 
-      const preySpeciesIdx = type[j];
-      if (!diet.canEat.has(preySpeciesIdx)) return;
+        const preySpeciesIdx = type[j];
+        if (!diet.canEat.has(preySpeciesIdx)) return;
 
-      // Check overlap: distance < sum of radii
-      const rj = species[preySpeciesIdx].radius;
-      const minDist = ri + rj;
-      if (distSq >= minDist * minDist) return;
+        // Check overlap: distance < sum of radii
+        const rj = species[preySpeciesIdx].radius;
+        const minDist = ri + rj;
+        if (distSq >= minDist * minDist) return;
 
-      // Energy gain from energyGainPerPrey array
-      const energyGain = species[speciesIdx].energy.energyGainPerPrey[preySpeciesIdx] ?? 0;
+        // Energy gain from energyGainPerPrey array
+        const energyGain = species[speciesIdx].energy.energyGainPerPrey[preySpeciesIdx] ?? 0;
 
-      // Don't eat if it would exceed max energy — predator is "full"
-      const maxE = species[speciesIdx].energy.maxEnergy;
-      if (state.energy[i] + energyGain > maxE) return;
+        // Don't eat if it would exceed max energy — predator is "full"
+        const maxE = species[speciesIdx].energy.maxEnergy;
+        if (state.energy[i] + energyGain > maxE) return;
 
-      // Eat! Instant kill + energy gain
-      eaten[j] = 1;
-      eco.kill(j);
-      result.killed++;
+        // Eat! Instant kill + energy gain
+        eaten[j] = 1;
+        eco.kill(j);
+        result.killed++;
 
-      if (energyGain > 0) {
-        state.energy[i] += energyGain;
-        result.energyGained += energyGain;
-      }
-    }, i);
+        if (energyGain > 0) {
+          state.energy[i] += energyGain;
+          result.energyGained += energyGain;
+        }
+      },
+      i,
+    );
   }
 
   return result;

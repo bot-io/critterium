@@ -76,7 +76,7 @@ describe('InteractionRuleMatrix', () => {
 
   it('supports asymmetric rules', () => {
     const m = new InteractionRuleMatrix(2);
-    m.enableForce(0, 1, 'eat', 20, 1);    // 0 eats 1
+    m.enableForce(0, 1, 'eat', 20, 1); // 0 eats 1
     m.enableForce(1, 0, 'flee', 40, 0.8); // 1 flees from 0
 
     expect(m.hasForce(0, 1, 'eat')).toBe(true);

@@ -19,7 +19,14 @@ export interface ControlsPanelOptions {
   onPopulationCapChange?: (cap: number) => void;
   onForceToggle?: (forceId: string, enabled: boolean) => void;
   onForceChange?: (forceId: string, param: string, value: number) => void;
-  onMatrixChange?: (i: number, j: number, strength: number, minRadius: number, maxRadius: number, falloff: string) => void;
+  onMatrixChange?: (
+    i: number,
+    j: number,
+    strength: number,
+    minRadius: number,
+    maxRadius: number,
+    falloff: string,
+  ) => void;
   onRandomizeMatrix?: () => void;
   onClearMatrix?: () => void;
   onSpeciesChange?: (speciesIndex: number, param: string, value: number | string | boolean) => void;
@@ -320,7 +327,11 @@ function el(tag: string, cls?: string): HTMLElement {
 }
 
 function makeSlider(
-  label: string, min: number, max: number, step: number, initial: number,
+  label: string,
+  min: number,
+  max: number,
+  step: number,
+  initial: number,
   onChange: (v: number) => void,
   registryKey?: string,
 ): HTMLElement {
@@ -384,7 +395,8 @@ function makeFalloffSelect(initial: string, onChange: (v: string) => void): HTML
   sel.className = 'crit-select';
   for (const opt of ['linear', 'inverse', 'constant']) {
     const o = document.createElement('option');
-    o.value = opt; o.textContent = opt;
+    o.value = opt;
+    o.textContent = opt;
     if (opt === initial) o.selected = true;
     sel.appendChild(o);
   }
@@ -396,9 +408,15 @@ function makeFalloffSelect(initial: string, onChange: (v: string) => void): HTML
 
 // ─── Collapsible Section ──────────────────────────────────────
 
-interface SectionState { collapsed: boolean; }
+interface SectionState {
+  collapsed: boolean;
+}
 
-function makeSection(title: string, buildBody: (body: HTMLElement) => void, state?: SectionState): HTMLElement {
+function makeSection(
+  title: string,
+  buildBody: (body: HTMLElement) => void,
+  state?: SectionState,
+): HTMLElement {
   const section = el('div', 'crit-section');
   const hdr = el('div', 'crit-section-hdr');
   const arrow = el('span', 'crit-section-arrow');
@@ -494,15 +512,35 @@ function buildSimSection(opts: ControlsPanelOptions): HTMLElement {
     body.appendChild(btnRow);
 
     // Speed slider
-    body.appendChild(makeSlider('Speed', 0.25, 3, 0.05, 1, (v) => {
-      opts.onSpeedChange?.(v);
-    }, 'sim.speed'));
+    body.appendChild(
+      makeSlider(
+        'Speed',
+        0.25,
+        3,
+        0.05,
+        1,
+        (v) => {
+          opts.onSpeedChange?.(v);
+        },
+        'sim.speed',
+      ),
+    );
 
     // Population cap slider
     const capInit = (opts.initialForceValues?.['_popCap'] as unknown as number | undefined) ?? 600;
-    body.appendChild(makeSlider('Pop Cap', 50, 2000, 50, capInit, (v) => {
-      opts.onPopulationCapChange?.(v);
-    }, 'sim.popCap'));
+    body.appendChild(
+      makeSlider(
+        'Pop Cap',
+        50,
+        2000,
+        50,
+        capInit,
+        (v) => {
+          opts.onPopulationCapChange?.(v);
+        },
+        'sim.popCap',
+      ),
+    );
   });
 }
 
@@ -512,7 +550,9 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
   return makeSection('Species', (body) => {
     const n = opts.speciesCount ?? 3;
     const names = opts.speciesNames ?? Array.from({ length: n }, (_, i) => `Species ${i}`);
-    const colors = opts.speciesColors ?? Array.from({ length: n }, (_, i) => ['#44cc44', '#ff4444', '#cc44cc'][i % 3]);
+    const colors =
+      opts.speciesColors ??
+      Array.from({ length: n }, (_, i) => ['#44cc44', '#ff4444', '#cc44cc'][i % 3]);
     const initVals = opts.initialSpeciesValues ?? [];
 
     // Tab bar for species selection
@@ -580,7 +620,8 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
         const delBtn = el('button', 'crit-btn crit-btn-small');
         delBtn.textContent = '✕';
         delBtn.title = 'Delete species';
-        delBtn.style.cssText = 'margin-left:auto; color:#ff6666; font-size:12px; padding:2px 6px; min-width:auto;';
+        delBtn.style.cssText =
+          'margin-left:auto; color:#ff6666; font-size:12px; padding:2px 6px; min-width:auto;';
         delBtn.addEventListener('click', () => {
           if (confirm(`Delete "${names[si]}"?`)) {
             opts.onDeleteSpecies?.(speciesIdx);
@@ -593,15 +634,23 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
 
       // Count slider + Apply button
       const countRow = el('div', 'crit-row');
-      const countLbl = el('span', 'crit-label'); countLbl.textContent = 'Count';
+      const countLbl = el('span', 'crit-label');
+      countLbl.textContent = 'Count';
       const countSlider = document.createElement('input');
-      countSlider.type = 'range'; countSlider.min = '1'; countSlider.max = String(opts.maxCount ?? 600);
-      countSlider.value = String(iv['count'] ?? 80); countSlider.step = '1';
+      countSlider.type = 'range';
+      countSlider.min = '1';
+      countSlider.max = String(opts.maxCount ?? 600);
+      countSlider.value = String(iv['count'] ?? 80);
+      countSlider.step = '1';
       const countVal = el('span', 'crit-value');
       countVal.textContent = countSlider.value;
-      countSlider.addEventListener('input', () => { countVal.textContent = countSlider.value; });
+      countSlider.addEventListener('input', () => {
+        countVal.textContent = countSlider.value;
+      });
       registerSlider(`species.${si}.count`, countSlider, countVal);
-      countRow.appendChild(countLbl); countRow.appendChild(countSlider); countRow.appendChild(countVal);
+      countRow.appendChild(countLbl);
+      countRow.appendChild(countSlider);
+      countRow.appendChild(countVal);
       const applyBtn = el('button', 'crit-btn crit-btn-small');
       applyBtn.textContent = 'Apply';
       applyBtn.addEventListener('click', () => {
@@ -611,60 +660,218 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
       panel.appendChild(countRow);
 
       // Basic sliders
-      panel.appendChild(makeSlider('Radius', 1, 10, 0.5, iv['radius'] ?? 3, (v) => opts.onSpeciesChange?.(speciesIdx, 'radius', v), `species.${si}.radius`));
-      panel.appendChild(makeSlider('Init Speed', 0, 200, 1, iv['initialSpeed'] ?? 50, (v) => opts.onSpeciesChange?.(speciesIdx, 'initialSpeed', v), `species.${si}.initialSpeed`));
-      panel.appendChild(makeSlider('Max Speed', 10, 300, 1, iv['maxSpeed'] ?? 100, (v) => opts.onSpeciesChange?.(speciesIdx, 'maxSpeed', v), `species.${si}.maxSpeed`));
+      panel.appendChild(
+        makeSlider(
+          'Radius',
+          1,
+          10,
+          0.5,
+          iv['radius'] ?? 3,
+          (v) => opts.onSpeciesChange?.(speciesIdx, 'radius', v),
+          `species.${si}.radius`,
+        ),
+      );
+      panel.appendChild(
+        makeSlider(
+          'Init Speed',
+          0,
+          200,
+          1,
+          iv['initialSpeed'] ?? 50,
+          (v) => opts.onSpeciesChange?.(speciesIdx, 'initialSpeed', v),
+          `species.${si}.initialSpeed`,
+        ),
+      );
+      panel.appendChild(
+        makeSlider(
+          'Max Speed',
+          10,
+          300,
+          1,
+          iv['maxSpeed'] ?? 100,
+          (v) => opts.onSpeciesChange?.(speciesIdx, 'maxSpeed', v),
+          `species.${si}.maxSpeed`,
+        ),
+      );
 
       // Energy sub-section
-      panel.appendChild(buildSubSection('Energy', (sub) => {
-        sub.appendChild(makeSlider('Max Energy', 10, 500, 5, iv['maxEnergy'] ?? 100, (v) => opts.onSpeciesChange?.(speciesIdx, 'maxEnergy', v), `species.${si}.maxEnergy`));
-        sub.appendChild(makeSlider('Init Energy', 5, 250, 5, iv['initialEnergy'] ?? 50, (v) => opts.onSpeciesChange?.(speciesIdx, 'initialEnergy', v), `species.${si}.initialEnergy`));
-        sub.appendChild(makeSlider('Repro Cost', 5, 200, 5, iv['reproductionCost'] ?? 40, (v) => opts.onSpeciesChange?.(speciesIdx, 'reproductionCost', v), `species.${si}.reproductionCost`));
-        sub.appendChild(makeSlider('Move Cost/s', 0, 10, 0.1, iv['movementCostPerSec'] ?? 2, (v) => opts.onSpeciesChange?.(speciesIdx, 'movementCostPerSec', v), `species.${si}.movementCostPerSec`));
-        sub.appendChild(makeSlider('Idle Drain/s', 0, 10, 0.1, iv['idleDrainPerSec'] ?? 1, (v) => opts.onSpeciesChange?.(speciesIdx, 'idleDrainPerSec', v), `species.${si}.idleDrainPerSec`));
-      }));
+      panel.appendChild(
+        buildSubSection('Energy', (sub) => {
+          sub.appendChild(
+            makeSlider(
+              'Max Energy',
+              10,
+              500,
+              5,
+              iv['maxEnergy'] ?? 100,
+              (v) => opts.onSpeciesChange?.(speciesIdx, 'maxEnergy', v),
+              `species.${si}.maxEnergy`,
+            ),
+          );
+          sub.appendChild(
+            makeSlider(
+              'Init Energy',
+              5,
+              250,
+              5,
+              iv['initialEnergy'] ?? 50,
+              (v) => opts.onSpeciesChange?.(speciesIdx, 'initialEnergy', v),
+              `species.${si}.initialEnergy`,
+            ),
+          );
+          sub.appendChild(
+            makeSlider(
+              'Repro Cost',
+              5,
+              200,
+              5,
+              iv['reproductionCost'] ?? 40,
+              (v) => opts.onSpeciesChange?.(speciesIdx, 'reproductionCost', v),
+              `species.${si}.reproductionCost`,
+            ),
+          );
+          sub.appendChild(
+            makeSlider(
+              'Move Cost/s',
+              0,
+              10,
+              0.1,
+              iv['movementCostPerSec'] ?? 2,
+              (v) => opts.onSpeciesChange?.(speciesIdx, 'movementCostPerSec', v),
+              `species.${si}.movementCostPerSec`,
+            ),
+          );
+          sub.appendChild(
+            makeSlider(
+              'Idle Drain/s',
+              0,
+              10,
+              0.1,
+              iv['idleDrainPerSec'] ?? 1,
+              (v) => opts.onSpeciesChange?.(speciesIdx, 'idleDrainPerSec', v),
+              `species.${si}.idleDrainPerSec`,
+            ),
+          );
+        }),
+      );
 
       // Lifecycle sub-section
-      panel.appendChild(buildSubSection('Lifecycle', (sub) => {
-        sub.appendChild(makeSlider('Max Age', 0, 300, 1, iv['maxAgeSec'] ?? 60, (v) => opts.onSpeciesChange?.(speciesIdx, 'maxAgeSec', v), `species.${si}.maxAgeSec`));
-        sub.appendChild(makeSlider('Starv Dmg/s', 0, 50, 0.5, iv['starvationDamagePerSec'] ?? 10, (v) => opts.onSpeciesChange?.(speciesIdx, 'starvationDamagePerSec', v), `species.${si}.starvationDamagePerSec`));
-        sub.appendChild(makeSlider('Repro Timeout', 1, 30, 0.5, iv['reproductionCooldownSec'] ?? 5, (v) => opts.onSpeciesChange?.(speciesIdx, 'reproductionCooldownSec', v), `species.${si}.reproductionCooldownSec`));
-      }));
+      panel.appendChild(
+        buildSubSection('Lifecycle', (sub) => {
+          sub.appendChild(
+            makeSlider(
+              'Max Age',
+              0,
+              300,
+              1,
+              iv['maxAgeSec'] ?? 60,
+              (v) => opts.onSpeciesChange?.(speciesIdx, 'maxAgeSec', v),
+              `species.${si}.maxAgeSec`,
+            ),
+          );
+          sub.appendChild(
+            makeSlider(
+              'Starv Dmg/s',
+              0,
+              50,
+              0.5,
+              iv['starvationDamagePerSec'] ?? 10,
+              (v) => opts.onSpeciesChange?.(speciesIdx, 'starvationDamagePerSec', v),
+              `species.${si}.starvationDamagePerSec`,
+            ),
+          );
+          sub.appendChild(
+            makeSlider(
+              'Repro Timeout',
+              1,
+              30,
+              0.5,
+              iv['reproductionCooldownSec'] ?? 5,
+              (v) => opts.onSpeciesChange?.(speciesIdx, 'reproductionCooldownSec', v),
+              `species.${si}.reproductionCooldownSec`,
+            ),
+          );
+        }),
+      );
 
       // Diet sub-section — checkboxes for each other species
-      panel.appendChild(buildSubSection('Diet', (sub) => {
-        for (let j = 0; j < n; j++) {
-          if (j === si) continue;
-          const canEatInitial = !!(iv['canEat_' + j]);
-          const checkboxRow = el('div', 'crit-row');
-          const checkbox = document.createElement('input');
-          checkbox.type = 'checkbox';
-          checkbox.checked = canEatInitial;
-          checkbox.style.cursor = 'pointer';
-          checkbox.style.accentColor = colors[j] ?? '#6af';
-          checkbox.addEventListener('change', () => {
-            opts.onSpeciesChange?.(speciesIdx, 'canEat_' + j, checkbox.checked);
-          });
-          checkboxRow.appendChild(checkbox);
-          const lbl = el('span', 'crit-label');
-          lbl.textContent = `Eat ${names[j]}`;
-          lbl.style.cursor = 'pointer';
-          lbl.addEventListener('click', () => {
-            checkbox.checked = !checkbox.checked;
-            opts.onSpeciesChange?.(speciesIdx, 'canEat_' + j, checkbox.checked);
-          });
-          checkboxRow.appendChild(lbl);
-          sub.appendChild(checkboxRow);
-        }
-      }));
+      panel.appendChild(
+        buildSubSection('Diet', (sub) => {
+          for (let j = 0; j < n; j++) {
+            if (j === si) continue;
+            const canEatInitial = !!iv['canEat_' + j];
+            const checkboxRow = el('div', 'crit-row');
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = canEatInitial;
+            checkbox.style.cursor = 'pointer';
+            checkbox.style.accentColor = colors[j] ?? '#6af';
+            checkbox.addEventListener('change', () => {
+              opts.onSpeciesChange?.(speciesIdx, 'canEat_' + j, checkbox.checked);
+            });
+            checkboxRow.appendChild(checkbox);
+            const lbl = el('span', 'crit-label');
+            lbl.textContent = `Eat ${names[j]}`;
+            lbl.style.cursor = 'pointer';
+            lbl.addEventListener('click', () => {
+              checkbox.checked = !checkbox.checked;
+              opts.onSpeciesChange?.(speciesIdx, 'canEat_' + j, checkbox.checked);
+            });
+            checkboxRow.appendChild(lbl);
+            sub.appendChild(checkboxRow);
+          }
+        }),
+      );
 
       // Stamina sub-section
-      panel.appendChild(buildSubSection('Stamina', (sub) => {
-        sub.appendChild(makeSlider('Sprint Dur', 1, 30, 0.5, iv['sprintDurationSec'] ?? 5, (v) => opts.onSpeciesChange?.(speciesIdx, 'sprintDurationSec', v), `species.${si}.sprintDurationSec`));
-        sub.appendChild(makeSlider('Sprint CD', 1, 30, 0.5, iv['sprintCooldownSec'] ?? 3, (v) => opts.onSpeciesChange?.(speciesIdx, 'sprintCooldownSec', v), `species.${si}.sprintCooldownSec`));
-        sub.appendChild(makeSlider('Sprint Spd ×', 0.5, 2.0, 0.1, iv['sprintSpeedMultiplier'] ?? 1.0, (v) => opts.onSpeciesChange?.(speciesIdx, 'sprintSpeedMultiplier', v), `species.${si}.sprintSpeedMultiplier`));
-        sub.appendChild(makeSlider('Tired Spd ×', 0.1, 1.0, 0.1, iv['tiredSpeedMultiplier'] ?? 0.5, (v) => opts.onSpeciesChange?.(speciesIdx, 'tiredSpeedMultiplier', v), `species.${si}.tiredSpeedMultiplier`));
-      }));
+      panel.appendChild(
+        buildSubSection('Stamina', (sub) => {
+          sub.appendChild(
+            makeSlider(
+              'Sprint Dur',
+              1,
+              30,
+              0.5,
+              iv['sprintDurationSec'] ?? 5,
+              (v) => opts.onSpeciesChange?.(speciesIdx, 'sprintDurationSec', v),
+              `species.${si}.sprintDurationSec`,
+            ),
+          );
+          sub.appendChild(
+            makeSlider(
+              'Sprint CD',
+              1,
+              30,
+              0.5,
+              iv['sprintCooldownSec'] ?? 3,
+              (v) => opts.onSpeciesChange?.(speciesIdx, 'sprintCooldownSec', v),
+              `species.${si}.sprintCooldownSec`,
+            ),
+          );
+          sub.appendChild(
+            makeSlider(
+              'Sprint Spd ×',
+              0.5,
+              2.0,
+              0.1,
+              iv['sprintSpeedMultiplier'] ?? 1.0,
+              (v) => opts.onSpeciesChange?.(speciesIdx, 'sprintSpeedMultiplier', v),
+              `species.${si}.sprintSpeedMultiplier`,
+            ),
+          );
+          sub.appendChild(
+            makeSlider(
+              'Tired Spd ×',
+              0.1,
+              1.0,
+              0.1,
+              iv['tiredSpeedMultiplier'] ?? 0.5,
+              (v) => opts.onSpeciesChange?.(speciesIdx, 'tiredSpeedMultiplier', v),
+              `species.${si}.tiredSpeedMultiplier`,
+            ),
+          );
+        }),
+      );
 
       panelsContainer.appendChild(panel);
     }
@@ -710,24 +917,80 @@ function buildForcesSection(opts: ControlsPanelOptions): HTMLElement {
     // Drag
     const dragEnabled = (fv['drag']?.['_enabled'] ?? 1) !== 0;
     body.appendChild(makeToggle('Drag', dragEnabled, (on) => opts.onForceToggle?.('drag', on)));
-    body.appendChild(makeSlider('  Coeff', 0, 5, 0.1, fv['drag']?.['coefficient'] ?? 0.8, (v) => opts.onForceChange?.('drag', 'coefficient', v), 'force.drag.coefficient'));
+    body.appendChild(
+      makeSlider(
+        '  Coeff',
+        0,
+        5,
+        0.1,
+        fv['drag']?.['coefficient'] ?? 0.8,
+        (v) => opts.onForceChange?.('drag', 'coefficient', v),
+        'force.drag.coefficient',
+      ),
+    );
 
     // Wander
     const wanderEnabled = (fv['wander']?.['_enabled'] ?? 1) !== 0;
-    body.appendChild(makeToggle('Wander', wanderEnabled, (on) => opts.onForceToggle?.('wander', on)));
-    body.appendChild(makeSlider('  Str', 0, 200, 1, fv['wander']?.['strength'] ?? 40, (v) => opts.onForceChange?.('wander', 'strength', v), 'force.wander.strength'));
-    body.appendChild(makeSlider('  Rate', 0, 10, 0.1, fv['wander']?.['rate'] ?? 2.5, (v) => opts.onForceChange?.('wander', 'rate', v), 'force.wander.rate'));
+    body.appendChild(
+      makeToggle('Wander', wanderEnabled, (on) => opts.onForceToggle?.('wander', on)),
+    );
+    body.appendChild(
+      makeSlider(
+        '  Str',
+        0,
+        200,
+        1,
+        fv['wander']?.['strength'] ?? 40,
+        (v) => opts.onForceChange?.('wander', 'strength', v),
+        'force.wander.strength',
+      ),
+    );
+    body.appendChild(
+      makeSlider(
+        '  Rate',
+        0,
+        10,
+        0.1,
+        fv['wander']?.['rate'] ?? 2.5,
+        (v) => opts.onForceChange?.('wander', 'rate', v),
+        'force.wander.rate',
+      ),
+    );
 
     // Pointer
     const pointerEnabled = (fv['pointer']?.['_enabled'] ?? 0) !== 0;
-    body.appendChild(makeToggle('Pointer', pointerEnabled, (on) => opts.onForceToggle?.('pointer', on)));
-    body.appendChild(makeSlider('  Str', -500, 500, 5, fv['pointer']?.['strength'] ?? 200, (v) => opts.onForceChange?.('pointer', 'strength', v), 'force.pointer.strength'));
-    body.appendChild(makeSlider('  Radius', 10, 400, 5, fv['pointer']?.['radius'] ?? 150, (v) => opts.onForceChange?.('pointer', 'radius', v), 'force.pointer.radius'));
-    body.appendChild(makeFalloffSelect((fv['pointer']?.['falloff'] as unknown as string) ?? 'linear', (v) => {
-      // Store falloff as a special param via onForceChange with string value mapped to number
-      // Since onForceChange expects number, encode falloff as a special call
-      opts.onForceChange?.('pointer', 'falloff_' + v, 0);
-    }));
+    body.appendChild(
+      makeToggle('Pointer', pointerEnabled, (on) => opts.onForceToggle?.('pointer', on)),
+    );
+    body.appendChild(
+      makeSlider(
+        '  Str',
+        -500,
+        500,
+        5,
+        fv['pointer']?.['strength'] ?? 200,
+        (v) => opts.onForceChange?.('pointer', 'strength', v),
+        'force.pointer.strength',
+      ),
+    );
+    body.appendChild(
+      makeSlider(
+        '  Radius',
+        10,
+        400,
+        5,
+        fv['pointer']?.['radius'] ?? 150,
+        (v) => opts.onForceChange?.('pointer', 'radius', v),
+        'force.pointer.radius',
+      ),
+    );
+    body.appendChild(
+      makeFalloffSelect((fv['pointer']?.['falloff'] as unknown as string) ?? 'linear', (v) => {
+        // Store falloff as a special param via onForceChange with string value mapped to number
+        // Since onForceChange expects number, encode falloff as a special call
+        opts.onForceChange?.('pointer', 'falloff_' + v, 0);
+      }),
+    );
   });
 }
 
@@ -791,10 +1054,11 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
         cell.appendChild(valLabel);
 
         // Click cell to cycle: +25, -25
-        const ii = i, jj = j;
+        const ii = i,
+          jj = j;
         let currentStr = initStr;
-        let currentMinR = Math.max(10, (init?.radius ?? 100) - 30);
-        let currentMaxR = init?.radius ?? 100;
+        const currentMinR = Math.max(10, (init?.radius ?? 100) - 30);
+        const currentMaxR = init?.radius ?? 100;
         cell.addEventListener('click', () => {
           currentStr += 25;
           if (currentStr > 100) currentStr = -100;
@@ -861,16 +1125,24 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
 
         // Min slider
         const minSlider = document.createElement('input');
-        minSlider.type = 'range'; minSlider.min = '10'; minSlider.max = '300'; minSlider.step = '5';
+        minSlider.type = 'range';
+        minSlider.min = '10';
+        minSlider.max = '300';
+        minSlider.step = '5';
         minSlider.value = String(Math.max(10, baseRadius - 30));
-        minSlider.style.flex = '1'; minSlider.style.minWidth = '40px';
+        minSlider.style.flex = '1';
+        minSlider.style.minWidth = '40px';
         rowDiv.appendChild(minSlider);
 
         // Max slider
         const maxSlider = document.createElement('input');
-        maxSlider.type = 'range'; maxSlider.min = '10'; maxSlider.max = '300'; maxSlider.step = '5';
+        maxSlider.type = 'range';
+        maxSlider.min = '10';
+        maxSlider.max = '300';
+        maxSlider.step = '5';
         maxSlider.value = String(baseRadius);
-        maxSlider.style.flex = '1'; maxSlider.style.minWidth = '40px';
+        maxSlider.style.flex = '1';
+        maxSlider.style.minWidth = '40px';
         rowDiv.appendChild(maxSlider);
 
         // Max value
@@ -885,7 +1157,8 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
         maxLbl.style.cssText = 'font-size:9px; color:#ffaa88; min-width:22px;';
         rowDiv.appendChild(maxLbl);
 
-        const ii = i, jj = j;
+        const ii = i,
+          jj = j;
         const updateRadius = (): void => {
           // Clamp: min cannot exceed max, max cannot go below min
           const minR = parseInt(minSlider.value);
@@ -900,8 +1173,15 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
           maxVal.textContent = maxSlider.value;
           const falloff = init?.falloff ?? 'linear';
           const str = initMatrix?.[ii]?.[jj]?.strength ?? 0;
-          opts.onMatrixChange?.(ii, jj, str, parseInt(minSlider.value), parseInt(maxSlider.value), falloff);
-        }
+          opts.onMatrixChange?.(
+            ii,
+            jj,
+            str,
+            parseInt(minSlider.value),
+            parseInt(maxSlider.value),
+            falloff,
+          );
+        };
 
         minSlider.addEventListener('input', updateRadius);
         maxSlider.addEventListener('input', updateRadius);
@@ -1057,12 +1337,11 @@ function refreshPresetDropdown(select: HTMLSelectElement, opts: ControlsPanelOpt
   } else {
     for (const name of presets) {
       const o = document.createElement('option');
-      o.value = name; o.textContent = name;
+      o.value = name;
+      o.textContent = name;
       select.appendChild(o);
     }
   }
 }
 
 // ─── Utility ──────────────────────────────────────────────────
-
-

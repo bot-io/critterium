@@ -21,11 +21,7 @@ export interface EcosystemPreset {
 
 // ─── Helpers ─────────────────────────────────────────────────
 
-function preset(
-  name: string,
-  description: string,
-  config: CritteriumConfig,
-): EcosystemPreset {
+function preset(name: string, description: string, config: CritteriumConfig): EcosystemPreset {
   return { name, description, config };
 }
 
@@ -107,8 +103,14 @@ const CLASSIC: EcosystemPreset = preset(
     ],
     interactionMatrix: [
       /*         Prey     Predator */
-      /* Prey     */ [{ strength: 30, radius: 80, falloff: 'linear' }, { strength: -80, radius: 120, falloff: 'linear' }],
-      /* Predator */ [{ strength: 60, radius: 150, falloff: 'linear' }, { strength: -20, radius: 50, falloff: 'linear' }],
+      /* Prey     */ [
+        { strength: 30, radius: 80, falloff: 'linear' },
+        { strength: -80, radius: 120, falloff: 'linear' },
+      ],
+      /* Predator */ [
+        { strength: 60, radius: 150, falloff: 'linear' },
+        { strength: -20, radius: 50, falloff: 'linear' },
+      ],
     ],
     forces: {
       drag: { coefficient: 0.8 },
@@ -256,9 +258,27 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
     interactionMatrix: [
       /*           Algae   Zoopl.  SmFish  BigFish Whale  */
       /* Algae   */ [null, null, null, null, null],
-      /* Zoopl.  */ [{ strength: 40, radius: 100, falloff: 'linear' }, null, { strength: -60, radius: 80, falloff: 'linear' }, { strength: -80, radius: 120, falloff: 'linear' }, null],
-      /* SmFish  */ [null, { strength: 50, radius: 100, falloff: 'linear' }, { strength: 25, radius: 60, falloff: 'linear' }, { strength: -70, radius: 120, falloff: 'linear' }, null],
-      /* BigFish */ [null, null, { strength: 60, radius: 150, falloff: 'linear' }, { strength: -30, radius: 80, falloff: 'linear' }, { strength: -50, radius: 150, falloff: 'linear' }],
+      /* Zoopl.  */ [
+        { strength: 40, radius: 100, falloff: 'linear' },
+        null,
+        { strength: -60, radius: 80, falloff: 'linear' },
+        { strength: -80, radius: 120, falloff: 'linear' },
+        null,
+      ],
+      /* SmFish  */ [
+        null,
+        { strength: 50, radius: 100, falloff: 'linear' },
+        { strength: 25, radius: 60, falloff: 'linear' },
+        { strength: -70, radius: 120, falloff: 'linear' },
+        null,
+      ],
+      /* BigFish */ [
+        null,
+        null,
+        { strength: 60, radius: 150, falloff: 'linear' },
+        { strength: -30, radius: 80, falloff: 'linear' },
+        { strength: -50, radius: 150, falloff: 'linear' },
+      ],
       /* Whale   */ [null, null, null, { strength: 40, radius: 200, falloff: 'linear' }, null],
     ],
     forces: {
@@ -482,10 +502,30 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
     ],
     interactionMatrix: [
       /*         Lions    Wolves   Deer     Rabbits */
-      /* Lions  */ [{ strength: -40, radius: 60, falloff: 'linear' }, { strength: 30, radius: 150, falloff: 'linear' }, { strength: 70, radius: 180, falloff: 'linear' }, { strength: 50, radius: 140, falloff: 'linear' }],
-      /* Wolves */ [{ strength: -60, radius: 120, falloff: 'linear' }, { strength: -25, radius: 50, falloff: 'linear' }, { strength: 65, radius: 160, falloff: 'linear' }, { strength: 55, radius: 130, falloff: 'linear' }],
-      /* Deer   */ [{ strength: -90, radius: 150, falloff: 'linear' }, { strength: -80, radius: 130, falloff: 'linear' }, { strength: 30, radius: 70, falloff: 'linear' }, null],
-      /* Rabbits*/ [{ strength: -70, radius: 120, falloff: 'linear' }, { strength: -60, radius: 100, falloff: 'linear' }, null, { strength: 20, radius: 40, falloff: 'linear' }],
+      /* Lions  */ [
+        { strength: -40, radius: 60, falloff: 'linear' },
+        { strength: 30, radius: 150, falloff: 'linear' },
+        { strength: 70, radius: 180, falloff: 'linear' },
+        { strength: 50, radius: 140, falloff: 'linear' },
+      ],
+      /* Wolves */ [
+        { strength: -60, radius: 120, falloff: 'linear' },
+        { strength: -25, radius: 50, falloff: 'linear' },
+        { strength: 65, radius: 160, falloff: 'linear' },
+        { strength: 55, radius: 130, falloff: 'linear' },
+      ],
+      /* Deer   */ [
+        { strength: -90, radius: 150, falloff: 'linear' },
+        { strength: -80, radius: 130, falloff: 'linear' },
+        { strength: 30, radius: 70, falloff: 'linear' },
+        null,
+      ],
+      /* Rabbits*/ [
+        { strength: -70, radius: 120, falloff: 'linear' },
+        { strength: -60, radius: 100, falloff: 'linear' },
+        null,
+        { strength: 20, radius: 40, falloff: 'linear' },
+      ],
     ],
     forces: {
       drag: { coefficient: 0.7 },
@@ -560,8 +600,14 @@ const TINY_POND: EcosystemPreset = preset(
     ],
     interactionMatrix: [
       /*         Minnows  Bass */
-      /* Minnows */ [{ strength: 40, radius: 60, falloff: 'linear' }, { strength: -100, radius: 100, falloff: 'linear' }],
-      /* Bass    */ [{ strength: 70, radius: 150, falloff: 'linear' }, { strength: -30, radius: 60, falloff: 'linear' }],
+      /* Minnows */ [
+        { strength: 40, radius: 60, falloff: 'linear' },
+        { strength: -100, radius: 100, falloff: 'linear' },
+      ],
+      /* Bass    */ [
+        { strength: 70, radius: 150, falloff: 'linear' },
+        { strength: -30, radius: 60, falloff: 'linear' },
+      ],
     ],
     forces: {
       drag: { coefficient: 0.7 },
@@ -780,9 +826,21 @@ const ROCK_PAPER_SCISSORS: EcosystemPreset = preset(
     // Circular chase/flee: each species chases its prey, flees its predator
     interactionMatrix: [
       /*             Rock         Paper        Scissors  */
-      /* Rock     */ [{ strength: -20, radius: 40, falloff: 'linear' }, { strength: -60, radius: 100, falloff: 'linear' }, { strength: 50, radius: 120, falloff: 'linear' }],
-      /* Paper    */ [{ strength: 50, radius: 120, falloff: 'linear' }, { strength: -20, radius: 40, falloff: 'linear' }, { strength: -60, radius: 100, falloff: 'linear' }],
-      /* Scissors */ [{ strength: -60, radius: 100, falloff: 'linear' }, { strength: 50, radius: 120, falloff: 'linear' }, { strength: -20, radius: 40, falloff: 'linear' }],
+      /* Rock     */ [
+        { strength: -20, radius: 40, falloff: 'linear' },
+        { strength: -60, radius: 100, falloff: 'linear' },
+        { strength: 50, radius: 120, falloff: 'linear' },
+      ],
+      /* Paper    */ [
+        { strength: 50, radius: 120, falloff: 'linear' },
+        { strength: -20, radius: 40, falloff: 'linear' },
+        { strength: -60, radius: 100, falloff: 'linear' },
+      ],
+      /* Scissors */ [
+        { strength: -60, radius: 100, falloff: 'linear' },
+        { strength: 50, radius: 120, falloff: 'linear' },
+        { strength: -20, radius: 40, falloff: 'linear' },
+      ],
     ],
     forces: {
       drag: { coefficient: 0.8 },
@@ -898,8 +956,16 @@ const GRASSLANDS: EcosystemPreset = preset(
     //         Grass       Rabbits     Foxes
     interactionMatrix: [
       /* Grass   */ [{ strength: -15, radius: 30, falloff: 'linear' }, null, null],
-      /* Rabbits */ [{ strength: 40, radius: 100, falloff: 'linear' }, { strength: 20, radius: 50, falloff: 'linear' }, { strength: -80, radius: 130, falloff: 'linear' }],
-      /* Foxes   */ [null, { strength: 60, radius: 160, falloff: 'linear' }, { strength: -30, radius: 60, falloff: 'linear' }],
+      /* Rabbits */ [
+        { strength: 40, radius: 100, falloff: 'linear' },
+        { strength: 20, radius: 50, falloff: 'linear' },
+        { strength: -80, radius: 130, falloff: 'linear' },
+      ],
+      /* Foxes   */ [
+        null,
+        { strength: 60, radius: 160, falloff: 'linear' },
+        { strength: -30, radius: 60, falloff: 'linear' },
+      ],
     ],
     forces: {
       drag: { coefficient: 0.8 },
@@ -989,8 +1055,14 @@ const BIRDS: EcosystemPreset = preset(
     // src=row (how this species reacts to target col)
     //         Starlings    Hawk
     interactionMatrix: [
-      /* Starlings */ [{ strength: 55, radius: 100, falloff: 'linear' }, { strength: -95, radius: 140, falloff: 'linear' }],
-      /* Hawk      */ [{ strength: 70, radius: 170, falloff: 'linear' }, { strength: -35, radius: 90, falloff: 'linear' }],
+      /* Starlings */ [
+        { strength: 55, radius: 100, falloff: 'linear' },
+        { strength: -95, radius: 140, falloff: 'linear' },
+      ],
+      /* Hawk      */ [
+        { strength: 70, radius: 170, falloff: 'linear' },
+        { strength: -35, radius: 90, falloff: 'linear' },
+      ],
     ],
     forces: {
       drag: { coefficient: 0.7 },
@@ -1105,9 +1177,17 @@ const FISHES: EcosystemPreset = preset(
     // src=row (how this species reacts to target col)
     //         Tetras        Wrasse       Barracuda
     interactionMatrix: [
-      /* Tetras    */ [{ strength: 40, radius: 80, falloff: 'linear' }, null, { strength: -85, radius: 130, falloff: 'linear' }],
+      /* Tetras    */ [
+        { strength: 40, radius: 80, falloff: 'linear' },
+        null,
+        { strength: -85, radius: 130, falloff: 'linear' },
+      ],
       /* Wrasse    */ [null, null, { strength: 30, radius: 90, falloff: 'linear' }],
-      /* Barracuda */ [{ strength: 60, radius: 150, falloff: 'linear' }, null, { strength: -25, radius: 70, falloff: 'linear' }],
+      /* Barracuda */ [
+        { strength: 60, radius: 150, falloff: 'linear' },
+        null,
+        { strength: -25, radius: 70, falloff: 'linear' },
+      ],
     ],
     forces: {
       drag: { coefficient: 0.7 },

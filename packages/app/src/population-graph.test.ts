@@ -17,12 +17,17 @@ function mockCanvas(): HTMLCanvasElement {
     lineTo: vi.fn(),
     stroke: vi.fn(),
   };
-  canvas.getContext = (type: string) => type === '2d' ? ctx as unknown as CanvasRenderingContext2D : null;
+  canvas.getContext = (type: string) =>
+    type === '2d' ? (ctx as unknown as CanvasRenderingContext2D) : null;
   return canvas;
 }
 
 function getCtx(canvas: HTMLCanvasElement) {
-  return (canvas.getContext('2d') as unknown as ReturnType<typeof mockCanvas> extends HTMLCanvasElement & { getContext(f: string): infer R } ? R : never);
+  return canvas.getContext('2d') as unknown as ReturnType<
+    typeof mockCanvas
+  > extends HTMLCanvasElement & { getContext(f: string): infer R }
+    ? R
+    : never;
 }
 
 describe('PopulationGraph', () => {

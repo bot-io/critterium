@@ -24,20 +24,26 @@ export type ForceType =
 
 /** All recognized force types. */
 export const ALL_FORCE_TYPES: readonly ForceType[] = [
-  'attract', 'repel', 'eat', 'infect',
-  'flock', 'orbit', 'flee', 'wander',
+  'attract',
+  'repel',
+  'eat',
+  'infect',
+  'flock',
+  'orbit',
+  'flee',
+  'wander',
 ];
 
 /** Bit flags for force types — fast set operations. */
 export const FORCE_FLAGS: Record<ForceType, number> = {
   attract: 1 << 0,
-  repel:   1 << 1,
-  eat:     1 << 2,
-  infect:  1 << 3,
-  flock:   1 << 4,
-  orbit:   1 << 5,
-  flee:    1 << 6,
-  wander:  1 << 7,
+  repel: 1 << 1,
+  eat: 1 << 2,
+  infect: 1 << 3,
+  flock: 1 << 4,
+  orbit: 1 << 5,
+  flee: 1 << 6,
+  wander: 1 << 7,
 };
 
 // ─── Interaction rule ────────────────────────────────────────────
@@ -116,10 +122,7 @@ export class InteractionRuleMatrix {
   }
 
   /** Enable a force for (source, target) with optional radius/strength. */
-  enableForce(
-    source: number, target: number, force: ForceType,
-    radius = 50, strength = 1,
-  ): void {
+  enableForce(source: number, target: number, force: ForceType, radius = 50, strength = 1): void {
     const i = this.idx(source, target);
     this.rules[i].enabledForces |= FORCE_FLAGS[force];
     if (radius > 0) this.rules[i].radius = radius;

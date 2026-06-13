@@ -63,9 +63,7 @@ test.describe('Critterium web app smoke test', () => {
     await page.waitForTimeout(3000);
 
     // Filter out known benign errors (e.g., WebGPU not available)
-    const realErrors = errors.filter(
-      (e) => !e.includes('WebGPU') && !e.includes('webgpu'),
-    );
+    const realErrors = errors.filter((e) => !e.includes('WebGPU') && !e.includes('webgpu'));
     expect(realErrors).toHaveLength(0);
   });
 

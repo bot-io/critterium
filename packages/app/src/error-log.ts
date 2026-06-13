@@ -46,7 +46,12 @@ export function formatErrors(): string {
     lines.push(`[${time}] [${e.type}] ${e.message}`);
     if (e.stack) {
       // Indent stack lines
-      lines.push(e.stack.split('\n').map(l => '  ' + l).join('\n'));
+      lines.push(
+        e.stack
+          .split('\n')
+          .map((l) => '  ' + l)
+          .join('\n'),
+      );
     }
     lines.push('');
   }
@@ -58,7 +63,10 @@ export function installErrorCapture(): void {
   const origConsoleError = console.error;
   console.error = (...args: unknown[]) => {
     origConsoleError.apply(console, args);
-    captureError('error', args.map(a => (a instanceof Error ? a.message + '\n' + a.stack : String(a))).join(' '));
+    captureError(
+      'error',
+      args.map((a) => (a instanceof Error ? a.message + '\n' + a.stack : String(a))).join(' '),
+    );
   };
 
   window.addEventListener('error', (e) => {

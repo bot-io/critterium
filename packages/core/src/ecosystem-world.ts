@@ -8,11 +8,7 @@
  * - Per-frame lifecycle processing
  */
 
-import {
-  World,
-  createRng,
-  type SimulationConfig,
-} from './index.js';
+import { World, createRng, type SimulationConfig } from './index.js';
 import {
   DEAD,
   EcosystemState,
@@ -57,15 +53,20 @@ export class EcosystemWorld {
 
     // Calculate total initial particles, capped to populationCap
     const rawTotal = config.species.reduce((sum, s) => sum + s.count, 0);
-    let totalCount = Math.min(rawTotal, config.populationCap);
 
     // If capped, proportionally reduce each species count
-    const speciesCounts = rawTotal > config.populationCap
-      ? config.species.map(s => Math.max(1, Math.floor(s.count * config.populationCap / rawTotal)))
-      : config.species.map(s => s.count);
+    const speciesCounts =
+      rawTotal > config.populationCap
+        ? config.species.map((s) =>
+            Math.max(1, Math.floor((s.count * config.populationCap) / rawTotal)),
+          )
+        : config.species.map((s) => s.count);
 
-    // Recompute in case rounding changed it
-    totalCount = Math.min(speciesCounts.reduce((sum, c) => sum + c, 0), config.populationCap);
+    // Total after proportional reduction (in case rounding changed it)
+    const totalCount = Math.min(
+      speciesCounts.reduce((sum, c) => sum + c, 0),
+      config.populationCap,
+    );
 
     // Create base world with a compatible config
     const simConfig: SimulationConfig = {
@@ -283,7 +284,12 @@ export class EcosystemWorld {
 
       const speciesIdx = this.world.type[i];
       const species = this.species[speciesIdx];
-      const stamina = species.stamina ?? { sprintDurationSec: 5, sprintCooldownSec: 3, sprintSpeedMultiplier: 1.0, tiredSpeedMultiplier: 0.5 };
+      const stamina = species.stamina ?? {
+        sprintDurationSec: 5,
+        sprintCooldownSec: 3,
+        sprintSpeedMultiplier: 1.0,
+        tiredSpeedMultiplier: 0.5,
+      };
       const baseMaxSpeed = species.maxSpeed;
 
       const speed = Math.sqrt(this.world.vx[i] ** 2 + this.world.vy[i] ** 2);

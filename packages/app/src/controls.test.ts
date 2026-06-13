@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createControlsPanel, resetAllSliders, getSliderValue, getAllSpeciesCounts } from './controls.js';
+import {
+  createControlsPanel,
+  resetAllSliders,
+  getSliderValue,
+  getAllSpeciesCounts,
+} from './controls.js';
 import type { ControlsPanelOptions } from './controls.js';
 
 function makeOptions(overrides: Partial<ControlsPanelOptions> = {}): ControlsPanelOptions {
@@ -104,8 +109,8 @@ describe('controls panel', () => {
   it('Pause button fires onTogglePause callback', () => {
     const opts = makeOptions();
     const panel = createControlsPanel(opts);
-    const pauseBtn = Array.from(panel.querySelectorAll('.crit-btn')).find(
-      (b) => b.textContent?.includes('Pause'),
+    const pauseBtn = Array.from(panel.querySelectorAll('.crit-btn')).find((b) =>
+      b.textContent?.includes('Pause'),
     ) as HTMLElement;
     expect(pauseBtn).toBeDefined();
     pauseBtn.click();
@@ -114,8 +119,8 @@ describe('controls panel', () => {
 
   it('Pause button toggles text between Pause and Play', () => {
     const panel = createControlsPanel(makeOptions());
-    const pauseBtn = Array.from(panel.querySelectorAll('.crit-btn')).find(
-      (b) => b.textContent?.includes('Pause'),
+    const pauseBtn = Array.from(panel.querySelectorAll('.crit-btn')).find((b) =>
+      b.textContent?.includes('Pause'),
     ) as HTMLElement;
     pauseBtn.click();
     expect(pauseBtn.textContent).toContain('Play');
@@ -126,8 +131,8 @@ describe('controls panel', () => {
   it('Reset button fires onReset callback', () => {
     const opts = makeOptions();
     const panel = createControlsPanel(opts);
-    const resetBtn = Array.from(panel.querySelectorAll('.crit-btn')).find(
-      (b) => b.textContent?.includes('Reload Preset'),
+    const resetBtn = Array.from(panel.querySelectorAll('.crit-btn')).find((b) =>
+      b.textContent?.includes('Reload Preset'),
     ) as HTMLElement;
     expect(resetBtn).toBeDefined();
     resetBtn.click();
@@ -137,8 +142,8 @@ describe('controls panel', () => {
   it('Seed button fires onReseed callback', () => {
     const opts = makeOptions();
     const panel = createControlsPanel(opts);
-    const seedBtn = Array.from(panel.querySelectorAll('.crit-btn')).find(
-      (b) => b.textContent?.includes('Reseed'),
+    const seedBtn = Array.from(panel.querySelectorAll('.crit-btn')).find((b) =>
+      b.textContent?.includes('Reseed'),
     ) as HTMLElement;
     expect(seedBtn).toBeDefined();
     seedBtn.click();
@@ -193,9 +198,7 @@ describe('controls panel', () => {
   });
 
   it('matrix grid has correct number of cells for 2 species', () => {
-    const panel = createControlsPanel(
-      makeOptions({ speciesCount: 2, speciesNames: ['A', 'B'] }),
-    );
+    const panel = createControlsPanel(makeOptions({ speciesCount: 2, speciesNames: ['A', 'B'] }));
     const cells = panel.querySelectorAll('.crit-matrix-cell');
     expect(cells.length).toBe(4);
   });
@@ -217,8 +220,8 @@ describe('controls panel', () => {
   it('Export button fires onExport callback', () => {
     const opts = makeOptions();
     const panel = createControlsPanel(opts);
-    const exportBtn = Array.from(panel.querySelectorAll('.crit-btn')).find(
-      (b) => b.textContent?.includes('Export'),
+    const exportBtn = Array.from(panel.querySelectorAll('.crit-btn')).find((b) =>
+      b.textContent?.includes('Export'),
     ) as HTMLElement;
     expect(exportBtn).toBeDefined();
     exportBtn.click();
@@ -228,8 +231,8 @@ describe('controls panel', () => {
   it('Import button fires onImport callback', () => {
     const opts = makeOptions();
     const panel = createControlsPanel(opts);
-    const importBtn = Array.from(panel.querySelectorAll('.crit-btn')).find(
-      (b) => b.textContent?.includes('Import'),
+    const importBtn = Array.from(panel.querySelectorAll('.crit-btn')).find((b) =>
+      b.textContent?.includes('Import'),
     ) as HTMLElement;
     expect(importBtn).toBeDefined();
     importBtn.click();

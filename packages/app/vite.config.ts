@@ -10,7 +10,10 @@ export default defineConfig({
   resolve: {
     alias: [
       { find: '@critterium/core', replacement: resolve(monorepo, 'packages/core/src/index.ts') },
-      { find: '@critterium/render', replacement: resolve(monorepo, 'packages/render/src/index.ts') },
+      {
+        find: '@critterium/render',
+        replacement: resolve(monorepo, 'packages/render/src/index.ts'),
+      },
     ],
     dedupe: ['pixi.js'],
   },

@@ -293,7 +293,10 @@ describe('EcosystemConfig type compatibility', () => {
         testSpecies({ name: 'B' }),
       ],
       interactionRules: [
-        [null, { enabledForces: new Set(['attract']), radius: 100, strength: 50, falloff: 'linear' }],
+        [
+          null,
+          { enabledForces: new Set(['attract']), radius: 100, strength: 50, falloff: 'linear' },
+        ],
         [null, null],
       ],
     };

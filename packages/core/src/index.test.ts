@@ -394,7 +394,8 @@ describe('Constants', () => {
 // ─── Spatial Hash Grid ──────────────────────────────────────────
 
 describe('SpatialHashGrid', () => {
-  const W = 800, H = 600;
+  const W = 800,
+    H = 600;
   const CELL = 100; // max interaction radius
   const MAX_P = 1000;
 
@@ -429,9 +430,9 @@ describe('SpatialHashGrid', () => {
   it('inserts particles into correct cells', () => {
     const grid = makeGrid();
     grid.clear();
-    grid.insert(0, 50, 50);   // col 0, row 0 → cell 0
-    grid.insert(1, 150, 50);  // col 1, row 0 → cell 1
-    grid.insert(2, 50, 150);  // col 0, row 1 → cell 8
+    grid.insert(0, 50, 50); // col 0, row 0 → cell 0
+    grid.insert(1, 150, 50); // col 1, row 0 → cell 1
+    grid.insert(2, 50, 150); // col 0, row 1 → cell 8
     expect(grid.cellAt(50, 50)).toBe(0);
     expect(grid.cellAt(150, 50)).toBe(1);
     expect(grid.cellAt(50, 150)).toBe(8);
@@ -441,7 +442,7 @@ describe('SpatialHashGrid', () => {
     const grid = makeGrid();
     grid.clear();
     grid.insert(0, 799, 599); // near edge
-    grid.insert(1, 0, 0);     // corner
+    grid.insert(1, 0, 0); // corner
     expect(grid.cellAt(799, 599)).toBe(47); // last cell
     expect(grid.cellAt(0, 0)).toBe(0);
   });
@@ -546,9 +547,18 @@ describe('SpatialHashGrid', () => {
 
     // With selfIdx=0: finds particle 1 (co-located, not self)
     const neighborsWithSelf: number[] = [];
-    grid.queryRadius(100, 100, 50, xArr, yArr, 2, (idx) => {
-      neighborsWithSelf.push(idx);
-    }, 0);
+    grid.queryRadius(
+      100,
+      100,
+      50,
+      xArr,
+      yArr,
+      2,
+      (idx) => {
+        neighborsWithSelf.push(idx);
+      },
+      0,
+    );
     expect(neighborsWithSelf).toEqual([1]);
   });
 
@@ -564,9 +574,18 @@ describe('SpatialHashGrid', () => {
 
     // With selfIdx=0: should find particle 1 but NOT particle 0
     const neighbors: number[] = [];
-    grid.queryRadius(100, 100, 50, xArr, yArr, 2, (idx) => {
-      neighbors.push(idx);
-    }, 0);
+    grid.queryRadius(
+      100,
+      100,
+      50,
+      xArr,
+      yArr,
+      2,
+      (idx) => {
+        neighbors.push(idx);
+      },
+      0,
+    );
     expect(neighbors).toContain(1);
     expect(neighbors).not.toContain(0);
   });
@@ -783,8 +802,12 @@ describe('SpatialHashGrid', () => {
       gridResult.sort((a, b) => a - b);
 
       const bruteResult = bruteForceNeighbors(
-        world.x[qi], world.y[qi], 100,
-        world.x, world.y, world.count,
+        world.x[qi],
+        world.y[qi],
+        100,
+        world.x,
+        world.y,
+        world.count,
       );
       expect(gridResult).toEqual(bruteResult);
     }
@@ -874,15 +897,23 @@ describe('InteractionMatrix', () => {
 // ─── PairwiseForce ──────────────────────────────────────────────
 
 describe('PairwiseForce', () => {
-  const W = 800, H = 600;
+  const W = 800,
+    H = 600;
 
   function twoParticleWorld(
-    typeA: number, typeB: number,
-    x0: number, y0: number, x1: number, y1: number,
+    typeA: number,
+    typeB: number,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
     maxSpeed = 200,
   ): { world: World; grid: SpatialHashGrid } {
     const cfg: SimulationConfig = {
-      width: W, height: H, boundaryMode: 'bounce', seed: 42,
+      width: W,
+      height: H,
+      boundaryMode: 'bounce',
+      seed: 42,
       types: [
         { count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed },
         { count: 1, color: '#0f0', radius: 3, initialSpeed: 0, maxSpeed },
@@ -890,14 +921,18 @@ describe('PairwiseForce', () => {
     };
     // If only one type, adjust
     if (typeA === typeB) {
-      cfg.types = [
-        { count: 2, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed },
-      ];
+      cfg.types = [{ count: 2, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed }];
     }
     const world = new World(cfg);
     // Override positions (deterministic seed doesn't matter here)
-    world.x[0] = x0; world.y[0] = y0; world.vx[0] = 0; world.vy[0] = 0;
-    world.x[1] = x1; world.y[1] = y1; world.vx[1] = 0; world.vy[1] = 0;
+    world.x[0] = x0;
+    world.y[0] = y0;
+    world.vx[0] = 0;
+    world.vy[0] = 0;
+    world.x[1] = x1;
+    world.y[1] = y1;
+    world.vx[1] = 0;
+    world.vy[1] = 0;
 
     const grid = new SpatialHashGrid(W, H, 100, 10);
     grid.rebuild(world);
@@ -1095,19 +1130,31 @@ describe('PairwiseForce', () => {
   it('chase/flee: predator accelerates toward prey, prey accelerates away', () => {
     // 3 types: predator (0), prey (1), neutral (2)
     const cfg: SimulationConfig = {
-      width: W, height: H, boundaryMode: 'bounce', seed: 42,
+      width: W,
+      height: H,
+      boundaryMode: 'bounce',
+      seed: 42,
       types: [
-        { count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 },  // predator
-        { count: 1, color: '#0f0', radius: 3, initialSpeed: 0, maxSpeed: 200 },  // prey
-        { count: 1, color: '#00f', radius: 3, initialSpeed: 0, maxSpeed: 200 },  // neutral
+        { count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }, // predator
+        { count: 1, color: '#0f0', radius: 3, initialSpeed: 0, maxSpeed: 200 }, // prey
+        { count: 1, color: '#00f', radius: 3, initialSpeed: 0, maxSpeed: 200 }, // neutral
       ],
     };
     const world = new World(cfg);
 
     // Position them: predator at left, prey at center, neutral far right
-    world.x[0] = 100; world.y[0] = 300; world.vx[0] = 0; world.vy[0] = 0;
-    world.x[1] = 150; world.y[1] = 300; world.vx[1] = 0; world.vy[1] = 0;
-    world.x[2] = 700; world.y[2] = 300; world.vx[2] = 0; world.vy[2] = 0;
+    world.x[0] = 100;
+    world.y[0] = 300;
+    world.vx[0] = 0;
+    world.vy[0] = 0;
+    world.x[1] = 150;
+    world.y[1] = 300;
+    world.vx[1] = 0;
+    world.vy[1] = 0;
+    world.x[2] = 700;
+    world.y[2] = 300;
+    world.vx[2] = 0;
+    world.vy[2] = 0;
 
     const grid = new SpatialHashGrid(W, H, 100, 10);
     grid.rebuild(world);
@@ -1135,7 +1182,10 @@ describe('PairwiseForce', () => {
   it('3x3 matrix: each pair gets its own interaction', () => {
     // 3 types, 9 entries
     const cfg: SimulationConfig = {
-      width: W, height: H, boundaryMode: 'bounce', seed: 42,
+      width: W,
+      height: H,
+      boundaryMode: 'bounce',
+      seed: 42,
       types: [
         { count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 },
         { count: 1, color: '#0f0', radius: 3, initialSpeed: 0, maxSpeed: 200 },
@@ -1145,9 +1195,18 @@ describe('PairwiseForce', () => {
     const world = new World(cfg);
 
     // Arrange in a line: 0 at x=100, 1 at x=130, 2 at x=160
-    world.x[0] = 100; world.y[0] = 300; world.vx[0] = 0; world.vy[0] = 0;
-    world.x[1] = 130; world.y[1] = 300; world.vx[1] = 0; world.vy[1] = 0;
-    world.x[2] = 160; world.y[2] = 300; world.vx[2] = 0; world.vy[2] = 0;
+    world.x[0] = 100;
+    world.y[0] = 300;
+    world.vx[0] = 0;
+    world.vy[0] = 0;
+    world.x[1] = 130;
+    world.y[1] = 300;
+    world.vx[1] = 0;
+    world.vy[1] = 0;
+    world.x[2] = 160;
+    world.y[2] = 300;
+    world.vx[2] = 0;
+    world.vy[2] = 0;
 
     const grid = new SpatialHashGrid(W, H, 100, 10);
     grid.rebuild(world);
@@ -1270,11 +1329,15 @@ describe('Force Interface', () => {
 // ─── DragForce ──────────────────────────────────────────────────
 
 describe('DragForce', () => {
-  const W = 800, H = 600;
+  const W = 800,
+    H = 600;
 
   function makeWorld(velocity = 100): { world: World; grid: SpatialHashGrid } {
     const cfg: SimulationConfig = {
-      width: W, height: H, boundaryMode: 'bounce', seed: 42,
+      width: W,
+      height: H,
+      boundaryMode: 'bounce',
+      seed: 42,
       types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
     };
     const world = new World(cfg);
@@ -1364,7 +1427,10 @@ describe('DragForce', () => {
 
   it('applies to all particles in world', () => {
     const cfg: SimulationConfig = {
-      width: W, height: H, boundaryMode: 'bounce', seed: 42,
+      width: W,
+      height: H,
+      boundaryMode: 'bounce',
+      seed: 42,
       types: [{ count: 5, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 }],
     };
     const world = new World(cfg);
@@ -1400,11 +1466,15 @@ describe('DragForce', () => {
 // ─── GravityForce ───────────────────────────────────────────────
 
 describe('GravityForce', () => {
-  const W = 800, H = 600;
+  const W = 800,
+    H = 600;
 
   function makeWorld(): { world: World; grid: SpatialHashGrid } {
     const cfg: SimulationConfig = {
-      width: W, height: H, boundaryMode: 'bounce', seed: 42,
+      width: W,
+      height: H,
+      boundaryMode: 'bounce',
+      seed: 42,
       types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
     };
     const world = new World(cfg);
@@ -1472,7 +1542,10 @@ describe('GravityForce', () => {
 
   it('applies to all particles equally', () => {
     const cfg: SimulationConfig = {
-      width: W, height: H, boundaryMode: 'bounce', seed: 42,
+      width: W,
+      height: H,
+      boundaryMode: 'bounce',
+      seed: 42,
       types: [{ count: 10, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
     };
     const world = new World(cfg);
@@ -1502,11 +1575,15 @@ describe('GravityForce', () => {
 // ─── BoundaryForce ──────────────────────────────────────────────
 
 describe('BoundaryForce', () => {
-  const W = 800, H = 600;
+  const W = 800,
+    H = 600;
 
   it('applies bounce boundaries via force pipeline', () => {
     const cfg: SimulationConfig = {
-      width: W, height: H, boundaryMode: 'bounce', seed: 42,
+      width: W,
+      height: H,
+      boundaryMode: 'bounce',
+      seed: 42,
       types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
     };
     const world = new World(cfg);
@@ -1526,7 +1603,10 @@ describe('BoundaryForce', () => {
 
   it('applies wrap boundaries via force pipeline', () => {
     const cfg: SimulationConfig = {
-      width: W, height: H, boundaryMode: 'wrap', seed: 42,
+      width: W,
+      height: H,
+      boundaryMode: 'wrap',
+      seed: 42,
       types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
     };
     const world = new World(cfg);
@@ -1548,16 +1628,20 @@ describe('BoundaryForce', () => {
 // ─── ForcePipeline ──────────────────────────────────────────────
 
 describe('ForcePipeline', () => {
-  const W = 800, H = 600;
+  const W = 800,
+    H = 600;
 
   it('applies forces in order', () => {
     const cfg: SimulationConfig = {
-      width: W, height: H, boundaryMode: 'bounce', seed: 42,
+      width: W,
+      height: H,
+      boundaryMode: 'bounce',
+      seed: 42,
       types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 500 }],
     };
     const world = new World(cfg);
     world.x[0] = 400;
-    world.y[0]  = 300;
+    world.y[0] = 300;
     world.vx[0] = 100;
     world.vy[0] = 0;
     const grid = new SpatialHashGrid(W, H, 100, 10);
@@ -1600,7 +1684,10 @@ describe('ForcePipeline', () => {
 
   it('empty pipeline does nothing', () => {
     const cfg: SimulationConfig = {
-      width: W, height: H, boundaryMode: 'bounce', seed: 42,
+      width: W,
+      height: H,
+      boundaryMode: 'bounce',
+      seed: 42,
       types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
     };
     const world = new World(cfg);
@@ -1663,7 +1750,10 @@ describe('ForcePipeline', () => {
 
   it('pipeline with gravity + drag reaches terminal velocity', () => {
     const cfg: SimulationConfig = {
-      width: W, height: H, boundaryMode: 'bounce', seed: 42,
+      width: W,
+      height: H,
+      boundaryMode: 'bounce',
+      seed: 42,
       types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 10000 }],
     };
     const world = new World(cfg);
@@ -1681,7 +1771,8 @@ describe('ForcePipeline', () => {
     const dt = 1 / 60;
 
     // Run until near terminal velocity
-    for (let step = 0; step < 600; step++) { // 10 seconds
+    for (let step = 0; step < 600; step++) {
+      // 10 seconds
       pipeline.step(world, grid, dt);
       // Keep particle in bounds for testing
       if (world.y[0] > world.height) {
@@ -1714,7 +1805,9 @@ describe('WanderForce', () => {
   });
 
   it('changes particle velocities over time', () => {
-    const cfg = defaultConfig({ types: [{ count: 5, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 }] });
+    const cfg = defaultConfig({
+      types: [{ count: 5, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 }],
+    });
     const world = new World(cfg);
     const grid = new SpatialHashGrid(W, H, 100, 10);
     grid.rebuild(world);
@@ -1744,7 +1837,10 @@ describe('WanderForce', () => {
 
   it('higher strength produces larger velocity changes', () => {
     const makeWorld = () => {
-      const cfg = defaultConfig({ seed: 42, types: [{ count: 10, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 500 }] });
+      const cfg = defaultConfig({
+        seed: 42,
+        types: [{ count: 10, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 500 }],
+      });
       return new World(cfg);
     };
 
@@ -1768,7 +1864,8 @@ describe('WanderForce', () => {
     }
 
     // Strong wander should produce more speed on average
-    let totalSpeed1 = 0, totalSpeed2 = 0;
+    let totalSpeed1 = 0,
+      totalSpeed2 = 0;
     for (let i = 0; i < 10; i++) {
       totalSpeed1 += Math.sqrt(w1.vx[i] ** 2 + w1.vy[i] ** 2);
       totalSpeed2 += Math.sqrt(w2.vx[i] ** 2 + w2.vy[i] ** 2);
@@ -1777,7 +1874,9 @@ describe('WanderForce', () => {
   });
 
   it('produces smooth motion (no discontinuous jumps)', () => {
-    const cfg = defaultConfig({ types: [{ count: 5, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 }] });
+    const cfg = defaultConfig({
+      types: [{ count: 5, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 }],
+    });
     const world = new World(cfg);
     const grid = new SpatialHashGrid(W, H, 100, 10);
     grid.rebuild(world);
@@ -1809,7 +1908,10 @@ describe('WanderForce', () => {
   });
 
   it('different particles wander independently', () => {
-    const cfg = defaultConfig({ seed: 42, types: [{ count: 10, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 }] });
+    const cfg = defaultConfig({
+      seed: 42,
+      types: [{ count: 10, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 }],
+    });
     const world = new World(cfg);
     const grid = new SpatialHashGrid(W, H, 100, 20);
     grid.rebuild(world);
@@ -1825,7 +1927,10 @@ describe('WanderForce', () => {
     // Check that not all particles have the same velocity (they wander independently)
     let sameVelocity = true;
     for (let i = 1; i < world.count; i++) {
-      if (Math.abs(world.vx[i] - world.vx[0]) > 0.01 || Math.abs(world.vy[i] - world.vy[0]) > 0.01) {
+      if (
+        Math.abs(world.vx[i] - world.vx[0]) > 0.01 ||
+        Math.abs(world.vy[i] - world.vy[0]) > 0.01
+      ) {
         sameVelocity = false;
         break;
       }
@@ -1834,7 +1939,9 @@ describe('WanderForce', () => {
   });
 
   it('zero strength produces no velocity change', () => {
-    const cfg = defaultConfig({ types: [{ count: 5, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 }] });
+    const cfg = defaultConfig({
+      types: [{ count: 5, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 }],
+    });
     const world = new World(cfg);
     const grid = new SpatialHashGrid(W, H, 100, 10);
     grid.rebuild(world);
@@ -1859,7 +1966,9 @@ describe('WanderForce', () => {
 
   it('handles capacity growth correctly', () => {
     // Start with small world, then verify wander works with larger world
-    const cfg1 = defaultConfig({ types: [{ count: 3, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 }] });
+    const cfg1 = defaultConfig({
+      types: [{ count: 3, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 }],
+    });
     const w1 = new World(cfg1);
     const g1 = new SpatialHashGrid(W, H, 100, 10);
     g1.rebuild(w1);
@@ -1867,7 +1976,9 @@ describe('WanderForce', () => {
     const wander = new WanderForce(80, 3);
     wander.apply(w1, g1, 1 / 60); // capacity grows to 3
 
-    const cfg2 = defaultConfig({ types: [{ count: 10, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 }] });
+    const cfg2 = defaultConfig({
+      types: [{ count: 10, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 }],
+    });
     const w2 = new World(cfg2);
     const g2 = new SpatialHashGrid(W, H, 100, 20);
     g2.rebuild(w2);
@@ -1887,7 +1998,9 @@ describe('FlowFieldForce', () => {
   });
 
   it('uniform mode pushes all particles in the same direction', () => {
-    const cfg = defaultConfig({ types: [{ count: 5, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const cfg = defaultConfig({
+      types: [{ count: 5, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
+    });
     const world = new World(cfg);
     // Place particles at known positions
     for (let i = 0; i < 5; i++) {
@@ -1909,7 +2022,9 @@ describe('FlowFieldForce', () => {
   });
 
   it('uniform mode with angle π/2 pushes upward', () => {
-    const cfg = defaultConfig({ types: [{ count: 3, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const cfg = defaultConfig({
+      types: [{ count: 3, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
+    });
     const world = new World(cfg);
     const grid = new SpatialHashGrid(W, H, 100, 10);
     grid.rebuild(world);
@@ -1924,7 +2039,9 @@ describe('FlowFieldForce', () => {
   });
 
   it('turbulence mode produces different forces at different positions', () => {
-    const cfg = defaultConfig({ types: [{ count: 2, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const cfg = defaultConfig({
+      types: [{ count: 2, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
+    });
     const world = new World(cfg);
     world.x[0] = 100;
     world.y[0] = 100;
@@ -1942,12 +2059,15 @@ describe('FlowFieldForce', () => {
     flow.apply(world, grid, 1 / 60);
 
     // Particles at different positions should get different forces
-    const sameForce = Math.abs(world.vx[0] - world.vx[1]) < 0.001 && Math.abs(world.vy[0] - world.vy[1]) < 0.001;
+    const sameForce =
+      Math.abs(world.vx[0] - world.vx[1]) < 0.001 && Math.abs(world.vy[0] - world.vy[1]) < 0.001;
     expect(sameForce).toBe(false);
   });
 
   it('custom flow field function', () => {
-    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const cfg = defaultConfig({
+      types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
+    });
     const world = new World(cfg);
     world.x[0] = 400;
     world.y[0] = 300;
@@ -1967,7 +2087,9 @@ describe('FlowFieldForce', () => {
   });
 
   it('custom field receives particle position', () => {
-    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const cfg = defaultConfig({
+      types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
+    });
     const world = new World(cfg);
     world.x[0] = 250;
     world.y[0] = 350;
@@ -1991,7 +2113,9 @@ describe('FlowFieldForce', () => {
   });
 
   it('zero strength produces no velocity change', () => {
-    const cfg = defaultConfig({ types: [{ count: 3, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const cfg = defaultConfig({
+      types: [{ count: 3, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
+    });
     const world = new World(cfg);
     const grid = new SpatialHashGrid(W, H, 100, 10);
     grid.rebuild(world);
@@ -2009,7 +2133,9 @@ describe('FlowFieldForce', () => {
   });
 
   it('analytic force check: uniform angle = π pushes in -x direction', () => {
-    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const cfg = defaultConfig({
+      types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
+    });
     const world = new World(cfg);
     world.vx[0] = 0;
     world.vy[0] = 0;
@@ -2036,7 +2162,9 @@ describe('FlowFieldForce', () => {
   });
 
   it('unknown mode produces no force', () => {
-    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const cfg = defaultConfig({
+      types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
+    });
     const world = new World(cfg);
     world.vx[0] = 0;
     world.vy[0] = 0;
@@ -2066,11 +2194,14 @@ describe('VortexForce', () => {
   });
 
   it('applies tangential force to nearby particle', () => {
-    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const cfg = defaultConfig({
+      types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
+    });
     const world = new World(cfg);
 
     // Place particle to the right of vortex center
-    const cx = 400, cy = 300;
+    const cx = 400,
+      cy = 300;
     world.x[0] = cx + 100; // 100 units to the right
     world.y[0] = cy;
     world.vx[0] = 0;
@@ -2090,10 +2221,14 @@ describe('VortexForce', () => {
   });
 
   it('analytic tangential force magnitude (constant falloff)', () => {
-    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const cfg = defaultConfig({
+      types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
+    });
     const world = new World(cfg);
 
-    const cx = 400, cy = 300, dist = 50;
+    const cx = 400,
+      cy = 300,
+      dist = 50;
     world.x[0] = cx; // directly above center
     world.y[0] = cy - dist;
     world.vx[0] = 0;
@@ -2116,10 +2251,15 @@ describe('VortexForce', () => {
   });
 
   it('analytic tangential force magnitude (linear falloff)', () => {
-    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const cfg = defaultConfig({
+      types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
+    });
     const world = new World(cfg);
 
-    const cx = 400, cy = 300, radius = 200, dist = 80;
+    const cx = 400,
+      cy = 300,
+      radius = 200,
+      dist = 80;
     world.x[0] = cx + dist; // to the right
     world.y[0] = cy;
     world.vx[0] = 0;
@@ -2141,7 +2281,9 @@ describe('VortexForce', () => {
   });
 
   it('particle beyond radius receives no force', () => {
-    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const cfg = defaultConfig({
+      types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
+    });
     const world = new World(cfg);
 
     world.x[0] = 400;
@@ -2161,7 +2303,9 @@ describe('VortexForce', () => {
   });
 
   it('particle at center receives no force', () => {
-    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const cfg = defaultConfig({
+      types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
+    });
     const world = new World(cfg);
 
     world.x[0] = 400;
@@ -2180,10 +2324,13 @@ describe('VortexForce', () => {
   });
 
   it('radial inward component pulls particles toward center', () => {
-    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const cfg = defaultConfig({
+      types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
+    });
     const world = new World(cfg);
 
-    const cx = 400, cy = 300;
+    const cx = 400,
+      cy = 300;
     world.x[0] = cx + 100; // 100 to the right
     world.y[0] = cy;
     world.vx[0] = 0;
@@ -2201,10 +2348,13 @@ describe('VortexForce', () => {
   });
 
   it('radial outward component pushes particles away from center', () => {
-    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const cfg = defaultConfig({
+      types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
+    });
     const world = new World(cfg);
 
-    const cx = 400, cy = 300;
+    const cx = 400,
+      cy = 300;
     world.x[0] = cx + 100;
     world.y[0] = cy;
     world.vx[0] = 0;
@@ -2222,10 +2372,13 @@ describe('VortexForce', () => {
   });
 
   it('spiral pattern with combined tangential + radial', () => {
-    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 500 }] });
+    const cfg = defaultConfig({
+      types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 500 }],
+    });
     const world = new World(cfg);
 
-    const cx = 400, cy = 300;
+    const cx = 400,
+      cy = 300;
     world.x[0] = cx + 80;
     world.y[0] = cy;
     world.vx[0] = 0;
@@ -2251,10 +2404,13 @@ describe('VortexForce', () => {
   });
 
   it('inverse falloff produces stronger force near center', () => {
-    const cfg = defaultConfig({ types: [{ count: 2, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 10000 }] });
+    const cfg = defaultConfig({
+      types: [{ count: 2, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 10000 }],
+    });
     const world = new World(cfg);
 
-    const cx = 400, cy = 300;
+    const cx = 400,
+      cy = 300;
     // Particle A: close to center
     world.x[0] = cx + 20;
     world.y[0] = cy;
@@ -2273,10 +2429,13 @@ describe('VortexForce', () => {
   });
 
   it('negative strength produces clockwise rotation', () => {
-    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const cfg = defaultConfig({
+      types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
+    });
     const world = new World(cfg);
 
-    const cx = 400, cy = 300;
+    const cx = 400,
+      cy = 300;
     world.x[0] = cx + 100;
     world.y[0] = cy;
     world.vx[0] = 0;
@@ -2294,7 +2453,9 @@ describe('VortexForce', () => {
   });
 
   it('zero strength and zero radial produce no force', () => {
-    const cfg = defaultConfig({ types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }] });
+    const cfg = defaultConfig({
+      types: [{ count: 1, color: '#f00', radius: 3, initialSpeed: 0, maxSpeed: 200 }],
+    });
     const world = new World(cfg);
 
     world.x[0] = 450;
@@ -2323,10 +2484,12 @@ describe('VortexForce', () => {
 
 describe('CRT-6: Integration — Wander + FlowField + Vortex together', () => {
   it('pipeline with all three forces runs stably', () => {
-    const cfg = defaultConfig({ types: [
-      { count: 50, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 },
-      { count: 50, color: '#0f0', radius: 3, initialSpeed: 40, maxSpeed: 180 },
-    ]});
+    const cfg = defaultConfig({
+      types: [
+        { count: 50, color: '#f00', radius: 3, initialSpeed: 50, maxSpeed: 200 },
+        { count: 50, color: '#0f0', radius: 3, initialSpeed: 40, maxSpeed: 180 },
+      ],
+    });
     const world = new World(cfg);
     const grid = new SpatialHashGrid(W, H, 100, 200);
     grid.rebuild(world);
@@ -2338,7 +2501,8 @@ describe('CRT-6: Integration — Wander + FlowField + Vortex together', () => {
     pipeline.add(new DragForce(1.5));
 
     const dt = 1 / 60;
-    for (let step = 0; step < 600; step++) { // 10 seconds
+    for (let step = 0; step < 600; step++) {
+      // 10 seconds
       pipeline.step(world, grid, dt);
       world.step(dt);
       grid.rebuild(world);
@@ -2353,7 +2517,9 @@ describe('CRT-6: Integration — Wander + FlowField + Vortex together', () => {
   });
 
   it('wander + vortex produces orbiting + wandering behavior', () => {
-    const cfg = defaultConfig({ types: [{ count: 5, color: '#f00', radius: 3, initialSpeed: 30, maxSpeed: 200 }] });
+    const cfg = defaultConfig({
+      types: [{ count: 5, color: '#f00', radius: 3, initialSpeed: 30, maxSpeed: 200 }],
+    });
     const world = new World(cfg);
     const grid = new SpatialHashGrid(W, H, 100, 10);
     grid.rebuild(world);
@@ -2366,7 +2532,8 @@ describe('CRT-6: Integration — Wander + FlowField + Vortex together', () => {
     const dt = 1 / 60;
     const positions: { x: number; y: number }[] = [];
 
-    for (let step = 0; step < 180; step++) { // 3 seconds
+    for (let step = 0; step < 180; step++) {
+      // 3 seconds
       pipeline.step(world, grid, dt);
       world.step(dt);
       grid.rebuild(world);

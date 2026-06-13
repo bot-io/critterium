@@ -118,8 +118,8 @@ test.describe('Settings stress test — exercise every control', () => {
             const slider = sliders.nth(i);
             if (await slider.isVisible()) {
               const currentVal = parseFloat(await slider.inputValue());
-              const max = parseFloat(await slider.getAttribute('max') ?? '100');
-              const step = parseFloat(await slider.getAttribute('step') ?? '1');
+              const max = parseFloat((await slider.getAttribute('max')) ?? '100');
+              const step = parseFloat((await slider.getAttribute('step')) ?? '1');
               const targetVal = Math.min(max, currentVal + step * 3);
               await slider.fill(String(targetVal));
               await page.waitForTimeout(50);
@@ -166,7 +166,9 @@ test.describe('Settings stress test — exercise every control', () => {
             await nameInput.blur();
             await page.waitForTimeout(200);
           }
-        } catch { /* non-critical */ }
+        } catch {
+          /* non-critical */
+        }
 
         // Change color input
         try {
@@ -175,7 +177,9 @@ test.describe('Settings stress test — exercise every control', () => {
             await colorInput.fill('#ff6600');
             await page.waitForTimeout(200);
           }
-        } catch { /* non-critical */ }
+        } catch {
+          /* non-critical */
+        }
 
         // Move Count slider + click Apply
         try {
@@ -191,7 +195,9 @@ test.describe('Settings stress test — exercise every control', () => {
             await applyBtn.click();
             await page.waitForTimeout(200);
           }
-        } catch { /* non-critical */ }
+        } catch {
+          /* non-critical */
+        }
 
         // Move basic sliders: Radius, Init Speed, Max Speed
         for (const label of ['Radius', 'Init Speed', 'Max Speed']) {
@@ -200,7 +206,13 @@ test.describe('Settings stress test — exercise every control', () => {
 
         // Open and exercise Energy sub-section
         await expandSubSection(activePanel, 'Energy');
-        for (const label of ['Max Energy', 'Init Energy', 'Repro Cost', 'Move Cost/s', 'Idle Drain/s']) {
+        for (const label of [
+          'Max Energy',
+          'Init Energy',
+          'Repro Cost',
+          'Move Cost/s',
+          'Idle Drain/s',
+        ]) {
           await moveSliderByLabel(activePanel, label);
         }
 
@@ -228,9 +240,13 @@ test.describe('Settings stress test — exercise every control', () => {
                 await dietCheckboxes.nth(ci).click();
                 await page.waitForTimeout(100);
               }
-            } catch { /* skip */ }
+            } catch {
+              /* skip */
+            }
           }
-        } catch { /* non-critical */ }
+        } catch {
+          /* non-critical */
+        }
       } catch {
         // Skip entire species tab on error
       }
@@ -253,7 +269,9 @@ test.describe('Settings stress test — exercise every control', () => {
             await forceToggles.nth(ti).click();
             await page.waitForTimeout(100);
           }
-        } catch { /* skip */ }
+        } catch {
+          /* skip */
+        }
       }
 
       // Move all force sliders (Drag Coeff, Wander Str/Rate, Pointer Str/Radius)
@@ -270,13 +288,19 @@ test.describe('Settings stress test — exercise every control', () => {
           await falloffSelect.selectOption('linear');
           await page.waitForTimeout(200);
         }
-      } catch { /* non-critical */ }
-    } catch { /* non-critical */ }
+      } catch {
+        /* non-critical */
+      }
+    } catch {
+      /* non-critical */
+    }
 
     // ── 7. Exercise Interaction Matrix section ─────────────────────
     await expandSection('Interaction Matrix');
     try {
-      const matrixSection = panel.locator('.crit-section').filter({ hasText: 'Interaction Matrix' });
+      const matrixSection = panel
+        .locator('.crit-section')
+        .filter({ hasText: 'Interaction Matrix' });
 
       // Click each matrix cell to change strength
       const matrixCells = matrixSection.locator('.crit-matrix-cell');
@@ -287,7 +311,9 @@ test.describe('Settings stress test — exercise every control', () => {
             await matrixCells.nth(ci).click();
             await page.waitForTimeout(100);
           }
-        } catch { /* skip */ }
+        } catch {
+          /* skip */
+        }
       }
 
       // Move min/max distance sliders in the Interaction Distance sub-area
@@ -300,13 +326,17 @@ test.describe('Settings stress test — exercise every control', () => {
             const slider = distSliders.nth(si);
             if (await slider.isVisible()) {
               const currentVal = parseFloat(await slider.inputValue());
-              const max = parseFloat(await slider.getAttribute('max') ?? '300');
+              const max = parseFloat((await slider.getAttribute('max')) ?? '300');
               await slider.fill(String(Math.min(max, currentVal + 10)));
               await page.waitForTimeout(50);
             }
-          } catch { /* skip */ }
+          } catch {
+            /* skip */
+          }
         }
-      } catch { /* non-critical */ }
+      } catch {
+        /* non-critical */
+      }
 
       // Click Randomize button
       try {
@@ -315,7 +345,9 @@ test.describe('Settings stress test — exercise every control', () => {
           await randBtn.click();
           await page.waitForTimeout(300);
         }
-      } catch { /* non-critical */ }
+      } catch {
+        /* non-critical */
+      }
 
       // Click Clear button
       try {
@@ -324,8 +356,12 @@ test.describe('Settings stress test — exercise every control', () => {
           await clearBtn.click();
           await page.waitForTimeout(300);
         }
-      } catch { /* non-critical */ }
-    } catch { /* non-critical */ }
+      } catch {
+        /* non-critical */
+      }
+    } catch {
+      /* non-critical */
+    }
 
     // ── 8. Add a new species ───────────────────────────────────────
     try {
@@ -334,7 +370,9 @@ test.describe('Settings stress test — exercise every control', () => {
         await addSpeciesBtn.click();
         await page.waitForTimeout(2000);
       }
-    } catch { /* non-critical */ }
+    } catch {
+      /* non-critical */
+    }
 
     // ── 9. Delete the added species ────────────────────────────────
     try {
@@ -365,7 +403,9 @@ test.describe('Settings stress test — exercise every control', () => {
         }
         await page.waitForTimeout(2000);
       }
-    } catch { /* non-critical */ }
+    } catch {
+      /* non-critical */
+    }
 
     // ── 10. Click Reseed button ────────────────────────────────────
     await expandSection('Simulation');
@@ -375,7 +415,9 @@ test.describe('Settings stress test — exercise every control', () => {
         await reseedBtn.click();
         await page.waitForTimeout(1000);
       }
-    } catch { /* non-critical */ }
+    } catch {
+      /* non-critical */
+    }
 
     // ── 11. Click Reset button (Reload Preset) ─────────────────────
     try {
@@ -384,7 +426,9 @@ test.describe('Settings stress test — exercise every control', () => {
         await resetBtn.click();
         await page.waitForTimeout(1000);
       }
-    } catch { /* non-critical */ }
+    } catch {
+      /* non-critical */
+    }
 
     // ── 12. Toggle Pause on/off ────────────────────────────────────
     try {
@@ -399,7 +443,9 @@ test.describe('Settings stress test — exercise every control', () => {
           await page.waitForTimeout(500);
         }
       }
-    } catch { /* non-critical */ }
+    } catch {
+      /* non-critical */
+    }
 
     // ── 13. Change speed slider ────────────────────────────────────
     try {
@@ -412,7 +458,9 @@ test.describe('Settings stress test — exercise every control', () => {
         await speedSlider.fill('1.0');
         await page.waitForTimeout(300);
       }
-    } catch { /* non-critical */ }
+    } catch {
+      /* non-critical */
+    }
 
     // ── 14. Change population cap slider ───────────────────────────
     try {
@@ -423,7 +471,9 @@ test.describe('Settings stress test — exercise every control', () => {
         await popCapSlider.fill('800');
         await page.waitForTimeout(300);
       }
-    } catch { /* non-critical */ }
+    } catch {
+      /* non-critical */
+    }
 
     // ── 15. Let the simulation run for 3 more seconds ──────────────
     await page.waitForTimeout(3000);
@@ -438,7 +488,7 @@ test.describe('Settings stress test — exercise every control', () => {
         !e.includes('DEVTOOLS') &&
         !e.includes('Extension context invalidated') &&
         !e.includes('Could not establish connection') &&
-        !e.includes('CORS')
+        !e.includes('CORS'),
     );
 
     if (realErrors.length > 0) {

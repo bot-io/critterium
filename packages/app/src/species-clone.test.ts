@@ -44,7 +44,7 @@ function makeSpecies(overrides: Partial<SpeciesConfig> = {}): SpeciesConfig {
 
 /** Mirrors the deepCloneSpeciesConfig logic from main.ts */
 function cloneSpecies(species: SpeciesConfig[]): SpeciesConfig[] {
-  return species.map(sp => ({
+  return species.map((sp) => ({
     name: sp.name,
     count: sp.count,
     color: sp.color,

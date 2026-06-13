@@ -6,3 +6,5 @@ coverage/
 .env
 .env.local
 critterium-*.apk
+test-results/
+playwright-report/

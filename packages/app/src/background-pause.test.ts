@@ -149,7 +149,9 @@ describe('Capacitor event wiring verification', () => {
 
   it('multiple pause events without resume are idempotent', () => {
     let pauseCount = 0;
-    document.addEventListener('pause', () => { pauseCount++; });
+    document.addEventListener('pause', () => {
+      pauseCount++;
+    });
 
     document.dispatchEvent(new Event('pause'));
     document.dispatchEvent(new Event('pause'));

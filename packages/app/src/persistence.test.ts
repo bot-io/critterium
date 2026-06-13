@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { autosave, loadAutosave, clearAutosave, exportConfig, importConfig } from './persistence.js';
+import {
+  autosave,
+  loadAutosave,
+  clearAutosave,
+  exportConfig,
+  importConfig,
+} from './persistence.js';
 import { deserializeConfig } from '@critterium/core';
 
 const AUTOSAVE_KEY = 'critterium-autosave';
@@ -115,8 +121,12 @@ describe('persistence', () => {
     });
 
     const clickSpy = vi.fn();
-    const appendChildSpy = vi.spyOn(document.body, 'appendChild').mockImplementation((node) => node);
-    const removeChildSpy = vi.spyOn(document.body, 'removeChild').mockImplementation((node) => node);
+    const appendChildSpy = vi
+      .spyOn(document.body, 'appendChild')
+      .mockImplementation((node) => node);
+    const removeChildSpy = vi
+      .spyOn(document.body, 'removeChild')
+      .mockImplementation((node) => node);
 
     // Mock createElement to track the anchor
     const origCreateElement = document.createElement.bind(document);
@@ -140,7 +150,10 @@ describe('persistence', () => {
   it('exportConfig appends .json if not present in filename', async () => {
     const createObjectURLSpy = vi.fn(() => 'blob:http://localhost/fake');
     const revokeObjectURLSpy = vi.fn();
-    vi.stubGlobal('URL', { createObjectURL: createObjectURLSpy, revokeObjectURL: revokeObjectURLSpy });
+    vi.stubGlobal('URL', {
+      createObjectURL: createObjectURLSpy,
+      revokeObjectURL: revokeObjectURLSpy,
+    });
 
     let capturedHref = '';
     const origCreateElement = document.createElement.bind(document);
@@ -149,8 +162,12 @@ describe('persistence', () => {
       if (tag === 'a') {
         el.click = vi.fn();
         Object.defineProperty(el, 'download', {
-          set(v: string) { capturedHref = v; },
-          get() { return capturedHref; },
+          set(v: string) {
+            capturedHref = v;
+          },
+          get() {
+            return capturedHref;
+          },
         });
       }
       return el;
@@ -228,7 +245,13 @@ describe('persistence', () => {
   });
 
   it('importConfig resolves null for config with wrong version', async () => {
-    const wrongVersion = JSON.stringify({ version: 2, simulation: {}, species: [], interactionMatrix: [], forces: {} });
+    const wrongVersion = JSON.stringify({
+      version: 2,
+      simulation: {},
+      species: [],
+      interactionMatrix: [],
+      forces: {},
+    });
     const origCreateElement = document.createElement.bind(document);
     vi.spyOn(document, 'createElement').mockImplementation((tag) => {
       const el = origCreateElement(tag);
@@ -360,7 +383,7 @@ describe('persistence', () => {
 
   it('roundtrip: export produces JSON that importConfig validates', async () => {
     // Capture the blob content from exportConfig
-    let capturedBlobContent: string | null = null;
+    const capturedBlobContent: string | null = null;
 
     const createObjectURLSpy = vi.fn((_blob: Blob) => {
       // Read the blob content synchronously for verification
@@ -380,8 +403,12 @@ describe('persistence', () => {
       if (tag === 'a') {
         el.click = vi.fn();
         Object.defineProperty(el, 'download', {
-          set(v: string) { capturedDownload = v; },
-          get() { return capturedDownload; },
+          set(v: string) {
+            capturedDownload = v;
+          },
+          get() {
+            return capturedDownload;
+          },
         });
       }
       return el;
@@ -415,7 +442,10 @@ describe('persistence', () => {
   it('exportConfig does not duplicate .json extension', async () => {
     const createObjectURLSpy = vi.fn(() => 'blob:http://localhost/fake');
     const revokeObjectURLSpy = vi.fn();
-    vi.stubGlobal('URL', { createObjectURL: createObjectURLSpy, revokeObjectURL: revokeObjectURLSpy });
+    vi.stubGlobal('URL', {
+      createObjectURL: createObjectURLSpy,
+      revokeObjectURL: revokeObjectURLSpy,
+    });
 
     let capturedDownload = '';
     const origCreateElement = document.createElement.bind(document);
@@ -424,8 +454,12 @@ describe('persistence', () => {
       if (tag === 'a') {
         el.click = vi.fn();
         Object.defineProperty(el, 'download', {
-          set(v: string) { capturedDownload = v; },
-          get() { return capturedDownload; },
+          set(v: string) {
+            capturedDownload = v;
+          },
+          get() {
+            return capturedDownload;
+          },
         });
       }
       return el;
@@ -441,9 +475,14 @@ describe('persistence', () => {
 
   it('exportConfig handles errors gracefully', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    vi.stubGlobal('Blob', class {
-      constructor() { throw new Error('Blob not available'); }
-    });
+    vi.stubGlobal(
+      'Blob',
+      class {
+        constructor() {
+          throw new Error('Blob not available');
+        }
+      },
+    );
 
     await expect(exportConfig(sampleConfig, 'test')).resolves.toBeUndefined();
     expect(errorSpy).toHaveBeenCalled();

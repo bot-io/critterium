@@ -49,14 +49,22 @@ function predatorPreyConfig(predCount = 5, preyCount = 20, cap = 100): Ecosystem
         diet: defaultDietConfig(), // doesn't eat
       },
     ],
-    interactionRules: [[null, null], [null, null]],
+    interactionRules: [
+      [null, null],
+      [null, null],
+    ],
   };
 }
 
 /** Create a grid large enough for eating tests (max eat radius = 8). */
 function makeGrid(eco: EcosystemWorld): SpatialHashGrid {
   const maxEatRadius = 8; // predator(5) + prey(3)
-  const grid = new SpatialHashGrid(eco.world.width, eco.world.height, maxEatRadius, eco.world.count);
+  const grid = new SpatialHashGrid(
+    eco.world.width,
+    eco.world.height,
+    maxEatRadius,
+    eco.world.count,
+  );
   grid.rebuild(eco.world);
   return grid;
 }
@@ -99,10 +107,14 @@ describe('processEating', () => {
   it('gives energy to predator on eat', () => {
     const cfg = predatorPreyConfig(1, 1, 100);
     const eco = new EcosystemWorld(cfg);
-    eco.world.x[0] = 100; eco.world.y[0] = 100;
-    eco.world.x[1] = 100; eco.world.y[1] = 100;
-    eco.world.vx[0] = 0; eco.world.vy[0] = 0;
-    eco.world.vx[1] = 0; eco.world.vy[1] = 0;
+    eco.world.x[0] = 100;
+    eco.world.y[0] = 100;
+    eco.world.x[1] = 100;
+    eco.world.y[1] = 100;
+    eco.world.vx[0] = 0;
+    eco.world.vy[0] = 0;
+    eco.world.vx[1] = 0;
+    eco.world.vy[1] = 0;
 
     const energyBefore = eco.eco.energy[0];
     const grid = makeGrid(eco);
@@ -114,10 +126,14 @@ describe('processEating', () => {
   it('predator skips eating when energy would exceed maxEnergy', () => {
     const cfg = predatorPreyConfig(1, 1, 100);
     const eco = new EcosystemWorld(cfg);
-    eco.world.x[0] = 100; eco.world.y[0] = 100;
-    eco.world.x[1] = 100; eco.world.y[1] = 100;
-    eco.world.vx[0] = 0; eco.world.vy[0] = 0;
-    eco.world.vx[1] = 0; eco.world.vy[1] = 0;
+    eco.world.x[0] = 100;
+    eco.world.y[0] = 100;
+    eco.world.x[1] = 100;
+    eco.world.y[1] = 100;
+    eco.world.vx[0] = 0;
+    eco.world.vy[0] = 0;
+    eco.world.vx[1] = 0;
+    eco.world.vy[1] = 0;
     // Set predator energy near max
     eco.eco.energy[0] = 195; // max is 200, gain is 30 → 225 > max → should NOT eat
 
@@ -147,10 +163,14 @@ describe('processEating', () => {
   it('prey cannot eat predator', () => {
     const cfg = predatorPreyConfig(1, 1, 100);
     const eco = new EcosystemWorld(cfg);
-    eco.world.x[0] = 100; eco.world.y[0] = 100;
-    eco.world.x[1] = 100; eco.world.y[1] = 100;
-    eco.world.vx[0] = 0; eco.world.vy[0] = 0;
-    eco.world.vx[1] = 0; eco.world.vy[1] = 0;
+    eco.world.x[0] = 100;
+    eco.world.y[0] = 100;
+    eco.world.x[1] = 100;
+    eco.world.y[1] = 100;
+    eco.world.vx[0] = 0;
+    eco.world.vy[0] = 0;
+    eco.world.vx[1] = 0;
+    eco.world.vy[1] = 0;
     // Remove predator's ability to eat, only prey processes
     eco.species[0].diet.canEat.clear();
 
@@ -163,12 +183,18 @@ describe('processEating', () => {
   it('does not eat dead particles', () => {
     const cfg = predatorPreyConfig(1, 2, 100);
     const eco = new EcosystemWorld(cfg);
-    eco.world.x[0] = 100; eco.world.y[0] = 100;
-    eco.world.x[1] = 100; eco.world.y[1] = 100;
-    eco.world.x[2] = 100; eco.world.y[2] = 100;
-    eco.world.vx[0] = 0; eco.world.vy[0] = 0;
-    eco.world.vx[1] = 0; eco.world.vy[1] = 0;
-    eco.world.vx[2] = 0; eco.world.vy[2] = 0;
+    eco.world.x[0] = 100;
+    eco.world.y[0] = 100;
+    eco.world.x[1] = 100;
+    eco.world.y[1] = 100;
+    eco.world.x[2] = 100;
+    eco.world.y[2] = 100;
+    eco.world.vx[0] = 0;
+    eco.world.vy[0] = 0;
+    eco.world.vx[1] = 0;
+    eco.world.vy[1] = 0;
+    eco.world.vx[2] = 0;
+    eco.world.vy[2] = 0;
     // Kill one prey manually
     eco.kill(1);
 
@@ -198,10 +224,14 @@ describe('processEating', () => {
     const cfg = predatorPreyConfig(1, 1, 100);
     const eco = new EcosystemWorld(cfg);
     // Place far apart
-    eco.world.x[0] = 0; eco.world.y[0] = 0;
-    eco.world.x[1] = 700; eco.world.y[1] = 500;
-    eco.world.vx[0] = 0; eco.world.vy[0] = 0;
-    eco.world.vx[1] = 0; eco.world.vy[1] = 0;
+    eco.world.x[0] = 0;
+    eco.world.y[0] = 0;
+    eco.world.x[1] = 700;
+    eco.world.y[1] = 500;
+    eco.world.vx[0] = 0;
+    eco.world.vy[0] = 0;
+    eco.world.vx[1] = 0;
+    eco.world.vy[1] = 0;
 
     const grid = makeGrid(eco);
     const result = processEating(eco, grid);
@@ -213,10 +243,14 @@ describe('processEating', () => {
     const cfg = predatorPreyConfig(1, 1, 100);
     const eco = new EcosystemWorld(cfg);
     // Predator radius=5, prey radius=3 → overlap if dist < 8
-    eco.world.x[0] = 100; eco.world.y[0] = 100;
-    eco.world.x[1] = 107; eco.world.y[1] = 100; // distance = 7, should overlap (< 8)
-    eco.world.vx[0] = 0; eco.world.vy[0] = 0;
-    eco.world.vx[1] = 0; eco.world.vy[1] = 0;
+    eco.world.x[0] = 100;
+    eco.world.y[0] = 100;
+    eco.world.x[1] = 107;
+    eco.world.y[1] = 100; // distance = 7, should overlap (< 8)
+    eco.world.vx[0] = 0;
+    eco.world.vy[0] = 0;
+    eco.world.vx[1] = 0;
+    eco.world.vy[1] = 0;
 
     const grid = makeGrid(eco);
     const result = processEating(eco, grid);
@@ -227,10 +261,14 @@ describe('processEating', () => {
     const cfg = predatorPreyConfig(1, 1, 100);
     const eco = new EcosystemWorld(cfg);
     // distance = 8 (exactly sum of radii 5+3) → no overlap
-    eco.world.x[0] = 100; eco.world.y[0] = 100;
-    eco.world.x[1] = 108; eco.world.y[1] = 100;
-    eco.world.vx[0] = 0; eco.world.vy[0] = 0;
-    eco.world.vx[1] = 0; eco.world.vy[1] = 0;
+    eco.world.x[0] = 100;
+    eco.world.y[0] = 100;
+    eco.world.x[1] = 108;
+    eco.world.y[1] = 100;
+    eco.world.vx[0] = 0;
+    eco.world.vy[0] = 0;
+    eco.world.vx[1] = 0;
+    eco.world.vy[1] = 0;
 
     const grid = makeGrid(eco);
     const result = processEating(eco, grid);
@@ -244,10 +282,14 @@ describe('eating + lifecycle integration', () => {
   it('eaten prey slot can be reused via spawn', () => {
     const cfg = predatorPreyConfig(1, 1, 100);
     const eco = new EcosystemWorld(cfg);
-    eco.world.x[0] = 100; eco.world.y[0] = 100;
-    eco.world.x[1] = 100; eco.world.y[1] = 100;
-    eco.world.vx[0] = 0; eco.world.vy[0] = 0;
-    eco.world.vx[1] = 0; eco.world.vy[1] = 0;
+    eco.world.x[0] = 100;
+    eco.world.y[0] = 100;
+    eco.world.x[1] = 100;
+    eco.world.y[1] = 100;
+    eco.world.vx[0] = 0;
+    eco.world.vy[0] = 0;
+    eco.world.vx[1] = 0;
+    eco.world.vy[1] = 0;
 
     const grid = makeGrid(eco);
     processEating(eco, grid);

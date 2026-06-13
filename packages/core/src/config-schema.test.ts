@@ -17,9 +17,7 @@ import {
   FlowFieldForce,
   VortexForce,
 } from './index.js';
-import {
-  EcosystemWorld,
-} from './ecosystem-world.js';
+import { EcosystemWorld } from './ecosystem-world.js';
 import {
   type EcosystemConfig,
   defaultEnergyConfig,
@@ -118,8 +116,16 @@ describe('serializeConfig', () => {
 
     expect(config.interactionMatrix).toHaveLength(2);
     expect(config.interactionMatrix[0][0]).toBeNull();
-    expect(config.interactionMatrix[0][1]).toEqual({ strength: 30, radius: 100, falloff: 'linear' });
-    expect(config.interactionMatrix[1][0]).toEqual({ strength: -50, radius: 80, falloff: 'inverse' });
+    expect(config.interactionMatrix[0][1]).toEqual({
+      strength: 30,
+      radius: 100,
+      falloff: 'linear',
+    });
+    expect(config.interactionMatrix[1][0]).toEqual({
+      strength: -50,
+      radius: 80,
+      falloff: 'inverse',
+    });
     expect(config.interactionMatrix[1][1]).toBeNull();
   });
 
@@ -139,10 +145,19 @@ describe('serializeConfig', () => {
     expect(config.forces.drag).toEqual({ coefficient: 1.5 });
     expect(config.forces.wander).toEqual({ strength: 60, rate: 4 });
     expect(config.forces.gravity).toEqual({ acceleration: 200 });
-    expect(config.forces.flowField).toEqual({ strength: 50, mode: 'turbulence', angle: 0, turbulenceScale: 0.02 });
+    expect(config.forces.flowField).toEqual({
+      strength: 50,
+      mode: 'turbulence',
+      angle: 0,
+      turbulenceScale: 0.02,
+    });
     expect(config.forces.vortex).toEqual({
-      cx: 200, cy: 150, strength: 100, radialStrength: -30,
-      radius: 250, falloff: 'linear',
+      cx: 200,
+      cy: 150,
+      strength: 100,
+      radialStrength: -30,
+      radius: 250,
+      falloff: 'linear',
     });
   });
 
@@ -229,7 +244,7 @@ describe('deserializeConfig', () => {
     const config: unknown = {
       version: 1,
       simulation: { width: 100, height: 100, boundaryMode: 'bounce', seed: 1, populationCap: 100 },
-      species: [{ name: 'Test' }],  // missing many fields
+      species: [{ name: 'Test' }], // missing many fields
       interactionMatrix: [],
       forces: {},
     };
@@ -248,7 +263,17 @@ describe('deserializeConfig', () => {
 
   it('validates snapshot arrays', () => {
     const config = makeMinimalConfig();
-    config.snapshot = { x: 'not-array', y: [], vx: [], vy: [], type: [], seed: 0, simTime: 0, energy: [], alive: [] } as any;
+    config.snapshot = {
+      x: 'not-array',
+      y: [],
+      vx: [],
+      vy: [],
+      type: [],
+      seed: 0,
+      simTime: 0,
+      energy: [],
+      alive: [],
+    } as any;
     expect(() => deserializeConfig(config)).toThrow('snapshot.x must be an array');
   });
 });

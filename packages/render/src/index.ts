@@ -254,11 +254,7 @@ export class CritteriumRenderer {
    * Sync all particle positions, visibility, and colors from the world state.
    * Call once per frame. Zero allocations in hot path.
    */
-  update(
-    world: World,
-    eco: EcosystemState,
-    dt: number,
-  ): void {
+  update(world: World, eco: EcosystemState, dt: number): void {
     const hwm = world.x.length;
     const len = this.sprites.length;
 
@@ -324,7 +320,7 @@ export class CritteriumRenderer {
       speciesCounts[speciesIdx]++;
 
       // Render skip: only render every Nth particle
-      if (renderSkip > 1 && (i % renderSkip) !== 0) {
+      if (renderSkip > 1 && i % renderSkip !== 0) {
         sprite.visible = false;
         continue;
       }

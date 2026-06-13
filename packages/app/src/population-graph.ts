@@ -102,7 +102,7 @@ export class PopulationGraph {
     ctx.lineWidth = 0.5;
     const gridLines = 3;
     for (let i = 1; i <= gridLines; i++) {
-      const y = h - (h * i / (gridLines + 1));
+      const y = h - (h * i) / (gridLines + 1);
       ctx.beginPath();
       ctx.moveTo(0, y);
       ctx.lineTo(w, y);

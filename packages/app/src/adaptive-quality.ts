@@ -163,9 +163,12 @@ export class AdaptiveQuality {
 
   private makeQuality(level: QualityLevel): QualitySettings {
     switch (level) {
-      case 'high': return { ...QUALITY_HIGH };
-      case 'medium': return { ...QUALITY_MEDIUM };
-      case 'low': return { ...QUALITY_LOW };
+      case 'high':
+        return { ...QUALITY_HIGH };
+      case 'medium':
+        return { ...QUALITY_MEDIUM };
+      case 'low':
+        return { ...QUALITY_LOW };
     }
   }
 }

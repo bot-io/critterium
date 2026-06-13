@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  CritteriumRenderer,
-  type SpeciesVisual,
-} from './index';
+import { CritteriumRenderer, type SpeciesVisual } from './index';
 
 // ─── Tests ────────────────────────────────────────────────────
 
@@ -25,13 +22,11 @@ describe('CritteriumRenderer.create', () => {
   });
 
   it('returns a Promise', () => {
-    const result = CritteriumRenderer.create(
-      [{ color: 0xff0000, radius: 5 }],
-      ['Test'],
-      100,
-    );
+    const result = CritteriumRenderer.create([{ color: 0xff0000, radius: 5 }], ['Test'], 100);
     expect(result).toBeInstanceOf(Promise);
-    result.catch(() => { /* expected in non-DOM */ });
+    result.catch(() => {
+      /* expected in non-DOM */
+    });
   });
 });
 

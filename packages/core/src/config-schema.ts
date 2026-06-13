@@ -422,7 +422,8 @@ export function deserializeConfig(json: unknown): CritteriumConfig {
   // Clamp dimensions to safe ranges
   const w = Number.isFinite(simObj.width) && simObj.width >= 100 ? simObj.width : 800;
   const h = Number.isFinite(simObj.height) && simObj.height >= 100 ? simObj.height : 600;
-  let cap = Number.isFinite(simObj.populationCap) && simObj.populationCap >= 1 ? simObj.populationCap : 600;
+  let cap =
+    Number.isFinite(simObj.populationCap) && simObj.populationCap >= 1 ? simObj.populationCap : 600;
   if (cap > 5000) cap = 5000;
   simObj.width = w;
   simObj.height = h;
@@ -476,8 +477,15 @@ function validateSpecies(sp: Record<string, unknown>, index: number): void {
   const req = (field: string) => {
     if (sp[field] === undefined) throw new Error(`species[${index}].${field} is required`);
   };
-  req('name'); req('count'); req('color'); req('radius');
-  req('initialSpeed'); req('maxSpeed'); req('energy'); req('lifecycle'); req('diet');
+  req('name');
+  req('count');
+  req('color');
+  req('radius');
+  req('initialSpeed');
+  req('maxSpeed');
+  req('energy');
+  req('lifecycle');
+  req('diet');
 
   // Type checks + range clamping to prevent NaN/Infinity/zero-division crashes
   sp.count = clampNum(sp.count, 0, 10000, 1, index, 'count');
@@ -489,9 +497,30 @@ function validateSpecies(sp: Record<string, unknown>, index: number): void {
   if (typeof sp.energy === 'object' && sp.energy !== null) {
     const e = sp.energy as Record<string, unknown>;
     e.maxEnergy = clampNum(e.maxEnergy, 1, 1e6, 100, index, 'energy.maxEnergy');
-    e.initialEnergy = clampNum(e.initialEnergy, 0, e.maxEnergy as number, 50, index, 'energy.initialEnergy');
-    e.reproductionCost = clampNum(e.reproductionCost, 0, e.maxEnergy as number, 20, index, 'energy.reproductionCost');
-    e.movementCostPerSec = clampNum(e.movementCostPerSec, 0, 1000, 2, index, 'energy.movementCostPerSec');
+    e.initialEnergy = clampNum(
+      e.initialEnergy,
+      0,
+      e.maxEnergy as number,
+      50,
+      index,
+      'energy.initialEnergy',
+    );
+    e.reproductionCost = clampNum(
+      e.reproductionCost,
+      0,
+      e.maxEnergy as number,
+      20,
+      index,
+      'energy.reproductionCost',
+    );
+    e.movementCostPerSec = clampNum(
+      e.movementCostPerSec,
+      0,
+      1000,
+      2,
+      index,
+      'energy.movementCostPerSec',
+    );
     e.idleDrainPerSec = clampNum(e.idleDrainPerSec, 0, 1000, 1, index, 'energy.idleDrainPerSec');
   }
 
@@ -499,8 +528,22 @@ function validateSpecies(sp: Record<string, unknown>, index: number): void {
   if (typeof sp.lifecycle === 'object' && sp.lifecycle !== null) {
     const lc = sp.lifecycle as Record<string, unknown>;
     lc.maxAgeSec = clampNum(lc.maxAgeSec, 1, 1e6, 60, index, 'lifecycle.maxAgeSec');
-    lc.starvationDamagePerSec = clampNum(lc.starvationDamagePerSec, 0, 1000, 5, index, 'lifecycle.starvationDamagePerSec');
-    lc.reproductionCooldownSec = clampNum(lc.reproductionCooldownSec, 0, 600, 5, index, 'lifecycle.reproductionCooldownSec');
+    lc.starvationDamagePerSec = clampNum(
+      lc.starvationDamagePerSec,
+      0,
+      1000,
+      5,
+      index,
+      'lifecycle.starvationDamagePerSec',
+    );
+    lc.reproductionCooldownSec = clampNum(
+      lc.reproductionCooldownSec,
+      0,
+      600,
+      5,
+      index,
+      'lifecycle.reproductionCooldownSec',
+    );
   }
 }
 
@@ -508,9 +551,18 @@ function validateSpecies(sp: Record<string, unknown>, index: number): void {
  * Clamp a numeric value to a safe range.
  * Returns `fallback` if the value is NaN, Infinity, or not a number.
  */
-function clampNum(val: unknown, min: number, max: number, fallback: number, speciesIdx: number, field: string): number {
+function clampNum(
+  val: unknown,
+  min: number,
+  max: number,
+  fallback: number,
+  speciesIdx: number,
+  field: string,
+): number {
   if (typeof val !== 'number' || !Number.isFinite(val)) {
-    console.warn(`[Critterium] species[${speciesIdx}].${field} = ${val}, using fallback ${fallback}`);
+    console.warn(
+      `[Critterium] species[${speciesIdx}].${field} = ${val}, using fallback ${fallback}`,
+    );
     return fallback;
   }
   if (val < min) return min;
@@ -672,7 +724,9 @@ function restoreSnapshot(eco: EcosystemWorld, snapshot: JsonSnapshot): void {
     (newEco as { age: Float32Array }).age.set(ecoState.age);
     (newEco as { health: Float32Array }).health.set(ecoState.health);
     (newEco as { alive: Uint8Array }).alive.set(ecoState.alive);
-    (newEco as { reproductionCooldown: Float32Array }).reproductionCooldown.set(ecoState.reproductionCooldown);
+    (newEco as { reproductionCooldown: Float32Array }).reproductionCooldown.set(
+      ecoState.reproductionCooldown,
+    );
     (eco as { eco: typeof ecoState }).eco = newEco;
   }
 

@@ -408,17 +408,19 @@ describe('Hard population cap enforcement', () => {
       boundaryMode: 'bounce',
       seed: 42,
       populationCap: 10,
-      species: [{
-        ...singleSpeciesConfig(8, 10).species[0],
-        count: 8,
-        energy: defaultEnergyConfig({
-          initialEnergy: 200,
-          reproductionCost: 10,
-        }),
-        lifecycle: defaultLifecycleConfig({
-          reproductionCooldownSec: 0, // no cooldown
-        }),
-      }],
+      species: [
+        {
+          ...singleSpeciesConfig(8, 10).species[0],
+          count: 8,
+          energy: defaultEnergyConfig({
+            initialEnergy: 200,
+            reproductionCost: 10,
+          }),
+          lifecycle: defaultLifecycleConfig({
+            reproductionCooldownSec: 0, // no cooldown
+          }),
+        },
+      ],
       interactionRules: [],
     };
     const eco = new EcosystemWorld(cfg);

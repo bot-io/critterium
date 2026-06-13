@@ -37,7 +37,13 @@ import {
 } from '@critterium/core';
 import { CritteriumRenderer, type SpeciesVisual } from '@critterium/render';
 import { createControlsPanel, resetAllSliders, getAllSpeciesCounts } from './controls.js';
-import { autosave, loadAutosave, clearAutosave, exportConfig, importConfig } from './persistence.js';
+import {
+  autosave,
+  loadAutosave,
+  clearAutosave,
+  exportConfig,
+  importConfig,
+} from './persistence.js';
 import { installErrorCapture, getErrors, clearErrors, formatErrors } from './error-log.js';
 import { getBuiltinPreset } from './presets.js';
 import { PopulationGraph } from './population-graph.js';
@@ -121,11 +127,15 @@ const CONFIG: EcosystemConfig = {
   species: SPECIES_CONFIGS,
   interactionRules: [
     // [prey→*]: attract own, flee predator
-    [{ enabledForces: new Set(['attract']), radius: 80, strength: 25, falloff: 'linear' },
-     { enabledForces: new Set(['attract']), radius: 120, strength: -80, falloff: 'linear' }],
+    [
+      { enabledForces: new Set(['attract']), radius: 80, strength: 25, falloff: 'linear' },
+      { enabledForces: new Set(['attract']), radius: 120, strength: -80, falloff: 'linear' },
+    ],
     // [predator→*]: chase prey, repel own
-    [{ enabledForces: new Set(['attract']), radius: 150, strength: 60, falloff: 'linear' },
-     { enabledForces: new Set(['attract']), radius: 50, strength: -20, falloff: 'linear' }],
+    [
+      { enabledForces: new Set(['attract']), radius: 150, strength: 60, falloff: 'linear' },
+      { enabledForces: new Set(['attract']), radius: 50, strength: -20, falloff: 'linear' },
+    ],
   ],
 };
 
@@ -155,7 +165,7 @@ function buildInteractionMatrix(): InteractionMatrix {
 // ─── Deep clone helper ────────────────────────────────────────
 
 function deepCloneSpeciesConfig(species: SpeciesConfig[]): SpeciesConfig[] {
-  return species.map(sp => ({
+  return species.map((sp) => ({
     name: sp.name,
     count: sp.count,
     color: sp.color,
@@ -191,7 +201,9 @@ function getSavedPresets(): string[] {
   try {
     const json = localStorage.getItem(PRESETS_KEY);
     return json ? Object.keys(JSON.parse(json)) : [];
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
 
 function savePreset(name: string, config: CritteriumConfig): void {
@@ -211,7 +223,9 @@ function loadPreset(name: string): CritteriumConfig | null {
     if (!json) return null;
     const presets = JSON.parse(json);
     return presets[name] ?? null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 function deletePreset(name: string): void {
@@ -221,7 +235,9 @@ function deletePreset(name: string): void {
     const presets = JSON.parse(json);
     delete presets[name];
     localStorage.setItem(PRESETS_KEY, JSON.stringify(presets));
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 // ─── Error boundary ──────────────────────────────────────────
@@ -234,7 +250,8 @@ function onError(err: unknown): void {
   const el = document.getElementById('app');
   if (el) {
     const msg = document.createElement('div');
-    msg.style.cssText = 'position:fixed;top:0;left:0;right:0;padding:12px;background:#cc0000;color:#fff;font:14px monospace;z-index:9999;white-space:pre-wrap;';
+    msg.style.cssText =
+      'position:fixed;top:0;left:0;right:0;padding:12px;background:#cc0000;color:#fff;font:14px monospace;z-index:9999;white-space:pre-wrap;';
     msg.textContent = `Critterium crashed:\n${err instanceof Error ? err.message + '\n' + err.stack : String(err)}`;
     el.appendChild(msg);
   }
@@ -243,7 +260,8 @@ function onError(err: unknown): void {
 /** Show a non-blocking performance warning toast. */
 function showPerfWarning(): void {
   const toast = document.createElement('div');
-  toast.style.cssText = 'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);padding:8px 16px;background:rgba(200,120,0,0.9);color:#fff;font:13px "SF Mono","Fira Code","Consolas",monospace;border-radius:6px;z-index:9999;pointer-events:none;transition:opacity 1s ease-out;white-space:nowrap;';
+  toast.style.cssText =
+    'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);padding:8px 16px;background:rgba(200,120,0,0.9);color:#fff;font:13px "SF Mono","Fira Code","Consolas",monospace;border-radius:6px;z-index:9999;pointer-events:none;transition:opacity 1s ease-out;white-space:nowrap;';
   toast.textContent = '⚠ Low performance detected — effects reduced';
   document.body.appendChild(toast);
   // Auto-dismiss after 4 seconds
@@ -283,7 +301,9 @@ function buildMatrixValues(
     const row: Array<{ strength: number; radius: number; falloff: string } | null> = [];
     for (let j = 0; j < n; j++) {
       const entry = matrix.get(i, j);
-      row.push(entry ? { strength: entry.strength, radius: entry.radius, falloff: entry.falloff } : null);
+      row.push(
+        entry ? { strength: entry.strength, radius: entry.radius, falloff: entry.falloff } : null,
+      );
     }
     result.push(row);
   }
@@ -374,12 +394,12 @@ async function main(): Promise<void> {
   );
 
   // 4. Create renderer — derive visuals from liveConfig (supports preset-loaded species)
-  const activeSpeciesNames = liveConfig.species.map(s => s.name);
-  const activeSpeciesVisuals = liveConfig.species.map(s => {
+  const activeSpeciesNames = liveConfig.species.map((s) => s.name);
+  const activeSpeciesVisuals = liveConfig.species.map((s) => {
     const hex = s.color.replace('#', '');
     return { color: parseInt(hex, 16), radius: s.radius };
   });
-  const speciesMaxEnergy = new Float32Array(liveConfig.species.map(s => s.energy.maxEnergy));
+  const speciesMaxEnergy = new Float32Array(liveConfig.species.map((s) => s.energy.maxEnergy));
   const renderer = await CritteriumRenderer.create(
     activeSpeciesVisuals,
     activeSpeciesNames,
@@ -389,12 +409,14 @@ async function main(): Promise<void> {
 
   /** Sync renderer species visuals from liveConfig */
   function syncRendererVisuals(): void {
-    const visuals: SpeciesVisual[] = liveConfig.species.map(s => {
+    const visuals: SpeciesVisual[] = liveConfig.species.map((s) => {
       const hex = s.color.replace('#', '');
       return { color: parseInt(hex, 16), radius: s.radius };
     });
     renderer.updateSpeciesVisuals(visuals);
-    renderer.setSpeciesMaxEnergy(new Float32Array(liveConfig.species.map(s => s.energy.maxEnergy)));
+    renderer.setSpeciesMaxEnergy(
+      new Float32Array(liveConfig.species.map((s) => s.energy.maxEnergy)),
+    );
   }
 
   // Attach canvas to DOM
@@ -405,7 +427,8 @@ async function main(): Promise<void> {
 
   // 4b. Create always-visible FPS counter
   const fpsEl = document.createElement('div');
-  fpsEl.style.cssText = 'position:fixed;top:8px;left:8px;font:12px "SF Mono","Fira Code","Consolas",monospace;color:#fff;background:rgba(0,0,0,0.5);padding:3px 7px;border-radius:4px;z-index:20;pointer-events:none;';
+  fpsEl.style.cssText =
+    'position:fixed;top:8px;left:8px;font:12px "SF Mono","Fira Code","Consolas",monospace;color:#fff;background:rgba(0,0,0,0.5);padding:3px 7px;border-radius:4px;z-index:20;pointer-events:none;';
   fpsEl.textContent = 'FPS: --';
   document.body.appendChild(fpsEl);
 
@@ -417,7 +440,7 @@ async function main(): Promise<void> {
   const popGraphCanvas = document.createElement('canvas');
   document.body.appendChild(popGraphCanvas);
   const popGraph = new PopulationGraph(popGraphCanvas, {
-    speciesColors: activeSpeciesVisuals.map(v => v.color),
+    speciesColors: activeSpeciesVisuals.map((v) => v.color),
     maxHistorySec: 30,
   });
 
@@ -453,9 +476,7 @@ async function main(): Promise<void> {
   let accumulator = 0;
   let lastTime = performance.now();
   let totalSimTime = 0;
-  let stepCount = 0;
   let paused = false;
-  let extinctionCount = 0;
 
   // Pre-allocated species counts array (avoid per-frame allocation)
   let speciesCounts = new Int32Array(liveConfig.species.length);
@@ -482,17 +503,23 @@ async function main(): Promise<void> {
         for (let j = 0; j < n; j++) {
           const cell = matrixState[i]?.[j];
           if (cell) {
-            interactionMatrix.set(i, j, { strength: cell.strength, radius: cell.radius, falloff: cell.falloff as FalloffType });
+            interactionMatrix.set(i, j, {
+              strength: cell.strength,
+              radius: cell.radius,
+              falloff: cell.falloff as FalloffType,
+            });
           }
         }
       }
       (pairwiseForce as { matrix: InteractionMatrix }).matrix = interactionMatrix;
 
       // Recreate spatial hash grid if cap or world dimensions changed
-      if (grid.cellSize !== 150 ||
-          grid.cols !== Math.ceil(liveConfig.width / 150) ||
-          grid.rows !== Math.ceil(liveConfig.height / 150) ||
-          eco.config.populationCap !== liveConfig.populationCap) {
+      if (
+        grid.cellSize !== 150 ||
+        grid.cols !== Math.ceil(liveConfig.width / 150) ||
+        grid.rows !== Math.ceil(liveConfig.height / 150) ||
+        eco.config.populationCap !== liveConfig.populationCap
+      ) {
         grid = new SpatialHashGrid(
           liveConfig.width,
           liveConfig.height,
@@ -516,15 +543,19 @@ async function main(): Promise<void> {
 
       // Update population graph colors and reset history
       popGraph.reset();
-      popGraph.setColors(liveConfig.species.map(s => {
-        const hex = s.color;
-        return parseInt(hex.slice(1), 16);
-      }));
+      popGraph.setColors(
+        liveConfig.species.map((s) => {
+          const hex = s.color;
+          return parseInt(hex.slice(1), 16);
+        }),
+      );
 
       // Clear stale autosave
       clearAutosave();
 
-      console.log(`[Critterium] Simulation rebuilt: ${eco.aliveCount} particles, cap ${liveConfig.populationCap}`);
+      console.log(
+        `[Critterium] Simulation rebuilt: ${eco.aliveCount} particles, cap ${liveConfig.populationCap}`,
+      );
     } catch (err) {
       console.error('[Critterium] rebuildSimulation failed:', err);
       onError(err);
@@ -532,7 +563,10 @@ async function main(): Promise<void> {
   }
 
   function getCurrentConfig(): CritteriumConfig {
-    const activeForces: Array<{ readonly id: string; readonly params: Record<string, unknown> }> = [dragForce, wanderForce];
+    const activeForces: Array<{ readonly id: string; readonly params: Record<string, unknown> }> = [
+      dragForce,
+      wanderForce,
+    ];
     if (pointerEnabled) activeForces.push(pointerForce);
     return serializeConfig(eco, interactionMatrix, activeForces);
   }
@@ -631,14 +665,12 @@ async function main(): Promise<void> {
         totalSimTime += dt;
         accumulator -= dt;
         stepsThisFrame++;
-        stepCount++;
       }
 
       // Extinction detection: if all particles died after sim has been running,
       // auto-reseed from current config (avoids empty screen with no way back)
       if (eco.aliveCount === 0 && totalSimTime > 2 && !paused) {
         console.log('[Critterium] Extinction detected — auto-reseeding');
-        extinctionCount++;
         rebuildSimulation();
         totalSimTime = 0;
       }
@@ -720,17 +752,25 @@ async function main(): Promise<void> {
     pointerDown = false;
     pointerForce.setPosition(0, 0, false);
   });
-  canvas.addEventListener('touchstart', (e) => {
-    if (!pointerEnabled) return;
-    e.preventDefault();
-    pointerDown = true;
-    if (e.touches[0]) updatePointerFromEvent(e.touches[0]);
-  }, { passive: false });
-  canvas.addEventListener('touchmove', (e) => {
-    if (!pointerEnabled) return;
-    e.preventDefault();
-    if (e.touches[0]) updatePointerFromEvent(e.touches[0]);
-  }, { passive: false });
+  canvas.addEventListener(
+    'touchstart',
+    (e) => {
+      if (!pointerEnabled) return;
+      e.preventDefault();
+      pointerDown = true;
+      if (e.touches[0]) updatePointerFromEvent(e.touches[0]);
+    },
+    { passive: false },
+  );
+  canvas.addEventListener(
+    'touchmove',
+    (e) => {
+      if (!pointerEnabled) return;
+      e.preventDefault();
+      if (e.touches[0]) updatePointerFromEvent(e.touches[0]);
+    },
+    { passive: false },
+  );
   canvas.addEventListener('touchend', () => {
     pointerDown = false;
     pointerForce.setPosition(0, 0, false);
@@ -744,7 +784,7 @@ async function main(): Promise<void> {
   const controlsPanel = createControlsPanel({
     speciesCount: nSpecies,
     speciesNames: activeSpeciesNames,
-    speciesColors: liveConfig.species.map(s => s.color),
+    speciesColors: liveConfig.species.map((s) => s.color),
     initialSpeciesValues,
     maxCount: liveConfig.populationCap,
     initialMatrixValues,
@@ -770,9 +810,17 @@ async function main(): Promise<void> {
         speciesValues: buildSpeciesValues(liveConfig.species),
         simValues: { speed: speedMultiplier, popCap: liveConfig.populationCap },
         forceValues: {
-          drag: { coefficient: (dragForce.params as Record<string, unknown>).coefficient as number },
-          wander: { strength: (wanderForce.params as Record<string, unknown>).strength as number, rate: (wanderForce.params as Record<string, unknown>).rate as number },
-          pointer: { strength: (pointerForce.params as Record<string, unknown>).strength as number, radius: (pointerForce.params as Record<string, unknown>).radius as number },
+          drag: {
+            coefficient: (dragForce.params as Record<string, unknown>).coefficient as number,
+          },
+          wander: {
+            strength: (wanderForce.params as Record<string, unknown>).strength as number,
+            rate: (wanderForce.params as Record<string, unknown>).rate as number,
+          },
+          pointer: {
+            strength: (pointerForce.params as Record<string, unknown>).strength as number,
+            radius: (pointerForce.params as Record<string, unknown>).radius as number,
+          },
         },
       });
     },
@@ -822,8 +870,20 @@ async function main(): Promise<void> {
       }
     },
 
-    onMatrixChange: (i: number, j: number, strength: number, minRadius: number, maxRadius: number, falloff: string) => {
-      const entry: InteractionEntry = { strength, minRadius, radius: maxRadius, falloff: falloff as 'linear' | 'inverse' | 'constant' };
+    onMatrixChange: (
+      i: number,
+      j: number,
+      strength: number,
+      minRadius: number,
+      maxRadius: number,
+      falloff: string,
+    ) => {
+      const entry: InteractionEntry = {
+        strength,
+        minRadius,
+        radius: maxRadius,
+        falloff: falloff as 'linear' | 'inverse' | 'constant',
+      };
       interactionMatrix.set(i, j, entry);
       // Update tracked state
       if (!matrixState[i]) matrixState[i] = [];
@@ -988,7 +1048,7 @@ async function main(): Promise<void> {
           seed: liveConfig.seed,
           populationCap: liveConfig.populationCap,
         },
-        species: liveConfig.species.map(sp => ({
+        species: liveConfig.species.map((sp) => ({
           name: sp.name,
           count: sp.count,
           color: sp.color,
@@ -1010,10 +1070,15 @@ async function main(): Promise<void> {
           },
           diet: { canEat: Array.from(sp.diet.canEat) },
         })),
-        interactionMatrix: matrixState.map(row =>
-          row.map(cell => cell ? { strength: cell.strength, radius: cell.radius, falloff: cell.falloff } : null)
+        interactionMatrix: matrixState.map((row) =>
+          row.map((cell) =>
+            cell ? { strength: cell.strength, radius: cell.radius, falloff: cell.falloff } : null,
+          ),
         ),
-        forces: { drag: { id: 'drag', params: { strength: dragForce.params.strength } }, wander: { id: 'wander', params: { strength: wanderForce.params.strength } } },
+        forces: {
+          drag: { id: 'drag', params: { strength: dragForce.params.strength } },
+          wander: { id: 'wander', params: { strength: wanderForce.params.strength } },
+        },
       };
       localStorage.setItem('critterium-pending-preset', JSON.stringify(pendingConfig));
       window.location.reload();
@@ -1052,7 +1117,7 @@ async function main(): Promise<void> {
           seed: liveConfig.seed,
           populationCap: liveConfig.populationCap,
         },
-        species: liveConfig.species.map(sp => ({
+        species: liveConfig.species.map((sp) => ({
           name: sp.name,
           count: sp.count,
           color: sp.color,
@@ -1074,10 +1139,15 @@ async function main(): Promise<void> {
           },
           diet: { canEat: Array.from(sp.diet.canEat) },
         })),
-        interactionMatrix: matrixState.map(row =>
-          row.map(cell => cell ? { strength: cell.strength, radius: cell.radius, falloff: cell.falloff } : null)
+        interactionMatrix: matrixState.map((row) =>
+          row.map((cell) =>
+            cell ? { strength: cell.strength, radius: cell.radius, falloff: cell.falloff } : null,
+          ),
         ),
-        forces: { drag: { id: 'drag', params: { strength: dragForce.params.strength } }, wander: { id: 'wander', params: { strength: wanderForce.params.strength } } },
+        forces: {
+          drag: { id: 'drag', params: { strength: dragForce.params.strength } },
+          wander: { id: 'wander', params: { strength: wanderForce.params.strength } },
+        },
       };
       localStorage.setItem('critterium-pending-preset', JSON.stringify(pendingConfig));
       window.location.reload();
@@ -1097,34 +1167,44 @@ async function main(): Promise<void> {
       const text = formatErrors();
       // Show in a modal overlay
       const overlay = document.createElement('div');
-      overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+      overlay.style.cssText =
+        'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
       const box = document.createElement('div');
-      box.style.cssText = 'background:#1a1a1a;color:#ff6666;border:1px solid #ff4444;border-radius:8px;padding:16px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column;';
+      box.style.cssText =
+        'background:#1a1a1a;color:#ff6666;border:1px solid #ff4444;border-radius:8px;padding:16px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column;';
       const header = document.createElement('div');
-      header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;';
+      header.style.cssText =
+        'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;';
       const title = document.createElement('span');
       title.textContent = `Error Log (${errs.length} errors)`;
       title.style.cssText = 'font-weight:bold;color:#fff;';
       header.appendChild(title);
       const copyBtn = document.createElement('button');
       copyBtn.textContent = '📋 Copy';
-      copyBtn.style.cssText = 'background:#333;color:#fff;border:1px solid #555;padding:4px 12px;border-radius:4px;cursor:pointer;margin-right:4px;';
+      copyBtn.style.cssText =
+        'background:#333;color:#fff;border:1px solid #555;padding:4px 12px;border-radius:4px;cursor:pointer;margin-right:4px;';
       copyBtn.addEventListener('click', () => {
-        navigator.clipboard.writeText(text).then(() => { copyBtn.textContent = '✓ Copied!'; });
+        navigator.clipboard.writeText(text).then(() => {
+          copyBtn.textContent = '✓ Copied!';
+        });
       });
       header.appendChild(copyBtn);
       const closeBtn = document.createElement('button');
       closeBtn.textContent = '✕';
-      closeBtn.style.cssText = 'background:#333;color:#fff;border:1px solid #555;padding:4px 8px;border-radius:4px;cursor:pointer;';
+      closeBtn.style.cssText =
+        'background:#333;color:#fff;border:1px solid #555;padding:4px 8px;border-radius:4px;cursor:pointer;';
       closeBtn.addEventListener('click', () => overlay.remove());
       header.appendChild(closeBtn);
       box.appendChild(header);
       const pre = document.createElement('pre');
-      pre.style.cssText = 'overflow:auto;flex:1;font:11px "SF Mono","Fira Code","Consolas",monospace;white-space:pre-wrap;word-break:break-all;';
+      pre.style.cssText =
+        'overflow:auto;flex:1;font:11px "SF Mono","Fira Code","Consolas",monospace;white-space:pre-wrap;word-break:break-all;';
       pre.textContent = text;
       box.appendChild(pre);
       overlay.appendChild(box);
-      overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) overlay.remove();
+      });
       document.body.appendChild(overlay);
     },
 
@@ -1244,7 +1324,9 @@ async function main(): Promise<void> {
           speciesValues: buildSpeciesValues(liveConfig.species),
           simValues: { speed: speedMultiplier, popCap: liveConfig.populationCap },
           forceValues: {
-            drag: { coefficient: (dragForce.params as Record<string, unknown>).coefficient as number },
+            drag: {
+              coefficient: (dragForce.params as Record<string, unknown>).coefficient as number,
+            },
             wander: {
               strength: (wanderForce.params as Record<string, unknown>).strength as number,
               rate: (wanderForce.params as Record<string, unknown>).rate as number,

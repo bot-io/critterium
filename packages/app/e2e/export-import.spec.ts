@@ -148,30 +148,44 @@ test.describe('CRT-14: Export/Import config files', () => {
         const cfg = JSON.parse(cfgJson);
         // Basic structural validation matching what deserializeConfig checks
         if (cfg.version !== 1) return { valid: false, error: 'wrong version' };
-        if (!cfg.simulation || typeof cfg.simulation.width !== 'number') return { valid: false, error: 'missing simulation' };
-        if (!Array.isArray(cfg.species) || cfg.species.length === 0) return { valid: false, error: 'missing species' };
-        if (!Array.isArray(cfg.interactionMatrix)) return { valid: false, error: 'missing interactionMatrix' };
+        if (!cfg.simulation || typeof cfg.simulation.width !== 'number')
+          return { valid: false, error: 'missing simulation' };
+        if (!Array.isArray(cfg.species) || cfg.species.length === 0)
+          return { valid: false, error: 'missing species' };
+        if (!Array.isArray(cfg.interactionMatrix))
+          return { valid: false, error: 'missing interactionMatrix' };
         if (!cfg.forces) return { valid: false, error: 'missing forces' };
 
         // Verify first species has required fields
         const sp = cfg.species[0];
         if (typeof sp.name !== 'string') return { valid: false, error: 'species[0] missing name' };
-        if (typeof sp.count !== 'number') return { valid: false, error: 'species[0] missing count' };
-        if (typeof sp.radius !== 'number') return { valid: false, error: 'species[0] missing radius' };
-        if (typeof sp.initialSpeed !== 'number') return { valid: false, error: 'species[0] missing initialSpeed' };
-        if (typeof sp.maxSpeed !== 'number') return { valid: false, error: 'species[0] missing maxSpeed' };
+        if (typeof sp.count !== 'number')
+          return { valid: false, error: 'species[0] missing count' };
+        if (typeof sp.radius !== 'number')
+          return { valid: false, error: 'species[0] missing radius' };
+        if (typeof sp.initialSpeed !== 'number')
+          return { valid: false, error: 'species[0] missing initialSpeed' };
+        if (typeof sp.maxSpeed !== 'number')
+          return { valid: false, error: 'species[0] missing maxSpeed' };
 
         // Verify snapshot data is consistent
         if (cfg.snapshot) {
           if (!Array.isArray(cfg.snapshot.x) || cfg.snapshot.x.length === 0) {
             return { valid: false, error: 'snapshot missing x array' };
           }
-          if (cfg.snapshot.x.length !== cfg.snapshot.y.length) return { valid: false, error: 'snapshot x/y length mismatch' };
-          if (typeof cfg.snapshot.seed !== 'number') return { valid: false, error: 'snapshot missing seed' };
-          if (typeof cfg.snapshot.simTime !== 'number') return { valid: false, error: 'snapshot missing simTime' };
+          if (cfg.snapshot.x.length !== cfg.snapshot.y.length)
+            return { valid: false, error: 'snapshot x/y length mismatch' };
+          if (typeof cfg.snapshot.seed !== 'number')
+            return { valid: false, error: 'snapshot missing seed' };
+          if (typeof cfg.snapshot.simTime !== 'number')
+            return { valid: false, error: 'snapshot missing simTime' };
         }
 
-        return { valid: true, speciesCount: cfg.species.length, particleCount: cfg.snapshot?.x?.length };
+        return {
+          valid: true,
+          speciesCount: cfg.species.length,
+          particleCount: cfg.snapshot?.x?.length,
+        };
       } catch (err) {
         return { valid: false, error: String(err) };
       }

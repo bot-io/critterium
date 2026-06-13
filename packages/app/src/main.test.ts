@@ -22,7 +22,7 @@ describe('app sanity', () => {
 
     // Asymmetric: different strengths and signs
     expect(Math.sign(preyToPredator)).toBe(-1); // repel = flee
-    expect(Math.sign(predatorToPrey)).toBe(1);  // attract = chase
+    expect(Math.sign(predatorToPrey)).toBe(1); // attract = chase
     expect(preyToPredator).not.toBe(-predatorToPrey); // not symmetric
   });
 

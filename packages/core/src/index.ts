@@ -194,10 +194,22 @@ export class World {
     for (let i = 0; i < this.count; i++) {
       if (this.boundaryMode === 'bounce') {
         // Hard bounce: reflect position and velocity at boundaries
-        if (this.x[i] < 0) { this.x[i] = -this.x[i]; this.vx[i] = -this.vx[i]; }
-        if (this.x[i] > this.width) { this.x[i] = 2 * this.width - this.x[i]; this.vx[i] = -this.vx[i]; }
-        if (this.y[i] < 0) { this.y[i] = -this.y[i]; this.vy[i] = -this.vy[i]; }
-        if (this.y[i] > this.height) { this.y[i] = 2 * this.height - this.y[i]; this.vy[i] = -this.vy[i]; }
+        if (this.x[i] < 0) {
+          this.x[i] = -this.x[i];
+          this.vx[i] = -this.vx[i];
+        }
+        if (this.x[i] > this.width) {
+          this.x[i] = 2 * this.width - this.x[i];
+          this.vx[i] = -this.vx[i];
+        }
+        if (this.y[i] < 0) {
+          this.y[i] = -this.y[i];
+          this.vy[i] = -this.vy[i];
+        }
+        if (this.y[i] > this.height) {
+          this.y[i] = 2 * this.height - this.y[i];
+          this.vy[i] = -this.vy[i];
+        }
 
         // Soft boundary repulsion: gentle inward push near walls to prevent
         // edge clustering. Particles near the wall receive an asymmetric
@@ -419,8 +431,12 @@ export class SpatialHashGrid {
    *                 system where predator and prey may overlap perfectly.
    */
   queryRadius(
-    px: number, py: number, radius: number,
-    xArr: Float32Array, yArr: Float32Array, count: number,
+    px: number,
+    py: number,
+    radius: number,
+    xArr: Float32Array,
+    yArr: Float32Array,
+    count: number,
     callback: (idx: number, dx: number, dy: number, distSq: number) => void,
     selfIdx = -1,
   ): void {
@@ -473,9 +489,14 @@ export class SpatialHashGrid {
    * Returns the count of neighbors found.
    */
   queryRadiusToArray(
-    px: number, py: number, radius: number,
-    xArr: Float32Array, yArr: Float32Array, count: number,
-    outIndices: Int32Array, maxResults: number,
+    px: number,
+    py: number,
+    radius: number,
+    xArr: Float32Array,
+    yArr: Float32Array,
+    count: number,
+    outIndices: Int32Array,
+    maxResults: number,
   ): number {
     let n = 0;
     this.queryRadius(px, py, radius, xArr, yArr, count, (idx) => {
@@ -505,8 +526,12 @@ export class SpatialHashGrid {
  * Returns sorted array of particle indices within radius (excluding self).
  */
 export function bruteForceNeighbors(
-  px: number, py: number, radius: number,
-  xArr: Float32Array, yArr: Float32Array, count: number,
+  px: number,
+  py: number,
+  radius: number,
+  xArr: Float32Array,
+  yArr: Float32Array,
+  count: number,
 ): number[] {
   const rSq = radius * radius;
   const result: number[] = [];
@@ -954,7 +979,10 @@ export class WanderForce implements Force {
       // Phase evolves based on index (unique per particle) and time.
       const noiseInput = simTime * rate + i * 7.31;
       // Smooth noise value in [-1, 1]
-      const noise = Math.sin(noiseInput) * 0.5 + Math.sin(noiseInput * 2.17 + 1.3) * 0.3 + Math.sin(noiseInput * 0.73 + 2.1) * 0.2;
+      const noise =
+        Math.sin(noiseInput) * 0.5 +
+        Math.sin(noiseInput * 2.17 + 1.3) * 0.3 +
+        Math.sin(noiseInput * 0.73 + 2.1) * 0.2;
 
       // Update wander angle: integrate noise
       this.angles[i] += noise * rate * dt;
@@ -1015,7 +1043,12 @@ export class FlowFieldForce implements Force {
 
   private customField: FlowFieldFn | null = null;
 
-  constructor(strength: number = 50, mode: string = 'uniform', angle: number = 0, turbulenceScale: number = 0.01) {
+  constructor(
+    strength: number = 50,
+    mode: string = 'uniform',
+    angle: number = 0,
+    turbulenceScale: number = 0.01,
+  ) {
     this.params = { strength, mode, angle, turbulenceScale };
   }
 
@@ -1034,8 +1067,10 @@ export class FlowFieldForce implements Force {
         return [Math.cos(angle), Math.sin(angle)];
       case 'turbulence': {
         // Pseudo-turbulence: sinusoidal field that varies spatially
-        const fx = Math.sin(y * turbulenceScale * 6.28) + Math.cos((x + y) * turbulenceScale * 3.14);
-        const fy = Math.cos(x * turbulenceScale * 6.28) + Math.sin((x - y) * turbulenceScale * 3.14);
+        const fx =
+          Math.sin(y * turbulenceScale * 6.28) + Math.cos((x + y) * turbulenceScale * 3.14);
+        const fy =
+          Math.cos(x * turbulenceScale * 6.28) + Math.sin((x - y) * turbulenceScale * 3.14);
         return [fx, fy];
       }
       default:
@@ -1164,8 +1199,23 @@ export class VortexForce implements Force {
 }
 
 // ─── Re-exports for barrel import ────────────────────────────────
-export type { EcosystemConfig, SpeciesConfig, EnergyConfig, LifecycleConfig, DietConfig, StaminaConfig, InteractionRule as EcoInteractionRule } from './ecosystem.js';
-export { ALIVE, DEAD, defaultEnergyConfig, defaultLifecycleConfig, defaultDietConfig, defaultStaminaConfig } from './ecosystem.js';
+export type {
+  EcosystemConfig,
+  SpeciesConfig,
+  EnergyConfig,
+  LifecycleConfig,
+  DietConfig,
+  StaminaConfig,
+  InteractionRule as EcoInteractionRule,
+} from './ecosystem.js';
+export {
+  ALIVE,
+  DEAD,
+  defaultEnergyConfig,
+  defaultLifecycleConfig,
+  defaultDietConfig,
+  defaultStaminaConfig,
+} from './ecosystem.js';
 export type { EcosystemState } from './ecosystem.js';
 export { EcosystemWorld } from './ecosystem-world.js';
 export type { LifecycleResult } from './ecosystem-world.js';
@@ -1173,9 +1223,22 @@ export { processEating } from './eating.js';
 export type { EatingResult } from './eating.js';
 export { processReproduction } from './lifecycle.js';
 export type { EcosystemStepResult } from './lifecycle.js';
-export { InteractionRuleMatrix, FORCE_FLAGS, NO_INTERACTION, forceFlags, decodeForceFlags } from './interaction-rules.js';
+export {
+  InteractionRuleMatrix,
+  FORCE_FLAGS,
+  NO_INTERACTION,
+  forceFlags,
+  decodeForceFlags,
+} from './interaction-rules.js';
 export type { ForceType, InteractionRule as RuleInteractionRule } from './interaction-rules.js';
 export { PointerForce } from './pointer-force.js';
 export type { PointerParams } from './pointer-force.js';
 export { serializeConfig, deserializeConfig, applyConfig } from './config-schema.js';
-export type { CritteriumConfig, JsonSpeciesConfig, JsonForcesConfig, JsonInteractionEntry, JsonSnapshot, AppliedConfig } from './config-schema.js';
+export type {
+  CritteriumConfig,
+  JsonSpeciesConfig,
+  JsonForcesConfig,
+  JsonInteractionEntry,
+  JsonSnapshot,
+  AppliedConfig,
+} from './config-schema.js';
