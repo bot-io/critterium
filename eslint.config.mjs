@@ -12,7 +12,7 @@ export default tseslint.config(
       '**/coverage/**',
       '*.apk',
       '**/*.config.{js,ts,mjs,cjs}',
-      'eslint.config.js',
+      'eslint.config.mjs',
     ],
   },
 
