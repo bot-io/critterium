@@ -24,6 +24,7 @@ export interface ControlsPanelOptions {
   onClearMatrix?: () => void;
   onSpeciesChange?: (speciesIndex: number, param: string, value: number | string | boolean) => void;
   onAddSpecies?: () => void;
+  onDeleteSpecies?: (speciesIndex: number) => void;
   onExport?: () => void;
   onImport?: () => void;
   onSavePreset?: (name: string) => void;
@@ -554,6 +555,21 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
         if (tabButtons[speciesIdx]) tabButtons[speciesIdx].textContent = nameInput.value;
       });
       nameRow.appendChild(nameInput);
+
+      // Delete species button (only if more than 1 species)
+      if (n > 1) {
+        const delBtn = el('button', 'crit-btn crit-btn-small');
+        delBtn.textContent = '✕';
+        delBtn.title = 'Delete species';
+        delBtn.style.cssText = 'margin-left:auto; color:#ff6666; font-size:12px; padding:2px 6px; min-width:auto;';
+        delBtn.addEventListener('click', () => {
+          if (confirm(`Delete "${names[si]}"?`)) {
+            opts.onDeleteSpecies?.(speciesIdx);
+          }
+        });
+        nameRow.appendChild(delBtn);
+      }
+
       panel.appendChild(nameRow);
 
       // Count slider + Apply button

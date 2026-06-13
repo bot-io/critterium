@@ -981,6 +981,70 @@ async function main(): Promise<void> {
       window.location.reload();
     },
 
+    onDeleteSpecies: (speciesIndex: number) => {
+      if (liveConfig.species.length <= 1) return;
+      // Remove species from config
+      liveConfig.species.splice(speciesIndex, 1);
+      nSpecies = liveConfig.species.length;
+      // Remove from matrixState: delete row and column
+      matrixState.splice(speciesIndex, 1);
+      for (const row of matrixState) {
+        row.splice(speciesIndex, 1);
+      }
+      // Fix diet canEat references (shift indices > speciesIndex down by 1, remove speciesIndex)
+      for (const sp of liveConfig.species) {
+        const newCanEat = new Set<number>();
+        for (const idx of sp.diet.canEat) {
+          if (idx === speciesIndex) continue;
+          newCanEat.add(idx > speciesIndex ? idx - 1 : idx);
+        }
+        sp.diet.canEat = newCanEat;
+      }
+      // Fix energyGainPerPrey: remove entry at speciesIndex
+      for (const sp of liveConfig.species) {
+        sp.energy.energyGainPerPrey.splice(speciesIndex, 1);
+      }
+      // Build pending config and reload
+      const pendingConfig = {
+        version: 1 as const,
+        simulation: {
+          width: liveConfig.width,
+          height: liveConfig.height,
+          boundaryMode: liveConfig.boundaryMode,
+          seed: liveConfig.seed,
+          populationCap: liveConfig.populationCap,
+        },
+        species: liveConfig.species.map(sp => ({
+          name: sp.name,
+          count: sp.count,
+          color: sp.color,
+          radius: sp.radius,
+          initialSpeed: sp.initialSpeed,
+          maxSpeed: sp.maxSpeed,
+          energy: {
+            maxEnergy: sp.energy.maxEnergy,
+            initialEnergy: sp.energy.initialEnergy,
+            movementCostPerSec: sp.energy.movementCostPerSec,
+            reproductionCost: sp.energy.reproductionCost,
+            idleDrainPerSec: sp.energy.idleDrainPerSec,
+            energyGainPerPrey: [...sp.energy.energyGainPerPrey],
+          },
+          lifecycle: {
+            maxAgeSec: sp.lifecycle.maxAgeSec,
+            starvationDamagePerSec: sp.lifecycle.starvationDamagePerSec,
+            reproductionCooldownSec: sp.lifecycle.reproductionCooldownSec,
+          },
+          diet: { canEat: [...sp.diet.canEat] },
+        })),
+        interactionMatrix: matrixState.map(row =>
+          row.map(cell => cell ? { strength: cell.strength, radius: cell.radius, falloff: cell.falloff } : null)
+        ),
+        forces: { drag: { id: 'drag', params: { strength: dragForce.params.strength } }, wander: { id: 'wander', params: { strength: wanderForce.params.strength } } },
+      };
+      localStorage.setItem('critterium-pending-preset', JSON.stringify(pendingConfig));
+      window.location.reload();
+    },
+
     onExport: () => {
       const config = getCurrentConfig();
       exportConfig(config, 'critterium-config.json');
