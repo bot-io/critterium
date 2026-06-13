@@ -20,6 +20,7 @@ import {
   type EcosystemConfig,
   type EcosystemSnapshot,
   type SpeciesConfig,
+  type StaminaConfig,
 } from './ecosystem.js';
 
 // ─── EcosystemWorld ──────────────────────────────────────────────
@@ -263,6 +264,85 @@ export class EcosystemWorld {
 
     const childIdx = this.spawn(speciesIdx, childX, childY);
     return childIdx;
+  }
+
+  /**
+   * Process stamina/sprint for all alive particles.
+   * Updates sprint timers and clamps velocities based on sprint state.
+   * Should be called after forces but before world.step() (which does its own clamp).
+   *
+   * Sprint state machine per particle:
+   * - sprintTimer > 0: SPRINTING — velocity capped at sprintSpeedMultiplier × maxSpeed
+   * - sprintTimer <= 0 && sprintCooldown > 0: TIRED — velocity capped at tiredSpeedMultiplier × maxSpeed
+   * - sprintTimer <= 0 && sprintCooldown <= 0: RECOVERED — reset sprintTimer, ready to sprint
+   *
+   * Sprint is automatically triggered when the particle is moving above 50% of maxSpeed.
+   */
+  processStamina(dt: number): void {
+    for (let i = 0; i < this._highWaterMark; i++) {
+      if (this.eco.alive[i] === DEAD) continue;
+
+      const speciesIdx = this.world.type[i];
+      const species = this.species[speciesIdx];
+      const stamina = species.stamina ?? { sprintDurationSec: 5, sprintCooldownSec: 3, sprintSpeedMultiplier: 1.0, tiredSpeedMultiplier: 0.5 };
+      const baseMaxSpeed = species.maxSpeed;
+
+      const speed = Math.sqrt(this.world.vx[i] ** 2 + this.world.vy[i] ** 2);
+
+      if (this.eco.sprintTimer[i] > 0) {
+        // Currently sprinting
+        this.eco.sprintTimer[i] -= dt;
+
+        // If speed dropped below threshold while sprinting, don't force sprint consumption
+        // (particle is idle/slow, pause sprint timer)
+        if (speed < baseMaxSpeed * 0.3) {
+          this.eco.sprintTimer[i] += dt; // undo the decrement
+        }
+
+        if (this.eco.sprintTimer[i] <= 0) {
+          // Sprint exhausted — enter cooldown
+          this.eco.sprintTimer[i] = 0;
+          this.eco.sprintCooldown[i] = stamina.sprintCooldownSec;
+        }
+
+        // Clamp to sprint speed
+        const effectiveMax = baseMaxSpeed * stamina.sprintSpeedMultiplier;
+        this.clampVelocity(i, effectiveMax);
+      } else if (this.eco.sprintCooldown[i] > 0) {
+        // Tired — recovering
+        this.eco.sprintCooldown[i] -= dt;
+
+        // Clamp to tired speed
+        const effectiveMax = baseMaxSpeed * stamina.tiredSpeedMultiplier;
+        this.clampVelocity(i, effectiveMax);
+
+        if (this.eco.sprintCooldown[i] <= 0) {
+          // Cooldown complete — reset sprint timer
+          this.eco.sprintCooldown[i] = 0;
+          this.eco.sprintTimer[i] = stamina.sprintDurationSec;
+        }
+      } else {
+        // Ready to sprint — reset timer if needed, apply normal clamp
+        if (this.eco.sprintTimer[i] <= 0) {
+          this.eco.sprintTimer[i] = stamina.sprintDurationSec;
+        }
+        // Normal max speed (sprintSpeedMultiplier is typically 1.0 here)
+        const effectiveMax = baseMaxSpeed * stamina.sprintSpeedMultiplier;
+        this.clampVelocity(i, effectiveMax);
+      }
+    }
+  }
+
+  /** Clamp a single particle's velocity to the given max speed. */
+  private clampVelocity(index: number, maxSpeed: number): void {
+    const vx = this.world.vx[index];
+    const vy = this.world.vy[index];
+    const spdSq = vx * vx + vy * vy;
+    if (spdSq > maxSpeed * maxSpeed) {
+      const scale = maxSpeed / Math.sqrt(spdSq);
+      this.world.vx[index] = vx * scale;
+      this.world.vy[index] = vy * scale;
+    }
   }
 
   /**

@@ -58,6 +58,18 @@ export interface DietConfig {
   canEat: Set<number>;
 }
 
+/** Stamina/sprint configuration per species. */
+export interface StaminaConfig {
+  /** How long (seconds) a particle can maintain sprint speed. Default: 5 */
+  sprintDurationSec: number;
+  /** Recovery time (seconds) before sprinting again. Default: 3 */
+  sprintCooldownSec: number;
+  /** Effective max speed multiplier during sprint. Default: 1.0 */
+  sprintSpeedMultiplier: number;
+  /** Effective max speed multiplier when tired. Default: 0.5 */
+  tiredSpeedMultiplier: number;
+}
+
 /** Full species configuration. */
 export interface SpeciesConfig {
   /** Base particle config. */
@@ -74,6 +86,8 @@ export interface SpeciesConfig {
   lifecycle: LifecycleConfig;
   /** Diet parameters. */
   diet: DietConfig;
+  /** Stamina/sprint parameters. */
+  stamina?: StaminaConfig;
 }
 
 /** Interaction rule between two species. */
@@ -121,6 +135,10 @@ export class EcosystemState {
   readonly alive: Uint8Array;
   // Reproduction cooldown (seconds remaining)
   readonly reproductionCooldown: Float32Array;
+  // Sprint timer: >0 = sprinting (time remaining), <=0 = tired/cooldown
+  readonly sprintTimer: Float32Array;
+  // Sprint cooldown: >0 = recovering (time remaining), 0 = ready to sprint
+  readonly sprintCooldown: Float32Array;
 
   constructor(capacity: number) {
     this.capacity = capacity;
@@ -129,6 +147,8 @@ export class EcosystemState {
     this.health = new Float32Array(capacity);
     this.alive = new Uint8Array(capacity);
     this.reproductionCooldown = new Float32Array(capacity);
+    this.sprintTimer = new Float32Array(capacity);
+    this.sprintCooldown = new Float32Array(capacity);
   }
 
   /** Initialize a particle slot for a living creature. */
@@ -143,6 +163,8 @@ export class EcosystemState {
     this.age[index] = 0;
     this.health[index] = 1.0; // full health
     this.reproductionCooldown[index] = species.lifecycle.reproductionCooldownSec; // start on cooldown
+    this.sprintTimer[index] = species.stamina?.sprintDurationSec ?? 5;
+    this.sprintCooldown[index] = 0;
   }
 
   /** Mark a particle as dead (free its slot). */
@@ -152,6 +174,8 @@ export class EcosystemState {
     this.age[index] = 0;
     this.health[index] = 0;
     this.reproductionCooldown[index] = 0;
+    this.sprintTimer[index] = 0;
+    this.sprintCooldown[index] = 0;
   }
 
   /** Snapshot the ecosystem state (copies). */
@@ -162,6 +186,8 @@ export class EcosystemState {
       health: new Float32Array(this.health),
       alive: new Uint8Array(this.alive),
       reproductionCooldown: new Float32Array(this.reproductionCooldown),
+      sprintTimer: new Float32Array(this.sprintTimer),
+      sprintCooldown: new Float32Array(this.sprintCooldown),
       capacity: this.capacity,
     };
   }
@@ -174,6 +200,8 @@ export interface EcosystemSnapshot {
   health: Float32Array;
   alive: Uint8Array;
   reproductionCooldown: Float32Array;
+  sprintTimer: Float32Array;
+  sprintCooldown: Float32Array;
   capacity: number;
 }
 
@@ -257,6 +285,17 @@ export function defaultDietConfig(overrides?: Partial<DietConfig>): DietConfig {
   };
 }
 
+/** Default stamina config — moderate sprint with short cooldown. */
+export function defaultStaminaConfig(overrides?: Partial<StaminaConfig>): StaminaConfig {
+  return {
+    sprintDurationSec: 5,
+    sprintCooldownSec: 3,
+    sprintSpeedMultiplier: 1.0,
+    tiredSpeedMultiplier: 0.5,
+    ...overrides,
+  };
+}
+
 /** Create a predator/prey config pair for testing. */
 export function predatorPreyConfig(): EcosystemConfig {
   return {
@@ -286,6 +325,11 @@ export function predatorPreyConfig(): EcosystemConfig {
         diet: defaultDietConfig({
           canEat: new Set([1]), // eats species 1
         }),
+        stamina: defaultStaminaConfig({
+          sprintDurationSec: 3,
+          sprintCooldownSec: 5,
+          tiredSpeedMultiplier: 0.4,
+        }),
       },
       {
         name: 'Prey',
@@ -305,6 +349,11 @@ export function predatorPreyConfig(): EcosystemConfig {
           reproductionCooldownSec: 3,
         }),
         diet: defaultDietConfig(),
+        stamina: defaultStaminaConfig({
+          sprintDurationSec: 8,
+          sprintCooldownSec: 2,
+          tiredSpeedMultiplier: 0.6,
+        }),
       },
     ],
     interactionRules: [

@@ -122,6 +122,23 @@ export class CritteriumRenderer {
   }
 
   /**
+   * Reset tracking state (prevAlive, effect pools). Call after sim rebuild
+   * to prevent stale birth/death effects from lingering.
+   */
+  resetState(): void {
+    this.prevAlive.fill(DEAD);
+    for (const effect of this.birthPool) {
+      effect.g.visible = false;
+      effect.elapsed = -1;
+      effect.idx = -1;
+    }
+    for (const effect of this.deathPool) {
+      effect.g.visible = false;
+      effect.elapsed = -1;
+    }
+  }
+
+  /**
    * Create and initialise the renderer.
    * Resolves when the PixiJS Application is ready.
    */

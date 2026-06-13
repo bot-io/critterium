@@ -25,6 +25,7 @@ import {
   defaultEnergyConfig,
   defaultLifecycleConfig,
   defaultDietConfig,
+  defaultStaminaConfig,
   EcosystemWorld,
   processEating,
   processReproduction,
@@ -46,7 +47,7 @@ import { AdaptiveQuality } from './adaptive-quality.js';
 const SPECIES_NAMES = ['Prey', 'Predator'] as const;
 
 const SPECIES_CONFIGS: SpeciesConfig[] = [
-  // 0: Prey — green, fast breeder
+  // 0: Prey — green, fast breeder, high endurance
   {
     name: 'Prey',
     count: 120,
@@ -70,8 +71,14 @@ const SPECIES_CONFIGS: SpeciesConfig[] = [
     diet: defaultDietConfig({
       canEat: new Set<number>(),
     }),
+    stamina: defaultStaminaConfig({
+      sprintDurationSec: 8,
+      sprintCooldownSec: 2,
+      sprintSpeedMultiplier: 1.0,
+      tiredSpeedMultiplier: 0.6,
+    }),
   },
-  // 1: Predator — red, hunts prey
+  // 1: Predator — red, hunts prey, burst predator
   {
     name: 'Predator',
     count: 40,
@@ -94,6 +101,12 @@ const SPECIES_CONFIGS: SpeciesConfig[] = [
     }),
     diet: defaultDietConfig({
       canEat: new Set([0]),
+    }),
+    stamina: defaultStaminaConfig({
+      sprintDurationSec: 3,
+      sprintCooldownSec: 5,
+      sprintSpeedMultiplier: 1.0,
+      tiredSpeedMultiplier: 0.4,
     }),
   },
 ];
@@ -159,6 +172,7 @@ function deepCloneSpeciesConfig(species: SpeciesConfig[]): SpeciesConfig[] {
     diet: {
       canEat: new Set(sp.diet.canEat),
     },
+    stamina: { ...sp.stamina },
   }));
 }
 
@@ -481,6 +495,9 @@ async function main(): Promise<void> {
     accumulator = 0;
     lastTime = performance.now();
 
+    // Reset renderer state (clear stale birth/death effects + prevAlive)
+    renderer.resetState();
+
     // Clear stale autosave
     clearAutosave();
 
@@ -557,6 +574,9 @@ async function main(): Promise<void> {
       let stepsThisFrame = 0;
       while (accumulator >= dt && stepsThisFrame < MAX_ACCUMULATOR_STEPS) {
         applyForces(dt);
+
+        // Process stamina (after forces, before physics step)
+        eco.processStamina(dt);
 
         // Step physics
         eco.world.step(dt);
@@ -759,12 +779,12 @@ async function main(): Promise<void> {
       }
     },
 
-    onMatrixChange: (i: number, j: number, strength: number, radius: number, falloff: string) => {
-      const entry: InteractionEntry = { strength, radius, falloff: falloff as 'linear' | 'inverse' | 'constant' };
+    onMatrixChange: (i: number, j: number, strength: number, minRadius: number, maxRadius: number, falloff: string) => {
+      const entry: InteractionEntry = { strength, minRadius, radius: maxRadius, falloff: falloff as 'linear' | 'inverse' | 'constant' };
       interactionMatrix.set(i, j, entry);
       // Update tracked state
       if (!matrixState[i]) matrixState[i] = [];
-      matrixState[i][j] = { strength, radius, falloff };
+      matrixState[i][j] = { strength, radius: maxRadius, falloff };
     },
 
     onRandomizeMatrix: () => {
@@ -852,6 +872,22 @@ async function main(): Promise<void> {
         const targetIdx = parseInt(param.replace('canEat_', ''));
         if (value) sp.diet.canEat.add(targetIdx);
         else sp.diet.canEat.delete(targetIdx);
+        rebuildSimulation();
+      } else if (param === 'sprintDurationSec' && typeof value === 'number') {
+        if (!sp.stamina) sp.stamina = defaultStaminaConfig();
+        sp.stamina.sprintDurationSec = value;
+        rebuildSimulation();
+      } else if (param === 'sprintCooldownSec' && typeof value === 'number') {
+        if (!sp.stamina) sp.stamina = defaultStaminaConfig();
+        sp.stamina.sprintCooldownSec = value;
+        rebuildSimulation();
+      } else if (param === 'sprintSpeedMultiplier' && typeof value === 'number') {
+        if (!sp.stamina) sp.stamina = defaultStaminaConfig();
+        sp.stamina.sprintSpeedMultiplier = value;
+        rebuildSimulation();
+      } else if (param === 'tiredSpeedMultiplier' && typeof value === 'number') {
+        if (!sp.stamina) sp.stamina = defaultStaminaConfig();
+        sp.stamina.tiredSpeedMultiplier = value;
         rebuildSimulation();
       }
     },

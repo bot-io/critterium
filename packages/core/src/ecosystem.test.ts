@@ -8,6 +8,7 @@ import {
   defaultEnergyConfig,
   defaultLifecycleConfig,
   defaultDietConfig,
+  defaultStaminaConfig,
   predatorPreyConfig,
   type SpeciesConfig,
   type EcosystemConfig,
@@ -28,6 +29,7 @@ function testSpecies(overrides?: Partial<SpeciesConfig>): SpeciesConfig {
     energy: defaultEnergyConfig(),
     lifecycle: defaultLifecycleConfig(),
     diet: defaultDietConfig(),
+    stamina: defaultStaminaConfig(),
     ...overrides,
   };
 }

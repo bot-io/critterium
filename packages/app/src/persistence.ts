@@ -55,35 +55,62 @@ export function clearAutosave(): void {
 
 /**
  * Export a config as a downloadable .json file.
- * On Android/Capacitor, uses the Web Share API (or falls back to anchor download).
+ * On Android/Capacitor, uses the Capacitor Share plugin.
+ * Falls back to Web Share API, then anchor download, then clipboard.
  */
-export function exportConfig(config: CritteriumConfig, filename: string): void {
+export async function exportConfig(config: CritteriumConfig, filename: string): Promise<void> {
   try {
     const json = JSON.stringify(config, null, 2);
     const safeName = filename.endsWith('.json') ? filename : `${filename}.json`;
 
-    // On Android/Capacitor, the anchor-download trick doesn't work.
-    // Try Web Share API first (available on modern Android WebView).
+    // Try Capacitor Share plugin first (works in Android WebView)
+    try {
+      const { Share } = await import('@capacitor/share');
+      const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem');
+
+      // Write to a temp file, then share it
+      const result = await Filesystem.writeFile({
+        path: safeName,
+        data: json,
+        directory: Directory.Cache,
+        encoding: Encoding.UTF8,
+      });
+
+      await Share.share({
+        title: 'Critterium Config',
+        text: safeName,
+        url: result.uri,
+      });
+      return;
+    } catch {
+      // Capacitor not available or share cancelled — fall through
+    }
+
     const blob = new Blob([json], { type: 'application/json' });
     const file = new File([blob], safeName, { type: 'application/json' });
 
+    // Try Web Share API
     if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-      navigator.share({
-        files: [file],
-        title: 'Critterium Config',
-      }).catch((err) => {
-        // User cancelled or share failed — fall back to download
-        if ((err as DOMException).name !== 'AbortError') {
-          fallbackDownload(blob, safeName);
-        }
-      });
-      return;
+      try {
+        await navigator.share({ files: [file], title: 'Critterium Config' });
+        return;
+      } catch (err) {
+        if ((err as DOMException).name === 'AbortError') return;
+      }
     }
 
-    // Fallback: traditional anchor download (works on desktop browsers)
+    // Fallback: anchor download (desktop browsers)
     fallbackDownload(blob, safeName);
   } catch (err) {
-    console.error('[Critterium] Export failed:', err);
+    // Last resort: copy to clipboard
+    try {
+      const json = JSON.stringify(config, null, 2);
+      await navigator.clipboard.writeText(json);
+      alert('Config copied to clipboard (share/download not available)');
+      return;
+    } catch {
+      console.error('[Critterium] Export failed completely:', err);
+    }
   }
 }
 

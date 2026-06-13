@@ -19,7 +19,7 @@ export interface ControlsPanelOptions {
   onPopulationCapChange?: (cap: number) => void;
   onForceToggle?: (forceId: string, enabled: boolean) => void;
   onForceChange?: (forceId: string, param: string, value: number) => void;
-  onMatrixChange?: (i: number, j: number, strength: number, radius: number, falloff: string) => void;
+  onMatrixChange?: (i: number, j: number, strength: number, minRadius: number, maxRadius: number, falloff: string) => void;
   onRandomizeMatrix?: () => void;
   onClearMatrix?: () => void;
   onSpeciesChange?: (speciesIndex: number, param: string, value: number | string | boolean) => void;
@@ -110,6 +110,10 @@ export function resetAllSliders(opts: {
     setSliderValue(`species.${si}.maxAgeSec`, iv['maxAgeSec'] ?? 60);
     setSliderValue(`species.${si}.starvationDamagePerSec`, iv['starvationDamagePerSec'] ?? 10);
     setSliderValue(`species.${si}.reproductionCooldownSec`, iv['reproductionCooldownSec'] ?? 5);
+    setSliderValue(`species.${si}.sprintDurationSec`, iv['sprintDurationSec'] ?? 5);
+    setSliderValue(`species.${si}.sprintCooldownSec`, iv['sprintCooldownSec'] ?? 3);
+    setSliderValue(`species.${si}.sprintSpeedMultiplier`, iv['sprintSpeedMultiplier'] ?? 1.0);
+    setSliderValue(`species.${si}.tiredSpeedMultiplier`, iv['tiredSpeedMultiplier'] ?? 0.5);
   }
 }
 
@@ -619,6 +623,14 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
         }
       }));
 
+      // Stamina sub-section
+      panel.appendChild(buildSubSection('Stamina', (sub) => {
+        sub.appendChild(makeSlider('Sprint Dur', 1, 30, 0.5, iv['sprintDurationSec'] ?? 5, (v) => opts.onSpeciesChange?.(speciesIdx, 'sprintDurationSec', v), `species.${si}.sprintDurationSec`));
+        sub.appendChild(makeSlider('Sprint CD', 1, 30, 0.5, iv['sprintCooldownSec'] ?? 3, (v) => opts.onSpeciesChange?.(speciesIdx, 'sprintCooldownSec', v), `species.${si}.sprintCooldownSec`));
+        sub.appendChild(makeSlider('Sprint Spd ×', 0.5, 2.0, 0.1, iv['sprintSpeedMultiplier'] ?? 1.0, (v) => opts.onSpeciesChange?.(speciesIdx, 'sprintSpeedMultiplier', v), `species.${si}.sprintSpeedMultiplier`));
+        sub.appendChild(makeSlider('Tired Spd ×', 0.1, 1.0, 0.1, iv['tiredSpeedMultiplier'] ?? 0.5, (v) => opts.onSpeciesChange?.(speciesIdx, 'tiredSpeedMultiplier', v), `species.${si}.tiredSpeedMultiplier`));
+      }));
+
       panelsContainer.appendChild(panel);
     }
 
@@ -746,14 +758,15 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
         // Click cell to cycle: +25, -25
         const ii = i, jj = j;
         let currentStr = initStr;
-        let currentRadius = init?.radius ?? 100;
+        let currentMinR = Math.max(10, (init?.radius ?? 100) - 30);
+        let currentMaxR = init?.radius ?? 100;
         cell.addEventListener('click', () => {
           currentStr += 25;
           if (currentStr > 100) currentStr = -100;
           valLabel.textContent = String(currentStr);
           updateCellColor(cell, currentStr);
           const falloff = init?.falloff ?? 'linear';
-          opts.onMatrixChange?.(ii, jj, currentStr, currentRadius, falloff);
+          opts.onMatrixChange?.(ii, jj, currentStr, currentMinR, currentMaxR, falloff);
         });
         // Right-click to decrease
         cell.addEventListener('contextmenu', (e) => {
@@ -763,7 +776,7 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
           valLabel.textContent = String(currentStr);
           updateCellColor(cell, currentStr);
           const falloff = init?.falloff ?? 'linear';
-          opts.onMatrixChange?.(ii, jj, currentStr, currentRadius, falloff);
+          opts.onMatrixChange?.(ii, jj, currentStr, currentMinR, currentMaxR, falloff);
         });
 
         grid.appendChild(cell);
@@ -777,8 +790,13 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
     radiusSection.style.cssText = 'margin-top:8px;';
 
     const radiusTitle = el('div', 'crit-subsection-hdr');
-    radiusTitle.textContent = '▾ Cell Radius Controls';
+    radiusTitle.textContent = '▾ Interaction Distance';
     radiusSection.appendChild(radiusTitle);
+
+    const radiusLegend = el('div');
+    radiusLegend.style.cssText = 'font-size:9px; color:#777; margin:2px 0 4px 0;';
+    radiusLegend.textContent = 'Min = closest distance · Max = farthest distance affected';
+    radiusSection.appendChild(radiusLegend);
 
     const radiusBody = el('div', 'crit-section-body');
 
@@ -787,23 +805,33 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
         const init = initMatrix?.[i]?.[j];
         const baseRadius = init?.radius ?? 100;
         const rowDiv = el('div', 'crit-row');
-        rowDiv.style.cssText = 'gap:4px; flex-wrap:wrap;';
+        rowDiv.style.cssText = 'gap:4px; flex-wrap:wrap; align-items:center;';
 
         const lbl = el('span', 'crit-label');
         lbl.textContent = `${names[i].substring(0, 4)}→${names[j].substring(0, 4)}`;
         lbl.style.minWidth = '60px';
         rowDiv.appendChild(lbl);
 
-        // Min radius slider
+        // Min distance slider
+        const minLbl = el('span', 'crit-value');
+        minLbl.textContent = 'Min';
+        minLbl.style.cssText = 'font-size:8px; color:#88aaff; min-width:20px;';
+        rowDiv.appendChild(minLbl);
+
         const minSlider = document.createElement('input');
-        minSlider.type = 'range'; minSlider.min = '10'; minSlider.max = '200'; minSlider.step = '5';
+        minSlider.type = 'range'; minSlider.min = '10'; minSlider.max = '300'; minSlider.step = '5';
         minSlider.value = String(Math.max(10, baseRadius - 30));
         minSlider.style.flex = '1'; minSlider.style.minWidth = '40px';
         const minVal = el('span', 'crit-value');
         minVal.textContent = minSlider.value;
         minVal.style.minWidth = '24px'; minVal.style.fontSize = '9px';
 
-        // Max radius slider
+        // Max distance slider
+        const maxLbl = el('span', 'crit-value');
+        maxLbl.textContent = 'Max';
+        maxLbl.style.cssText = 'font-size:8px; color:#ffaa88; min-width:20px;';
+        rowDiv.appendChild(maxLbl);
+
         const maxSlider = document.createElement('input');
         maxSlider.type = 'range'; maxSlider.min = '10'; maxSlider.max = '300'; maxSlider.step = '5';
         maxSlider.value = String(baseRadius);
@@ -814,13 +842,26 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
 
         const ii = i, jj = j;
         function updateRadius(): void {
-          const r = parseInt(maxSlider.value);
-          maxVal.textContent = String(r);
+          // Clamp: min cannot exceed max, max cannot go below min
+          const minR = parseInt(minSlider.value);
+          const maxR = parseInt(maxSlider.value);
+          if (minR > maxR) {
+            maxSlider.value = String(minR);
+          }
+          if (maxR < minR) {
+            minSlider.value = String(maxR);
+          }
+          minVal.textContent = minSlider.value;
+          maxVal.textContent = maxSlider.value;
           const falloff = init?.falloff ?? 'linear';
-          opts.onMatrixChange?.(ii, jj, initMatrix?.[ii]?.[jj]?.strength ?? 0, r, falloff);
+          // Update the closure variables used by cell click handlers
+          const mi = ii, mj = jj;
+          // Find the matching cell's currentStr from the initMatrix
+          const str = initMatrix?.[mi]?.[mj]?.strength ?? 0;
+          opts.onMatrixChange?.(ii, jj, str, parseInt(minSlider.value), parseInt(maxSlider.value), falloff);
         }
 
-        minSlider.addEventListener('input', () => { minVal.textContent = minSlider.value; });
+        minSlider.addEventListener('input', updateRadius);
         maxSlider.addEventListener('input', updateRadius);
 
         rowDiv.appendChild(minSlider);

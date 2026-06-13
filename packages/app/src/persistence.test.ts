@@ -106,7 +106,7 @@ describe('persistence', () => {
 
   // ─── exportConfig ───
 
-  it('exportConfig creates a download link with .json extension', () => {
+  it('exportConfig creates a download link with .json extension', async () => {
     const createObjectURLSpy = vi.fn(() => 'blob:http://localhost/fake');
     const revokeObjectURLSpy = vi.fn();
     vi.stubGlobal('URL', {
@@ -128,7 +128,7 @@ describe('persistence', () => {
       return el;
     });
 
-    exportConfig(sampleConfig, 'test-config');
+    await exportConfig(sampleConfig, 'test-config');
 
     expect(createObjectURLSpy).toHaveBeenCalled();
     expect(clickSpy).toHaveBeenCalled();
@@ -137,7 +137,7 @@ describe('persistence', () => {
     vi.restoreAllMocks();
   });
 
-  it('exportConfig appends .json if not present in filename', () => {
+  it('exportConfig appends .json if not present in filename', async () => {
     const createObjectURLSpy = vi.fn(() => 'blob:http://localhost/fake');
     const revokeObjectURLSpy = vi.fn();
     vi.stubGlobal('URL', { createObjectURL: createObjectURLSpy, revokeObjectURL: revokeObjectURLSpy });
@@ -158,7 +158,7 @@ describe('persistence', () => {
     vi.spyOn(document.body, 'appendChild').mockImplementation((n) => n);
     vi.spyOn(document.body, 'removeChild').mockImplementation((n) => n);
 
-    exportConfig(sampleConfig, 'myfile');
+    await exportConfig(sampleConfig, 'myfile');
     expect(capturedHref).toBe('myfile.json');
 
     vi.restoreAllMocks();
@@ -390,7 +390,7 @@ describe('persistence', () => {
     vi.spyOn(document.body, 'removeChild').mockImplementation((n) => n);
 
     // Export
-    exportConfig(sampleConfig, 'roundtrip-test');
+    await exportConfig(sampleConfig, 'roundtrip-test');
     expect(capturedDownload).toBe('roundtrip-test.json');
 
     // Verify blob was created with correct content
@@ -412,7 +412,7 @@ describe('persistence', () => {
     vi.restoreAllMocks();
   });
 
-  it('exportConfig does not duplicate .json extension', () => {
+  it('exportConfig does not duplicate .json extension', async () => {
     const createObjectURLSpy = vi.fn(() => 'blob:http://localhost/fake');
     const revokeObjectURLSpy = vi.fn();
     vi.stubGlobal('URL', { createObjectURL: createObjectURLSpy, revokeObjectURL: revokeObjectURLSpy });
@@ -433,19 +433,19 @@ describe('persistence', () => {
     vi.spyOn(document.body, 'appendChild').mockImplementation((n) => n);
     vi.spyOn(document.body, 'removeChild').mockImplementation((n) => n);
 
-    exportConfig(sampleConfig, 'already.json');
+    await exportConfig(sampleConfig, 'already.json');
     expect(capturedDownload).toBe('already.json');
 
     vi.restoreAllMocks();
   });
 
-  it('exportConfig handles errors gracefully', () => {
+  it('exportConfig handles errors gracefully', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.stubGlobal('Blob', class {
       constructor() { throw new Error('Blob not available'); }
     });
 
-    expect(() => exportConfig(sampleConfig, 'test')).not.toThrow();
+    await expect(exportConfig(sampleConfig, 'test')).resolves.toBeUndefined();
     expect(errorSpy).toHaveBeenCalled();
 
     vi.restoreAllMocks();

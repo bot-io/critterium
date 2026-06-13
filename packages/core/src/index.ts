@@ -509,7 +509,9 @@ export type FalloffType = 'linear' | 'inverse' | 'constant';
 export interface InteractionEntry {
   /** Force magnitude. Positive = attract, negative = repel. */
   strength: number;
-  /** Maximum interaction radius (must be ≤ spatial hash cell size). */
+  /** Minimum interaction radius. No effect below this distance. */
+  minRadius?: number;
+  /** Maximum interaction radius. No effect beyond this distance. */
   radius: number;
   /** How force decays with distance. */
   falloff: FalloffType;
@@ -632,7 +634,7 @@ export class PairwiseForce {
 
         // 1. Interaction matrix force: how typeJ affects typeI
         const entry = matrix.get(typeI, typeJ);
-        if (entry && dist < entry.radius) {
+        if (entry && dist < entry.radius && dist >= (entry.minRadius ?? 0)) {
           const force = InteractionMatrix.forceAtDistance(entry, dist);
           // Positive strength = attract (toward j), negative = repel (away from j)
           dvx[i] += nx * force * dt;
@@ -1113,8 +1115,8 @@ export class VortexForce implements Force {
 }
 
 // ─── Re-exports for barrel import ────────────────────────────────
-export type { EcosystemConfig, SpeciesConfig, EnergyConfig, LifecycleConfig, DietConfig, InteractionRule as EcoInteractionRule } from './ecosystem.js';
-export { ALIVE, DEAD, defaultEnergyConfig, defaultLifecycleConfig, defaultDietConfig } from './ecosystem.js';
+export type { EcosystemConfig, SpeciesConfig, EnergyConfig, LifecycleConfig, DietConfig, StaminaConfig, InteractionRule as EcoInteractionRule } from './ecosystem.js';
+export { ALIVE, defaultEnergyConfig, defaultLifecycleConfig, defaultDietConfig, defaultStaminaConfig } from './ecosystem.js';
 export type { EcosystemState } from './ecosystem.js';
 export { EcosystemWorld } from './ecosystem-world.js';
 export type { LifecycleResult } from './ecosystem-world.js';

@@ -15,6 +15,7 @@ import {
   type EnergyConfig,
   type LifecycleConfig,
   type DietConfig,
+  type StaminaConfig,
   ALIVE,
 } from './ecosystem.js';
 import { EcosystemWorld } from './ecosystem-world.js';
@@ -43,6 +44,14 @@ export interface JsonDietConfig {
   canEat: number[];
 }
 
+/** JSON-serializable stamina config. */
+export interface JsonStaminaConfig {
+  sprintDurationSec: number;
+  sprintCooldownSec: number;
+  sprintSpeedMultiplier: number;
+  tiredSpeedMultiplier: number;
+}
+
 /** JSON-serializable species definition. */
 export interface JsonSpeciesConfig {
   name: string;
@@ -54,6 +63,7 @@ export interface JsonSpeciesConfig {
   energy: JsonEnergyConfig;
   lifecycle: JsonLifecycleConfig;
   diet: JsonDietConfig;
+  stamina?: JsonStaminaConfig;
 }
 
 /** JSON-serializable interaction matrix entry. */
@@ -167,6 +177,35 @@ function jsonToDiet(json: JsonDietConfig): DietConfig {
   };
 }
 
+/** Default stamina values for deserialization fallback. */
+const DEFAULT_STAMINA: StaminaConfig = {
+  sprintDurationSec: 5,
+  sprintCooldownSec: 3,
+  sprintSpeedMultiplier: 1.0,
+  tiredSpeedMultiplier: 0.5,
+};
+
+/** Convert a StaminaConfig to JSON form. */
+function staminaToJson(stamina: StaminaConfig): JsonStaminaConfig {
+  return {
+    sprintDurationSec: stamina.sprintDurationSec,
+    sprintCooldownSec: stamina.sprintCooldownSec,
+    sprintSpeedMultiplier: stamina.sprintSpeedMultiplier,
+    tiredSpeedMultiplier: stamina.tiredSpeedMultiplier,
+  };
+}
+
+/** Parse a JSON stamina config, filling defaults for missing fields. */
+function jsonToStamina(json?: JsonStaminaConfig): StaminaConfig {
+  if (!json) return { ...DEFAULT_STAMINA };
+  return {
+    sprintDurationSec: json.sprintDurationSec ?? DEFAULT_STAMINA.sprintDurationSec,
+    sprintCooldownSec: json.sprintCooldownSec ?? DEFAULT_STAMINA.sprintCooldownSec,
+    sprintSpeedMultiplier: json.sprintSpeedMultiplier ?? DEFAULT_STAMINA.sprintSpeedMultiplier,
+    tiredSpeedMultiplier: json.tiredSpeedMultiplier ?? DEFAULT_STAMINA.tiredSpeedMultiplier,
+  };
+}
+
 /** Convert a SpeciesConfig to JSON form. */
 function speciesToJson(sp: SpeciesConfig): JsonSpeciesConfig {
   return {
@@ -179,6 +218,7 @@ function speciesToJson(sp: SpeciesConfig): JsonSpeciesConfig {
     energy: energyToJson(sp.energy),
     lifecycle: lifecycleToJson(sp.lifecycle),
     diet: dietToJson(sp.diet),
+    stamina: staminaToJson(sp.stamina ?? DEFAULT_STAMINA),
   };
 }
 
@@ -194,6 +234,7 @@ function jsonToSpecies(json: JsonSpeciesConfig): SpeciesConfig {
     energy: jsonToEnergy(json.energy),
     lifecycle: jsonToLifecycle(json.lifecycle),
     diet: jsonToDiet(json.diet),
+    stamina: jsonToStamina(json.stamina),
   };
 }
 

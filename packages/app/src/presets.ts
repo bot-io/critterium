@@ -67,6 +67,12 @@ const CLASSIC: EcosystemPreset = preset(
         diet: {
           canEat: [],
         },
+        stamina: {
+          sprintDurationSec: 8,
+          sprintCooldownSec: 2,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.6,
+        },
       },
       {
         name: 'Predator',
@@ -90,6 +96,12 @@ const CLASSIC: EcosystemPreset = preset(
         },
         diet: {
           canEat: [0],
+        },
+        stamina: {
+          sprintDurationSec: 3,
+          sprintCooldownSec: 5,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.4,
         },
       },
     ],
@@ -370,6 +382,12 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
         diet: {
           canEat: [1, 2, 3],
         },
+        stamina: {
+          sprintDurationSec: 3,
+          sprintCooldownSec: 5,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.4,
+        },
       },
       {
         name: 'Wolves',
@@ -393,6 +411,12 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
         },
         diet: {
           canEat: [2, 3],
+        },
+        stamina: {
+          sprintDurationSec: 4,
+          sprintCooldownSec: 4,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.45,
         },
       },
       {
@@ -418,6 +442,12 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
         diet: {
           canEat: [],
         },
+        stamina: {
+          sprintDurationSec: 7,
+          sprintCooldownSec: 2,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.6,
+        },
       },
       {
         name: 'Rabbits',
@@ -441,6 +471,12 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
         },
         diet: {
           canEat: [],
+        },
+        stamina: {
+          sprintDurationSec: 8,
+          sprintCooldownSec: 2,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.55,
         },
       },
     ],

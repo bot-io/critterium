@@ -211,7 +211,7 @@ describe('controls panel', () => {
     const panel = createControlsPanel(opts);
     const firstCell = panel.querySelector('.crit-matrix-cell') as HTMLElement;
     firstCell.click();
-    expect(opts.onMatrixChange).toHaveBeenCalledWith(0, 0, 25, 100, 'linear');
+    expect(opts.onMatrixChange).toHaveBeenCalledWith(0, 0, 25, 70, 100, 'linear');
   });
 
   it('Export button fires onExport callback', () => {

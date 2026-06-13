@@ -1,6 +1,6 @@
 {
   "name": "@critterium/app",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,6 +13,8 @@
     "e2e": "playwright test"
   },
   "dependencies": {
+    "@capacitor/filesystem": "^8.1.2",
+    "@capacitor/share": "^8.0.1",
     "@critterium/core": "*",
     "@critterium/render": "*"
   },
