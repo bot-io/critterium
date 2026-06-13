@@ -999,6 +999,123 @@ const BIRDS: EcosystemPreset = preset(
   },
 );
 
+// ─── 10. Fishes (Coral Reef) ─────────────────────────────────
+
+const FISHES: EcosystemPreset = preset(
+  'Fishes',
+  'A living coral reef: Tetras school for safety, Cleaner Wrasse tag along with predators in a rare symbiosis, and Barracuda hunt — but never the fish that cleans them.',
+  {
+    version: 1,
+    simulation: {
+      width: 800,
+      height: 600,
+      boundaryMode: 'wrap',
+      seed: 271,
+      populationCap: 450,
+    },
+    species: [
+      // ── Schooling prey: Tetras ────────────────────────────────
+      {
+        name: 'Tetras',
+        count: 250,
+        color: '#2e86de',
+        radius: 2,
+        initialSpeed: 40,
+        maxSpeed: 85,
+        energy: {
+          maxEnergy: 120,
+          initialEnergy: 60,
+          movementCostPerSec: 0.8,
+          reproductionCost: 15,
+          idleDrainPerSec: 0.4,
+          energyGainPerPrey: [0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 80,
+          starvationDamagePerSec: 3,
+          reproductionCooldownSec: 4,
+        },
+        diet: {
+          canEat: [],
+        },
+      },
+      // ── Symbiotic cleaner: Cleaner Wrasse ─────────────────────
+      {
+        name: 'Cleaner Wrasse',
+        count: 12,
+        color: '#feca57',
+        radius: 3,
+        initialSpeed: 35,
+        maxSpeed: 70,
+        energy: {
+          maxEnergy: 100,
+          initialEnergy: 50,
+          movementCostPerSec: 1,
+          reproductionCost: 30,
+          idleDrainPerSec: 0.5,
+          energyGainPerPrey: [20, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 90,
+          starvationDamagePerSec: 4,
+          reproductionCooldownSec: 12,
+        },
+        diet: {
+          canEat: [0],
+        },
+        stamina: {
+          sprintDurationSec: 5,
+          sprintCooldownSec: 3,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.5,
+        },
+      },
+      // ── Apex predator: Barracuda ──────────────────────────────
+      {
+        name: 'Barracuda',
+        count: 10,
+        color: '#7f8c8d',
+        radius: 6,
+        initialSpeed: 55,
+        maxSpeed: 120,
+        energy: {
+          maxEnergy: 200,
+          initialEnergy: 100,
+          movementCostPerSec: 2.5,
+          reproductionCost: 70,
+          idleDrainPerSec: 1.5,
+          energyGainPerPrey: [35, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 100,
+          starvationDamagePerSec: 3,
+          reproductionCooldownSec: 15,
+        },
+        diet: {
+          canEat: [0],
+        },
+        stamina: {
+          sprintDurationSec: 3,
+          sprintCooldownSec: 5,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.4,
+        },
+      },
+    ],
+    // src=row (how this species reacts to target col)
+    //         Tetras        Wrasse       Barracuda
+    interactionMatrix: [
+      /* Tetras    */ [{ strength: 40, radius: 80, falloff: 'linear' }, null, { strength: -85, radius: 130, falloff: 'linear' }],
+      /* Wrasse    */ [null, null, { strength: 30, radius: 90, falloff: 'linear' }],
+      /* Barracuda */ [{ strength: 60, radius: 150, falloff: 'linear' }, null, { strength: -25, radius: 70, falloff: 'linear' }],
+    ],
+    forces: {
+      drag: { coefficient: 0.7 },
+      wander: { strength: 30, rate: 2.5 },
+    },
+  },
+);
+
 // ─── Export all presets ───────────────────────────────────────
 
 export const BUILTIN_PRESETS: EcosystemPreset[] = [
@@ -1011,6 +1128,7 @@ export const BUILTIN_PRESETS: EcosystemPreset[] = [
   ROCK_PAPER_SCISSORS,
   GRASSLANDS,
   BIRDS,
+  FISHES,
 ];
 
 export const BUILTIN_PRESET_NAMES: string[] = BUILTIN_PRESETS.map((p) => p.name);

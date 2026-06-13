@@ -12,11 +12,12 @@ const EXPECTED_PRESET_NAMES = [
   'Rock Paper Scissors',
   'Grasslands',
   'Birds',
+  'Fishes',
 ];
 
 describe('presets', () => {
-  it('exports exactly 9 built-in presets', () => {
-    expect(BUILTIN_PRESETS).toHaveLength(9);
+  it('exports exactly 10 built-in presets', () => {
+    expect(BUILTIN_PRESETS).toHaveLength(10);
   });
 
   it('BUILTIN_PRESET_NAMES matches expected list', () => {
@@ -460,5 +461,124 @@ describe('presets', () => {
     const birds = getBuiltinPreset('Birds');
     const total = birds!.config.species.reduce((sum, s) => sum + s.count, 0);
     expect(total).toBeLessThanOrEqual(birds!.config.simulation.populationCap!);
+  });
+
+  // ── Fishes (Coral Reef) — symbiosis + predator/prey tests ──
+
+  it('Fishes has exactly 3 species', () => {
+    const fishes = getBuiltinPreset('Fishes');
+    expect(fishes).toBeDefined();
+    expect(fishes!.config.species).toHaveLength(3);
+  });
+
+  it('Fishes species names are Tetras, Cleaner Wrasse, Barracuda', () => {
+    const fishes = getBuiltinPreset('Fishes');
+    const names = fishes!.config.species.map((s) => s.name);
+    expect(names).toEqual(['Tetras', 'Cleaner Wrasse', 'Barracuda']);
+  });
+
+  it('Fishes: Tetras are the schooling prey base (majority of population)', () => {
+    const fishes = getBuiltinPreset('Fishes');
+    const counts = fishes!.config.species.map((s) => s.count);
+    // Tetras vastly outnumber predators and cleaners
+    expect(counts[0]).toBeGreaterThan(counts[1] * 10);
+    expect(counts[0]).toBeGreaterThan(counts[2] * 10);
+  });
+
+  it('Fishes: Barracuda is the apex predator (eats Tetras)', () => {
+    const fishes = getBuiltinPreset('Fishes');
+    expect(fishes!.config.species[2].diet.canEat).toContain(0);
+  });
+
+  it('Fishes: Barracuda does NOT eat Cleaner Wrasse (symbiotic tolerance)', () => {
+    const fishes = getBuiltinPreset('Fishes');
+    expect(fishes!.config.species[2].diet.canEat).not.toContain(1);
+  });
+
+  it('Fishes: Cleaner Wrasse opportunistically eats Tetras', () => {
+    const fishes = getBuiltinPreset('Fishes');
+    expect(fishes!.config.species[1].diet.canEat).toContain(0);
+  });
+
+  it('Fishes: Tetras eat nothing (base of food chain)', () => {
+    const fishes = getBuiltinPreset('Fishes');
+    expect(fishes!.config.species[0].diet.canEat).toEqual([]);
+  });
+
+  it('Fishes: Barracuda gains energy from Tetras only', () => {
+    const fishes = getBuiltinPreset('Fishes');
+    expect(fishes!.config.species[2].energy.energyGainPerPrey[0]).toBeGreaterThan(0);
+    // No gain from Wrasse or self
+    expect(fishes!.config.species[2].energy.energyGainPerPrey[1]).toBe(0);
+    expect(fishes!.config.species[2].energy.energyGainPerPrey[2]).toBe(0);
+  });
+
+  it('Fishes: Cleaner Wrasse gains energy from Tetras only', () => {
+    const fishes = getBuiltinPreset('Fishes');
+    expect(fishes!.config.species[1].energy.energyGainPerPrey[0]).toBeGreaterThan(0);
+    expect(fishes!.config.species[1].energy.energyGainPerPrey[1]).toBe(0);
+    expect(fishes!.config.species[1].energy.energyGainPerPrey[2]).toBe(0);
+  });
+
+  it('Fishes: Tetras school together (positive self-cohesion)', () => {
+    const fishes = getBuiltinPreset('Fishes');
+    const m = fishes!.config.interactionMatrix;
+    // Tetras (row 0) attract own kind (col 0)
+    expect(m[0][0]!.strength).toBeGreaterThan(0);
+  });
+
+  it('Fishes: Tetras flee the Barracuda (predator avoidance)', () => {
+    const fishes = getBuiltinPreset('Fishes');
+    const m = fishes!.config.interactionMatrix;
+    // Tetras (row 0) flee Barracuda (col 2)
+    expect(m[0][2]!.strength).toBeLessThan(0);
+  });
+
+  it('Fishes: Barracuda chases Tetras (hunting)', () => {
+    const fishes = getBuiltinPreset('Fishes');
+    const m = fishes!.config.interactionMatrix;
+    // Barracuda (row 2) chases Tetras (col 0)
+    expect(m[2][0]!.strength).toBeGreaterThan(0);
+  });
+
+  it('Fishes: Barracuda completely ignores Cleaner Wrasse (symbiosis — null interaction)', () => {
+    const fishes = getBuiltinPreset('Fishes');
+    const m = fishes!.config.interactionMatrix;
+    // Barracuda (row 2) does NOT react to Wrasse (col 1) — unique to this preset
+    expect(m[2][1]).toBeNull();
+  });
+
+  it('Fishes: Cleaner Wrasse is attracted to Barracuda (symbiotic following)', () => {
+    const fishes = getBuiltinPreset('Fishes');
+    const m = fishes!.config.interactionMatrix;
+    // Wrasse (row 1) attracted to Barracuda (col 2)
+    expect(m[1][2]!.strength).toBeGreaterThan(0);
+  });
+
+  it('Fishes: Barracuda is territorial (negative self-interaction)', () => {
+    const fishes = getBuiltinPreset('Fishes');
+    const m = fishes!.config.interactionMatrix;
+    // Barracuda (row 2) self-repel (col 2)
+    expect(m[2][2]!.strength).toBeLessThan(0);
+  });
+
+  it('Fishes: Barracuda is larger than Cleaner Wrasse which is larger than Tetras', () => {
+    const fishes = getBuiltinPreset('Fishes');
+    const radii = fishes!.config.species.map((s) => s.radius);
+    expect(radii[2]).toBeGreaterThan(radii[1]);
+    expect(radii[1]).toBeGreaterThan(radii[0]);
+  });
+
+  it('Fishes: all three species have distinct colors', () => {
+    const fishes = getBuiltinPreset('Fishes');
+    const colors = fishes!.config.species.map((s) => s.color);
+    const unique = new Set(colors);
+    expect(unique.size).toBe(3);
+  });
+
+  it('Fishes: total initial population is within populationCap', () => {
+    const fishes = getBuiltinPreset('Fishes');
+    const total = fishes!.config.species.reduce((sum, s) => sum + s.count, 0);
+    expect(total).toBeLessThanOrEqual(fishes!.config.simulation.populationCap!);
   });
 });
