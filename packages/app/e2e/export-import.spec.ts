@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
 /**
  * CRT-14: Export/Import Config Files — E2E round-trip test
@@ -8,6 +8,20 @@ import { test, expect } from '@playwright/test';
  * 2. The exported config is valid and can be re-imported
  * 3. Round-trip preserves the simulation state
  */
+
+/**
+ * Helper: open the controls panel and scroll to the Actions section.
+ * The panel is closed by default (off-screen via CSS transform: translateX(380px)).
+ * The Actions section (Export/Import) is at the bottom of the panel content.
+ */
+async function openPanelAndScrollToActions(page: Page): Promise<void> {
+  await page.locator('.crit-controls-toggle').click();
+  await page.waitForTimeout(300);
+  // Scroll panel to bottom so the Actions section is visible
+  await page.locator('.crit-panel').evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
+}
 
 test.describe('CRT-14: Export/Import config files', () => {
   test('export button triggers download with valid JSON config', async ({ page }) => {
@@ -22,6 +36,9 @@ test.describe('CRT-14: Export/Import config files', () => {
 
     // Verify app started
     expect(messages.some((m) => m.includes('Critterium'))).toBe(true);
+
+    // Open the controls panel and scroll to the Actions section
+    await openPanelAndScrollToActions(page);
 
     // Find and click the Export button in the controls panel
     const exportButton = page.locator('button:has-text("Export")').first();
@@ -89,6 +106,9 @@ test.describe('CRT-14: Export/Import config files', () => {
 
     await page.goto('http://localhost:3000');
     await page.waitForTimeout(3000);
+
+    // Open the controls panel and scroll to the Actions section
+    await openPanelAndScrollToActions(page);
 
     // Step 1: Export the current config
     const exportButton = page.locator('button:has-text("Export")').first();
@@ -211,6 +231,9 @@ test.describe('CRT-14: Export/Import config files', () => {
     const initialMatch = initialParticleLine!.match(/(\d+)/);
     const initialCount = parseInt(initialMatch![1], 10);
 
+    // Open the controls panel and scroll to the Actions section
+    await openPanelAndScrollToActions(page);
+
     // Step 2: Export
     const exportButton = page.locator('button:has-text("Export")').first();
     const downloadPromise = page.waitForEvent('download', { timeout: 5000 }).catch(() => null);
@@ -277,12 +300,20 @@ test.describe('CRT-14: Export/Import config files', () => {
     await page.goto('http://localhost:3000');
     await page.waitForTimeout(2000);
 
+    // Open the controls panel and scroll to the Actions section
+    await openPanelAndScrollToActions(page);
+
     // Pause the simulation so state doesn't change between exports
+    // Pause button is in the Simulation section (top of panel)
+    await page.locator('.crit-panel').evaluate((el) => { el.scrollTop = 0; });
     const pauseButton = page.locator('button:has-text("Pause")').first();
     if (await pauseButton.isVisible()) {
       await pauseButton.click();
       await page.waitForTimeout(500);
     }
+
+    // Scroll back to Actions section for Export button
+    await page.locator('.crit-panel').evaluate((el) => { el.scrollTop = el.scrollHeight; });
 
     // Export twice
     const exportButton = page.locator('button:has-text("Export")').first();
