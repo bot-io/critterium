@@ -503,6 +503,15 @@ async function main(): Promise<void> {
       // Reset renderer state (clear stale birth/death effects + prevAlive)
       renderer.resetState();
 
+      // Reallocate species counts array for current species count
+      speciesCounts = new Int32Array(liveConfig.species.length);
+
+      // Update population graph colors
+      (popGraph as { speciesColors: number[] }).speciesColors = liveConfig.species.map(s => {
+        const hex = s.color;
+        return parseInt(hex.slice(1), 16);
+      });
+
       // Clear stale autosave
       clearAutosave();
 

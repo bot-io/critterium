@@ -87,8 +87,8 @@ export class CritteriumRenderer {
   /** Birth effect object pool. */
   private birthPool: BirthEffect[] = [];
 
-  /** Skip birth/death detection for one frame after reset. */
-  private skipEffectsFrame = false;
+  /** Skip birth/death detection for one frame after reset or fresh init. */
+  private skipEffectsFrame = true;
 
   /** Pulsing phase for sickness rings. */
   private pulsePhase = 0;

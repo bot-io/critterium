@@ -156,13 +156,14 @@ export class EcosystemState {
     index: number,
     _speciesIndex: number,
     species: SpeciesConfig,
-    _rng: () => number,
+    rng: () => number,
   ): void {
     this.alive[index] = ALIVE;
     this.energy[index] = species.energy.initialEnergy;
     this.age[index] = 0;
     this.health[index] = 1.0; // full health
-    this.reproductionCooldown[index] = species.lifecycle.reproductionCooldownSec; // start on cooldown
+    // Randomize initial cooldown (0 to max) so particles don't all reproduce in unison
+    this.reproductionCooldown[index] = rng() * species.lifecycle.reproductionCooldownSec;
     this.sprintTimer[index] = species.stamina?.sprintDurationSec ?? 5;
     this.sprintCooldown[index] = 0;
   }

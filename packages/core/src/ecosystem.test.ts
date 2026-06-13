@@ -80,14 +80,15 @@ describe('EcosystemState.initParticle', () => {
     expect(state.health[0]).toBe(1.0);
   });
 
-  it('sets reproduction cooldown to species cooldown', () => {
+  it('sets reproduction cooldown to a random value in [0, cooldownSec]', () => {
     const state = new EcosystemState(10);
     const species = testSpecies({
       lifecycle: defaultLifecycleConfig({ reproductionCooldownSec: 7 }),
     });
     const rng = createRng(42);
     state.initParticle(0, 0, species, rng);
-    expect(state.reproductionCooldown[0]).toBe(7);
+    expect(state.reproductionCooldown[0]).toBeGreaterThanOrEqual(0);
+    expect(state.reproductionCooldown[0]).toBeLessThanOrEqual(7);
   });
 
   it('can initialize multiple particles independently', () => {
