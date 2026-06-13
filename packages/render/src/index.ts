@@ -87,6 +87,9 @@ export class CritteriumRenderer {
   /** Birth effect object pool. */
   private birthPool: BirthEffect[] = [];
 
+  /** Skip birth/death detection for one frame after reset. */
+  private skipEffectsFrame = false;
+
   /** Pulsing phase for sickness rings. */
   private pulsePhase = 0;
 
@@ -127,6 +130,7 @@ export class CritteriumRenderer {
    */
   resetState(): void {
     this.prevAlive.fill(DEAD);
+    this.skipEffectsFrame = true;
     for (const effect of this.birthPool) {
       effect.g.visible = false;
       effect.elapsed = -1;
@@ -272,24 +276,34 @@ export class CritteriumRenderer {
       const isAlive = eco.alive[i] !== DEAD;
       const wasAlive = this.prevAlive[i] !== DEAD;
 
-      // Detect death: was alive last frame, now dead
-      if (wasAlive && !isAlive) {
-        if (effectsEnabled) {
-          const speciesIdx = world.type[i];
-          const vis = this.speciesVisuals[speciesIdx];
-          if (vis) {
-            this.spawnDeathEffect(world.x[i], world.y[i], vis.color, vis.radius);
+      // After reset, skip effects for one frame but sync prevAlive
+      if (this.skipEffectsFrame) {
+        this.prevAlive[i] = eco.alive[i];
+        if (!isAlive) {
+          sprite.visible = false;
+          continue;
+        }
+        // fall through to normal rendering
+      } else {
+        // Detect death: was alive last frame, now dead
+        if (wasAlive && !isAlive) {
+          if (effectsEnabled) {
+            const speciesIdx = world.type[i];
+            const vis = this.speciesVisuals[speciesIdx];
+            if (vis) {
+              this.spawnDeathEffect(world.x[i], world.y[i], vis.color, vis.radius);
+            }
           }
         }
-      }
 
-      // Detect birth: was dead, now alive
-      if (!wasAlive && isAlive && effectsEnabled) {
-        this.spawnBirthEffect(i);
-      }
+        // Detect birth: was dead, now alive
+        if (!wasAlive && isAlive && effectsEnabled) {
+          this.spawnBirthEffect(i);
+        }
 
-      // Update prevAlive (always track for state consistency)
-      this.prevAlive[i] = eco.alive[i];
+        // Update prevAlive (always track for state consistency)
+        this.prevAlive[i] = eco.alive[i];
+      }
 
       if (!isAlive) {
         sprite.visible = false;
@@ -355,6 +369,9 @@ export class CritteriumRenderer {
 
     // Update birth effects (always run so active effects can finish)
     this.updateBirthEffects(world, eco, dt);
+
+    // Clear skip flag after one frame
+    if (this.skipEffectsFrame) this.skipEffectsFrame = false;
 
     // Total alive
     let totalAlive = 0;

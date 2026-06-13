@@ -805,40 +805,40 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
         const init = initMatrix?.[i]?.[j];
         const baseRadius = init?.radius ?? 100;
         const rowDiv = el('div', 'crit-row');
-        rowDiv.style.cssText = 'gap:4px; flex-wrap:wrap; align-items:center;';
+        rowDiv.style.cssText = 'gap:6px; flex-wrap:wrap; align-items:center;';
 
         const lbl = el('span', 'crit-label');
         lbl.textContent = `${names[i].substring(0, 4)}→${names[j].substring(0, 4)}`;
         lbl.style.minWidth = '60px';
         rowDiv.appendChild(lbl);
 
-        // Min distance slider
-        const minLbl = el('span', 'crit-value');
-        minLbl.textContent = 'Min';
-        minLbl.style.cssText = 'font-size:8px; color:#88aaff; min-width:20px;';
-        rowDiv.appendChild(minLbl);
-
+        // Min distance group: slider + inline value
+        const minGroup = el('div');
+        minGroup.style.cssText = 'display:flex; align-items:center; gap:3px; flex:1; min-width:80px;';
         const minSlider = document.createElement('input');
         minSlider.type = 'range'; minSlider.min = '10'; minSlider.max = '300'; minSlider.step = '5';
         minSlider.value = String(Math.max(10, baseRadius - 30));
-        minSlider.style.flex = '1'; minSlider.style.minWidth = '40px';
+        minSlider.style.flex = '1';
         const minVal = el('span', 'crit-value');
         minVal.textContent = minSlider.value;
-        minVal.style.minWidth = '24px'; minVal.style.fontSize = '9px';
+        minVal.style.cssText = 'min-width:24px; font-size:9px; color:#88aaff;';
+        minGroup.appendChild(minSlider);
+        minGroup.appendChild(minVal);
+        rowDiv.appendChild(minGroup);
 
-        // Max distance slider
-        const maxLbl = el('span', 'crit-value');
-        maxLbl.textContent = 'Max';
-        maxLbl.style.cssText = 'font-size:8px; color:#ffaa88; min-width:20px;';
-        rowDiv.appendChild(maxLbl);
-
+        // Max distance group: slider + inline value
+        const maxGroup = el('div');
+        maxGroup.style.cssText = 'display:flex; align-items:center; gap:3px; flex:1; min-width:80px;';
         const maxSlider = document.createElement('input');
         maxSlider.type = 'range'; maxSlider.min = '10'; maxSlider.max = '300'; maxSlider.step = '5';
         maxSlider.value = String(baseRadius);
-        maxSlider.style.flex = '1'; maxSlider.style.minWidth = '40px';
+        maxSlider.style.flex = '1';
         const maxVal = el('span', 'crit-value');
         maxVal.textContent = maxSlider.value;
-        maxVal.style.minWidth = '24px'; maxVal.style.fontSize = '9px';
+        maxVal.style.cssText = 'min-width:24px; font-size:9px; color:#ffaa88;';
+        maxGroup.appendChild(maxSlider);
+        maxGroup.appendChild(maxVal);
+        rowDiv.appendChild(maxGroup);
 
         const ii = i, jj = j;
         function updateRadius(): void {
@@ -854,20 +854,13 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
           minVal.textContent = minSlider.value;
           maxVal.textContent = maxSlider.value;
           const falloff = init?.falloff ?? 'linear';
-          // Update the closure variables used by cell click handlers
-          const mi = ii, mj = jj;
-          // Find the matching cell's currentStr from the initMatrix
-          const str = initMatrix?.[mi]?.[mj]?.strength ?? 0;
+          const str = initMatrix?.[ii]?.[jj]?.strength ?? 0;
           opts.onMatrixChange?.(ii, jj, str, parseInt(minSlider.value), parseInt(maxSlider.value), falloff);
         }
 
         minSlider.addEventListener('input', updateRadius);
         maxSlider.addEventListener('input', updateRadius);
 
-        rowDiv.appendChild(minSlider);
-        rowDiv.appendChild(minVal);
-        rowDiv.appendChild(maxSlider);
-        rowDiv.appendChild(maxVal);
         radiusBody.appendChild(rowDiv);
       }
     }
