@@ -472,36 +472,41 @@ async function main(): Promise<void> {
 
   // ─── rebuildSimulation ──────────────────────────────────────
   function rebuildSimulation(): void {
-    // Create new ecosystem from live config
-    eco = new EcosystemWorld(liveConfig);
+    try {
+      // Create new ecosystem from live config
+      eco = new EcosystemWorld(liveConfig);
 
-    // Rebuild interaction matrix from current matrix state
-    const n = matrixState.length;
-    interactionMatrix = new InteractionMatrix(n);
-    for (let i = 0; i < n; i++) {
-      for (let j = 0; j < n; j++) {
-        const cell = matrixState[i]?.[j];
-        if (cell) {
-          interactionMatrix.set(i, j, { strength: cell.strength, radius: cell.radius, falloff: cell.falloff as FalloffType });
+      // Rebuild interaction matrix from current matrix state
+      const n = matrixState.length;
+      interactionMatrix = new InteractionMatrix(n);
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+          const cell = matrixState[i]?.[j];
+          if (cell) {
+            interactionMatrix.set(i, j, { strength: cell.strength, radius: cell.radius, falloff: cell.falloff as FalloffType });
+          }
         }
       }
+      (pairwiseForce as { matrix: InteractionMatrix }).matrix = interactionMatrix;
+
+      // Rebuild spatial hash
+      grid.rebuild(eco.world);
+
+      // Reset timing
+      accumulator = 0;
+      lastTime = performance.now();
+
+      // Reset renderer state (clear stale birth/death effects + prevAlive)
+      renderer.resetState();
+
+      // Clear stale autosave
+      clearAutosave();
+
+      console.log(`[Critterium] Simulation rebuilt: ${eco.aliveCount} particles, cap ${liveConfig.populationCap}`);
+    } catch (err) {
+      console.error('[Critterium] rebuildSimulation failed:', err);
+      onError(err);
     }
-    (pairwiseForce as { matrix: InteractionMatrix }).matrix = interactionMatrix;
-
-    // Rebuild spatial hash
-    grid.rebuild(eco.world);
-
-    // Reset timing
-    accumulator = 0;
-    lastTime = performance.now();
-
-    // Reset renderer state (clear stale birth/death effects + prevAlive)
-    renderer.resetState();
-
-    // Clear stale autosave
-    clearAutosave();
-
-    console.log(`[Critterium] Simulation rebuilt: ${eco.aliveCount} particles, cap ${liveConfig.populationCap}`);
   }
 
   function getCurrentConfig(): CritteriumConfig {
