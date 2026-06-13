@@ -25,15 +25,16 @@ export function autosave(config: CritteriumConfig): void {
 /**
  * Load the autosaved config from localStorage.
  * Returns null if no autosave exists or if it's invalid.
+ * Full validation via deserializeConfig ensures the returned config is
+ * always safe to use (consistent with importConfig).
  */
 export function loadAutosave(): CritteriumConfig | null {
   try {
     const json = localStorage.getItem(AUTOSAVE_KEY);
     if (!json) return null;
     const parsed = JSON.parse(json);
-    // Basic version check
-    if (parsed.version !== 1) return null;
-    return parsed as CritteriumConfig;
+    // Full validation — same path as importConfig
+    return deserializeConfig(parsed);
   } catch (err) {
     console.warn('[Critterium] Failed to load autosave:', err);
     return null;

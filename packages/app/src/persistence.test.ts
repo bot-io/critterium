@@ -97,6 +97,104 @@ describe('persistence', () => {
     warnSpy.mockRestore();
   });
 
+  it('loadAutosave returns null for config missing required fields', () => {
+    // version 1 but missing simulation, species, interactionMatrix
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({ version: 1 }));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(loadAutosave()).toBeNull();
+    warnSpy.mockRestore();
+  });
+
+  it('loadAutosave returns null for config with invalid species (missing energy)', () => {
+    const badConfig = {
+      version: 1,
+      simulation: {
+        width: 800,
+        height: 600,
+        boundaryMode: 'wrap',
+        seed: 42,
+        populationCap: 600,
+      },
+      species: [
+        {
+          name: 'Broken',
+          count: 10,
+          color: '#ff0000',
+          radius: 3,
+          initialSpeed: 50,
+          maxSpeed: 100,
+          // energy, lifecycle, diet are MISSING
+        },
+      ],
+      interactionMatrix: [[null]],
+      forces: {},
+    };
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(badConfig));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(loadAutosave()).toBeNull();
+    warnSpy.mockRestore();
+  });
+
+  it('loadAutosave clamps out-of-range values in validated config', () => {
+    const extremeConfig = {
+      version: 1,
+      simulation: {
+        width: 50, // below minimum 100, will be clamped to 800
+        height: 10, // below minimum 100, will be clamped to 600
+        boundaryMode: 'wrap',
+        seed: 42,
+        populationCap: 99999, // above maximum 5000, will be clamped
+      },
+      species: [
+        {
+          name: 'Extreme',
+          count: 120,
+          color: '#ff00ff',
+          radius: 3,
+          initialSpeed: 60,
+          maxSpeed: 100,
+          energy: {
+            maxEnergy: 80,
+            initialEnergy: 40,
+            movementCostPerSec: 2,
+            reproductionCost: 20,
+            idleDrainPerSec: 1,
+            energyGainPerPrey: [0],
+          },
+          lifecycle: {
+            maxAgeSec: 40,
+            starvationDamagePerSec: 8,
+            reproductionCooldownSec: 3,
+          },
+          diet: { canEat: [] },
+        },
+      ],
+      interactionMatrix: [[null]],
+      forces: {},
+    };
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(extremeConfig));
+    const loaded = loadAutosave();
+    expect(loaded).not.toBeNull();
+    // Values should be clamped to safe defaults
+    expect(loaded!.simulation.width).toBe(800);
+    expect(loaded!.simulation.height).toBe(600);
+    expect(loaded!.simulation.populationCap).toBe(5000);
+  });
+
+  it('loadAutosave returns null for null object', () => {
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(null));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(loadAutosave()).toBeNull();
+    warnSpy.mockRestore();
+  });
+
+  it('loadAutosave returns null for non-object JSON', () => {
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(42));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(loadAutosave()).toBeNull();
+    warnSpy.mockRestore();
+  });
+
   // ─── clearAutosave ───
 
   it('clearAutosave removes the autosave key', () => {
