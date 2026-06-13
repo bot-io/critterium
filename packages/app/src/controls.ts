@@ -25,6 +25,8 @@ export interface ControlsPanelOptions {
   onSpeciesChange?: (speciesIndex: number, param: string, value: number | string | boolean) => void;
   onAddSpecies?: () => void;
   onDeleteSpecies?: (speciesIndex: number) => void;
+  onShowErrorLog?: () => void;
+  onClearErrorLog?: () => void;
   onExport?: () => void;
   onImport?: () => void;
   onSavePreset?: (name: string) => void;
@@ -1007,6 +1009,22 @@ function buildActionsSection(opts: ControlsPanelOptions): HTMLElement {
     presetRow.appendChild(loadBtn);
     presetRow.appendChild(delBtn);
     body.appendChild(presetRow);
+
+    // Error Log section
+    const errorDivider = el('div');
+    errorDivider.style.cssText = 'border-top:1px solid rgba(255,255,255,0.08); margin:6px 0;';
+    body.appendChild(errorDivider);
+
+    const errorRow = el('div', 'crit-row');
+    const errorLogBtn = el('button', 'crit-btn');
+    errorLogBtn.textContent = '📋 Error Log';
+    errorLogBtn.addEventListener('click', () => opts.onShowErrorLog?.());
+    errorRow.appendChild(errorLogBtn);
+    const clearLogBtn = el('button', 'crit-btn crit-btn-small');
+    clearLogBtn.textContent = '🗑 Clear';
+    clearLogBtn.addEventListener('click', () => opts.onClearErrorLog?.());
+    errorRow.appendChild(clearLogBtn);
+    body.appendChild(errorRow);
   });
 }
 

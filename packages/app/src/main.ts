@@ -38,6 +38,7 @@ import {
 import { CritteriumRenderer, type SpeciesVisual } from '@critterium/render';
 import { createControlsPanel, resetAllSliders } from './controls.js';
 import { autosave, loadAutosave, clearAutosave, exportConfig, importConfig } from './persistence.js';
+import { installErrorCapture, getErrors, clearErrors, formatErrors } from './error-log.js';
 import { getBuiltinPreset } from './presets.js';
 import { PopulationGraph } from './population-graph.js';
 import { AdaptiveQuality } from './adaptive-quality.js';
@@ -298,6 +299,9 @@ function buildMatrixValues(
 // ─── Main ─────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
+  // Install error capture first (before anything else)
+  installErrorCapture();
+
   // 1. Check for autosave
   let eco: EcosystemWorld;
   let interactionMatrix: InteractionMatrix;
@@ -1048,6 +1052,50 @@ async function main(): Promise<void> {
     onExport: () => {
       const config = getCurrentConfig();
       exportConfig(config, 'critterium-config.json');
+    },
+
+    onShowErrorLog: () => {
+      const errs = getErrors();
+      if (errs.length === 0) {
+        alert('No errors captured.');
+        return;
+      }
+      const text = formatErrors();
+      // Show in a modal overlay
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+      const box = document.createElement('div');
+      box.style.cssText = 'background:#1a1a1a;color:#ff6666;border:1px solid #ff4444;border-radius:8px;padding:16px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column;';
+      const header = document.createElement('div');
+      header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;';
+      const title = document.createElement('span');
+      title.textContent = `Error Log (${errs.length} errors)`;
+      title.style.cssText = 'font-weight:bold;color:#fff;';
+      header.appendChild(title);
+      const copyBtn = document.createElement('button');
+      copyBtn.textContent = '📋 Copy';
+      copyBtn.style.cssText = 'background:#333;color:#fff;border:1px solid #555;padding:4px 12px;border-radius:4px;cursor:pointer;margin-right:4px;';
+      copyBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(text).then(() => { copyBtn.textContent = '✓ Copied!'; });
+      });
+      header.appendChild(copyBtn);
+      const closeBtn = document.createElement('button');
+      closeBtn.textContent = '✕';
+      closeBtn.style.cssText = 'background:#333;color:#fff;border:1px solid #555;padding:4px 8px;border-radius:4px;cursor:pointer;';
+      closeBtn.addEventListener('click', () => overlay.remove());
+      header.appendChild(closeBtn);
+      box.appendChild(header);
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'overflow:auto;flex:1;font:11px "SF Mono","Fira Code","Consolas",monospace;white-space:pre-wrap;word-break:break-all;';
+      pre.textContent = text;
+      box.appendChild(pre);
+      overlay.appendChild(box);
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+      document.body.appendChild(overlay);
+    },
+
+    onClearErrorLog: () => {
+      clearErrors();
     },
 
     onImport: async () => {
