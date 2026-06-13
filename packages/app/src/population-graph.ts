@@ -137,9 +137,15 @@ export class PopulationGraph {
     }
   }
 
+  /** Clean up and reset all history. */
+  reset(): void {
+    this.history.length = 0;
+    this.sampleTimer = 0;
+    this.ctx.clearRect(0, 0, this.width, this.height);
+  }
+
   /** Clean up. */
   destroy(): void {
-    this.history.length = 0;
-    this.ctx.clearRect(0, 0, this.width, this.height);
+    this.reset();
   }
 }

@@ -423,7 +423,7 @@ async function main(): Promise<void> {
   const popGraphCanvas = document.createElement('canvas');
   document.body.appendChild(popGraphCanvas);
   const popGraph = new PopulationGraph(popGraphCanvas, {
-    speciesColors: SPECIES_VISUALS.map(v => v.color),
+    speciesColors: activeSpeciesVisuals.map(v => v.color),
     maxHistorySec: 30,
   });
 
@@ -506,7 +506,8 @@ async function main(): Promise<void> {
       // Reallocate species counts array for current species count
       speciesCounts = new Int32Array(liveConfig.species.length);
 
-      // Update population graph colors
+      // Update population graph colors and reset history
+      popGraph.reset();
       (popGraph as { speciesColors: number[] }).speciesColors = liveConfig.species.map(s => {
         const hex = s.color;
         return parseInt(hex.slice(1), 16);
