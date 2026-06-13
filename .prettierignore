@@ -4,3 +4,4 @@ android/
 coverage/
 *.apk
 package-lock.json
+LICENSE
