@@ -59,22 +59,21 @@ export function processEating(eco: EcosystemWorld): EatingResult {
       const minDist = ri + rj;
 
       if (distSq < minDist * minDist) {
+        // Energy gain from energyGainPerPrey array
+        const energyGain = species[speciesIdx].energy.energyGainPerPrey[preySpeciesIdx] ?? 0;
+
+        // Don't eat if it would exceed max energy — predator is "full"
+        const maxE = species[speciesIdx].energy.maxEnergy;
+        if (state.energy[i] + energyGain > maxE) continue;
+
         // Eat! Instant kill + energy gain
         eaten[j] = 1;
         eco.kill(j);
         result.killed++;
 
-        // Energy gain from energyGainPerPrey array
-        const energyGain = species[speciesIdx].energy.energyGainPerPrey[preySpeciesIdx] ?? 0;
         if (energyGain > 0) {
           state.energy[i] += energyGain;
           result.energyGained += energyGain;
-
-          // Clamp to max
-          const maxE = species[speciesIdx].energy.maxEnergy;
-          if (state.energy[i] > maxE) {
-            state.energy[i] = maxE;
-          }
         }
       }
     }
