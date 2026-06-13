@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createControlsPanel, resetAllSliders } from './controls.js';
+import { createControlsPanel, resetAllSliders, getSliderValue, getAllSpeciesCounts } from './controls.js';
 import type { ControlsPanelOptions } from './controls.js';
 
 function makeOptions(overrides: Partial<ControlsPanelOptions> = {}): ControlsPanelOptions {
@@ -275,5 +275,51 @@ describe('controls panel', () => {
     const panel = createControlsPanel(makeOptions());
     const sliders = panel.querySelectorAll('input[type="range"]');
     expect(sliders.length).toBeGreaterThan(0);
+  });
+
+  // ─── getSliderValue / getAllSpeciesCounts (CRT-22) ───────────────
+  it('getSliderValue returns undefined for unregistered key', () => {
+    expect(getSliderValue('nonexistent.key')).toBeUndefined();
+  });
+
+  it('getSliderValue returns current numeric value of a registered slider', () => {
+    createControlsPanel(makeOptions({ speciesCount: 2, speciesNames: ['A', 'B'] }));
+    const val = getSliderValue('species.0.count');
+    expect(val).toBeTypeOf('number');
+    expect(val!).toBeGreaterThan(0);
+  });
+
+  it('getAllSpeciesCounts returns counts for every species with a slider', () => {
+    createControlsPanel(makeOptions({ speciesCount: 3 }));
+    const counts = getAllSpeciesCounts(3);
+    expect(counts.length).toBe(3);
+    for (const c of counts) {
+      expect(c).toBeTypeOf('number');
+      expect(c!).toBeGreaterThan(0);
+    }
+  });
+
+  it('getAllSpeciesCounts pads with undefined for species beyond registered sliders', () => {
+    const counts = getAllSpeciesCounts(5);
+    expect(counts.length).toBe(5);
+    // Entries for indices 0-2 may be registered from prior tests, but indices 3-4 are not
+    expect(counts[4]).toBeUndefined();
+  });
+
+  // ─── maxCount option (CRT-22) ────────────────────────────────────
+  it('maxCount option sets species count slider maximum', () => {
+    const panel = createControlsPanel(
+      makeOptions({ speciesCount: 2, speciesNames: ['A', 'B'], maxCount: 999 }),
+    );
+    const sliders = panel.querySelectorAll('input[type="range"]');
+    const maxes = Array.from(sliders).map((s) => (s as HTMLInputElement).max);
+    expect(maxes).toContain('999');
+  });
+
+  it('default count slider max is 600 when maxCount not specified', () => {
+    const panel = createControlsPanel(makeOptions({ speciesCount: 2, speciesNames: ['A', 'B'] }));
+    const sliders = panel.querySelectorAll('input[type="range"]');
+    const maxes = Array.from(sliders).map((s) => (s as HTMLInputElement).max);
+    expect(maxes).toContain('600');
   });
 });

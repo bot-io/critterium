@@ -36,7 +36,7 @@ import {
   type CritteriumConfig,
 } from '@critterium/core';
 import { CritteriumRenderer, type SpeciesVisual } from '@critterium/render';
-import { createControlsPanel, resetAllSliders } from './controls.js';
+import { createControlsPanel, resetAllSliders, getAllSpeciesCounts } from './controls.js';
 import { autosave, loadAutosave, clearAutosave, exportConfig, importConfig } from './persistence.js';
 import { installErrorCapture, getErrors, clearErrors, formatErrors } from './error-log.js';
 import { getBuiltinPreset } from './presets.js';
@@ -746,6 +746,7 @@ async function main(): Promise<void> {
     speciesNames: activeSpeciesNames,
     speciesColors: liveConfig.species.map(s => s.color),
     initialSpeciesValues,
+    maxCount: liveConfig.populationCap,
     initialMatrixValues,
     initialForceValues: {
       drag: { coefficient: 0.8, _enabled: 1 },
@@ -760,11 +761,22 @@ async function main(): Promise<void> {
     },
 
     onReset: () => {
-      // Reset to the original CONFIG defaults
-      liveConfig = deepCloneConfig(CONFIG);
-      interactionMatrix = buildInteractionMatrix();
+      // Reset to the original CONFIG defaults — use applyConfig pipeline
+      // to properly rebuild matrix from CONFIG's interaction rules
+      const validated = deserializeConfig(CONFIG as any);
+      const applied = applyConfig(validated);
+      eco = applied.eco;
+      interactionMatrix = applied.matrix;
+      (pairwiseForce as { matrix: InteractionMatrix }).matrix = interactionMatrix;
       initMatrixState(interactionMatrix);
-      rebuildSimulation();
+      liveConfig = deepCloneConfig(eco.config);
+      accumulator = 0;
+      lastTime = performance.now();
+      renderer.resetState();
+      speciesCounts = new Int32Array(liveConfig.species.length);
+      popGraph.reset();
+      popGraph.setColors(liveConfig.species.map(s => parseInt(s.color.slice(1), 16)));
+      clearAutosave();
       // Sync all UI sliders to the reset values
       resetAllSliders({
         speciesValues: buildSpeciesValues(liveConfig.species),
@@ -778,8 +790,15 @@ async function main(): Promise<void> {
     },
 
     onReseed: () => {
-      const newSeed = Math.floor(Math.random() * 2147483647);
-      liveConfig.seed = newSeed;
+      // Commit all pending species counts from sliders before reseeding
+      const counts = getAllSpeciesCounts(liveConfig.species.length);
+      for (let i = 0; i < counts.length; i++) {
+        if (counts[i] !== undefined) {
+          liveConfig.species[i].count = counts[i]!;
+        }
+      }
+      // New random seed + full rebuild
+      liveConfig.seed = Math.floor(Math.random() * 2147483647);
       rebuildSimulation();
     },
 

@@ -42,6 +42,7 @@ export interface ControlsPanelOptions {
   initialForceValues?: Record<string, Record<string, number>>;
   initialMatrixValues?: Array<Array<{ strength: number; radius: number; falloff: string } | null>>;
   initialSpeciesValues?: Array<Record<string, number>>;
+  maxCount?: number;
 }
 
 // ─── Slider Registry ─────────────────────────────────────────
@@ -66,6 +67,22 @@ function setSliderValue(key: string, value: number): void {
     ref.slider.value = String(value);
     ref.valueEl.textContent = formatNum(value);
   }
+}
+
+/** Read a registered slider's current numeric value. Returns undefined if not found. */
+export function getSliderValue(key: string): number | undefined {
+  const ref = sliderRegistry.get(key);
+  if (!ref) return undefined;
+  return parseFloat(ref.slider.value);
+}
+
+/** Read all species count slider values. Returns map of speciesIndex → count. */
+export function getAllSpeciesCounts(numSpecies: number): Array<number | undefined> {
+  const result: Array<number | undefined> = [];
+  for (let i = 0; i < numSpecies; i++) {
+    result.push(getSliderValue(`species.${i}.count`));
+  }
+  return result;
 }
 
 /**
@@ -578,7 +595,7 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
       const countRow = el('div', 'crit-row');
       const countLbl = el('span', 'crit-label'); countLbl.textContent = 'Count';
       const countSlider = document.createElement('input');
-      countSlider.type = 'range'; countSlider.min = '1'; countSlider.max = '200';
+      countSlider.type = 'range'; countSlider.min = '1'; countSlider.max = String(opts.maxCount ?? 600);
       countSlider.value = String(iv['count'] ?? 80); countSlider.step = '1';
       const countVal = el('span', 'crit-value');
       countVal.textContent = countSlider.value;
