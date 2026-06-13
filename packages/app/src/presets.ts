@@ -121,7 +121,7 @@ const CLASSIC: EcosystemPreset = preset(
 
 const PLANKTON_BLOOM: EcosystemPreset = preset(
   'Plankton Bloom',
-  'Deep ocean food chain: 885 particles from Algae to Whales.',
+  'Deep ocean food chain: Algae, Zooplankton, Small Fish, Big Fish, and Whales.',
   {
     version: 1,
     simulation: {
@@ -129,12 +129,12 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
       height: 600,
       boundaryMode: 'wrap',
       seed: 77,
-      populationCap: 1200,
+      populationCap: 800,
     },
     species: [
       {
         name: 'Algae',
-        count: 400,
+        count: 360,
         color: '#22dd22',
         radius: 2,
         initialSpeed: 10,
@@ -158,7 +158,7 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
       },
       {
         name: 'Zooplankton',
-        count: 250,
+        count: 225,
         color: '#4488ff',
         radius: 3,
         initialSpeed: 30,
@@ -182,7 +182,7 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
       },
       {
         name: 'Small Fish',
-        count: 150,
+        count: 135,
         color: '#eedd44',
         radius: 4,
         initialSpeed: 50,
@@ -206,7 +206,7 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
       },
       {
         name: 'Big Fish',
-        count: 80,
+        count: 70,
         color: '#ff8833',
         radius: 6,
         initialSpeed: 40,

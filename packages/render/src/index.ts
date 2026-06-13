@@ -78,6 +78,9 @@ export class CritteriumRenderer {
   /** Per-species names for HUD. */
   private speciesNames: string[];
 
+  /** Colored squares shown next to each species name in the HUD. */
+  private speciesColorIndicators: Graphics[] = [];
+
   /** Previous alive state for death/birth detection. */
   private prevAlive: Uint8Array;
 
@@ -382,9 +385,34 @@ export class CritteriumRenderer {
     // Update HUD (no array allocation — direct string concatenation)
     let hud = 'Particles: ' + totalAlive;
     for (let s = 0; s < this.speciesNames.length; s++) {
-      hud += '\n' + this.speciesNames[s] + ': ' + speciesCounts[s];
+      hud += '\n  ' + this.speciesNames[s] + ': ' + speciesCounts[s];
     }
     this.hudText.text = hud;
+
+    // Update colored species indicators
+    const lineHeight = 17;
+    const numSpecies = this.speciesNames.length;
+    // Ensure we have enough indicator graphics
+    while (this.speciesColorIndicators.length < numSpecies) {
+      const g = new Graphics();
+      g.visible = false;
+      this.hudContainer.addChild(g);
+      this.speciesColorIndicators.push(g);
+    }
+    for (let s = 0; s < this.speciesColorIndicators.length; s++) {
+      const g = this.speciesColorIndicators[s];
+      if (s < numSpecies) {
+        g.clear();
+        g.rect(0, 0, 8, 8);
+        g.fill({ color: this.speciesVisuals[s].color });
+        g.x = 12;
+        // +1 for "Particles" header line, +1 because the newline adds a line
+        g.y = 10 + (1 + s) * lineHeight + 3;
+        g.visible = true;
+      } else {
+        g.visible = false;
+      }
+    }
   }
 
   /** Spawn a death effect at the given position. */
