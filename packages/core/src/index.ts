@@ -1116,7 +1116,7 @@ export class VortexForce implements Force {
 
 // ─── Re-exports for barrel import ────────────────────────────────
 export type { EcosystemConfig, SpeciesConfig, EnergyConfig, LifecycleConfig, DietConfig, StaminaConfig, InteractionRule as EcoInteractionRule } from './ecosystem.js';
-export { ALIVE, defaultEnergyConfig, defaultLifecycleConfig, defaultDietConfig, defaultStaminaConfig } from './ecosystem.js';
+export { ALIVE, DEAD, defaultEnergyConfig, defaultLifecycleConfig, defaultDietConfig, defaultStaminaConfig } from './ecosystem.js';
 export type { EcosystemState } from './ecosystem.js';
 export { EcosystemWorld } from './ecosystem-world.js';
 export type { LifecycleResult } from './ecosystem-world.js';
