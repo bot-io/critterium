@@ -378,11 +378,26 @@ export class SpatialHashGrid {
   /**
    * Rebuild the grid from a World's current positions.
    * Calls clear() then inserts all particles. Zero allocations.
+   *
+   * @param world  The simulation world
+   * @param alive  Optional alive array (from EcosystemState). If provided,
+   *               dead particles (alive[i] === 0) are skipped to prevent
+   *               phantom neighbors in force/eating queries.
+   * @param hwm    Optional high-water mark. If provided, only particles
+   *               [0, hwm) are inserted instead of [0, world.count).
    */
-  rebuild(world: World): void {
+  rebuild(world: World, alive?: Uint8Array, hwm?: number): void {
     this.clear();
-    for (let i = 0; i < world.count; i++) {
-      this.insert(i, world.x[i], world.y[i]);
+    const limit = hwm ?? world.count;
+    if (alive) {
+      for (let i = 0; i < limit; i++) {
+        if (alive[i] === 0) continue;
+        this.insert(i, world.x[i], world.y[i]);
+      }
+    } else {
+      for (let i = 0; i < limit; i++) {
+        this.insert(i, world.x[i], world.y[i]);
+      }
     }
   }
 
@@ -397,11 +412,17 @@ export class SpatialHashGrid {
    * @param yArr     Particle y positions (world.y)
    * @param count    Number of particles
    * @param callback Called for each neighbor: (particleIndex, dx, dy, distSq)
+   * @param selfIdx  Optional: when querying from a particle's own position, pass
+   *                 that particle's index to exclude it by index (instead of by
+   *                 zero-distance). This allows co-located particles (dSq === 0)
+   *                 to be found as neighbors, which is essential for the eating
+   *                 system where predator and prey may overlap perfectly.
    */
   queryRadius(
     px: number, py: number, radius: number,
     xArr: Float32Array, yArr: Float32Array, count: number,
     callback: (idx: number, dx: number, dy: number, distSq: number) => void,
+    selfIdx = -1,
   ): void {
     const rSq = radius * radius;
     const invCS = this.invCellSize;
@@ -418,11 +439,27 @@ export class SpatialHashGrid {
         let pIdx = this.head[row * this.cols + col];
         while (pIdx !== -1) {
           if (pIdx < count) {
-            const dx = xArr[pIdx] - px;
-            const dy = yArr[pIdx] - py;
-            const dSq = dx * dx + dy * dy;
-            if (dSq <= rSq && dSq > 0) {
-              callback(pIdx, dx, dy, dSq);
+            // When selfIdx is provided, exclude self by index so that
+            // co-located particles (dSq === 0) are still returned.
+            // When selfIdx is not provided, use dSq > 0 for backward-
+            // compatible self-exclusion (prevents division-by-zero in
+            // force calculations that divide by dist = sqrt(dSq)).
+            if (selfIdx >= 0) {
+              if (pIdx !== selfIdx) {
+                const dx = xArr[pIdx] - px;
+                const dy = yArr[pIdx] - py;
+                const dSq = dx * dx + dy * dy;
+                if (dSq <= rSq) {
+                  callback(pIdx, dx, dy, dSq);
+                }
+              }
+            } else {
+              const dx = xArr[pIdx] - px;
+              const dy = yArr[pIdx] - py;
+              const dSq = dx * dx + dy * dy;
+              if (dSq <= rSq && dSq > 0) {
+                callback(pIdx, dx, dy, dSq);
+              }
             }
           }
           pIdx = this.next[pIdx];
@@ -589,6 +626,10 @@ export class PairwiseForce {
   readonly matrix: InteractionMatrix;
   readonly repulsion: RepulsionConfig;
 
+  // Pre-allocated velocity delta buffers — grow on demand, never reallocated per-step
+  private dvx: Float32Array = new Float32Array(0);
+  private dvy: Float32Array = new Float32Array(0);
+
   constructor(matrix: InteractionMatrix, repulsion: RepulsionConfig = DEFAULT_REPULSION) {
     this.matrix = matrix;
     this.repulsion = repulsion;
@@ -617,9 +658,17 @@ export class PairwiseForce {
       }
     }
 
-    // Accumulate velocity changes in temp arrays to avoid order dependency
-    const dvx = new Float32Array(count);
-    const dvy = new Float32Array(count);
+    // Ensure velocity delta buffers are large enough (grow only, never shrink)
+    if (this.dvx.length < count) {
+      this.dvx = new Float32Array(count);
+      this.dvy = new Float32Array(count);
+    } else {
+      // Zero-fill only the active range
+      this.dvx.fill(0, 0, count);
+      this.dvy.fill(0, 0, count);
+    }
+    const dvx = this.dvx;
+    const dvy = this.dvy;
 
     for (let i = 0; i < count; i++) {
       const xi = x[i];

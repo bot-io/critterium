@@ -16,7 +16,7 @@ interface HistoryEntry {
 }
 
 export class PopulationGraph {
-  private _canvas: HTMLCanvasElement;
+  private readonly canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private speciesColors: number[];
   private maxHistorySec: number;
@@ -37,7 +37,7 @@ export class PopulationGraph {
   private readonly height = 80;
 
   constructor(canvas: HTMLCanvasElement, options: PopulationGraphOptions) {
-    this._canvas = canvas;
+    this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
     this.speciesColors = options.speciesColors;
     this.maxHistorySec = options.maxHistorySec;
@@ -135,6 +135,11 @@ export class PopulationGraph {
       }
       ctx.stroke();
     }
+  }
+
+  /** Update species colors (e.g. when species are added/removed). */
+  setColors(colors: number[]): void {
+    this.speciesColors = colors;
   }
 
   /** Clean up and reset all history. */

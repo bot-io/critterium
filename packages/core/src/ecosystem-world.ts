@@ -20,7 +20,6 @@ import {
   type EcosystemConfig,
   type EcosystemSnapshot,
   type SpeciesConfig,
-  type StaminaConfig,
 } from './ecosystem.js';
 
 // ─── EcosystemWorld ──────────────────────────────────────────────

@@ -169,7 +169,9 @@ describe('sim: eating', () => {
     ]));
     eco.world.x[0] = 200; eco.world.y[0] = 150;
     eco.world.x[1] = 200; eco.world.y[1] = 150;
-    const r = processEating(eco);
+    const g1 = new SpatialHashGrid(eco.config.width, eco.config.height, 150, eco.config.populationCap);
+    g1.rebuild(eco.world);
+    const r = processEating(eco, g1);
     expect(r.killed).toBe(1);
     expect(eco.eco.alive[0]).toBe(DEAD);
     expect(eco.eco.alive[1]).toBe(ALIVE);
@@ -184,7 +186,9 @@ describe('sim: eating', () => {
     const e0 = eco.eco.energy[1];
     eco.world.x[0] = 200; eco.world.y[0] = 150;
     eco.world.x[1] = 200; eco.world.y[1] = 150;
-    processEating(eco);
+    const g2 = new SpatialHashGrid(eco.config.width, eco.config.height, 150, eco.config.populationCap);
+    g2.rebuild(eco.world);
+    processEating(eco, g2);
     expect(eco.eco.energy[1]).toBe(e0 + 25);
   });
 
@@ -195,7 +199,9 @@ describe('sim: eating', () => {
     ]));
     eco.world.x[0] = 100; eco.world.y[0] = 150;
     eco.world.x[1] = 200; eco.world.y[1] = 150;
-    expect(processEating(eco).killed).toBe(0);
+    const g3 = new SpatialHashGrid(eco.config.width, eco.config.height, 150, eco.config.populationCap);
+    g3.rebuild(eco.world);
+    expect(processEating(eco, g3).killed).toBe(0);
     expect(eco.eco.alive[0]).toBe(ALIVE);
   });
 
@@ -207,7 +213,9 @@ describe('sim: eating', () => {
     eco.world.x[0] = 200; eco.world.y[0] = 150;
     eco.world.x[1] = 200; eco.world.y[1] = 150;
     eco.world.x[2] = 200; eco.world.y[2] = 150;
-    expect(processEating(eco).killed).toBe(1);
+    const g4 = new SpatialHashGrid(eco.config.width, eco.config.height, 150, eco.config.populationCap);
+    g4.rebuild(eco.world);
+    expect(processEating(eco, g4).killed).toBe(1);
     expect(eco.eco.alive[0]).toBe(DEAD);
   });
 });
@@ -476,7 +484,7 @@ describe('sim: multi-step', () => {
       eco.world.clampVelocities();
       eco.world.integrate(DT);
       eco.world.applyBoundaries();
-      processEating(eco);
+      processEating(eco, grid);
     }
     expect(eco.eco.alive[0]).toBe(DEAD);
   });

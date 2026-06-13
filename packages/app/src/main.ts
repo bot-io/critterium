@@ -45,8 +45,6 @@ import { AdaptiveQuality } from './adaptive-quality.js';
 
 // ─── Species Definitions ─────────────────────────────────────
 
-const SPECIES_NAMES = ['Prey', 'Predator'] as const;
-
 const SPECIES_CONFIGS: SpeciesConfig[] = [
   // 0: Prey — green, fast breeder, high endurance
   {
@@ -132,11 +130,7 @@ const CONFIG: EcosystemConfig = {
 };
 
 // ─── Species Visuals ─────────────────────────────────────────
-
-const SPECIES_VISUALS: SpeciesVisual[] = [
-  { color: 0x44cc44, radius: 3 },  // Prey: green
-  { color: 0xff4444, radius: 5 },  // Predator: red
-];
+// Default visuals are now derived from liveConfig.species dynamically.
 
 // ─── Interaction Matrix (for physics forces) ─────────────────
 
@@ -276,7 +270,7 @@ function buildSpeciesValues(species: readonly SpeciesConfig[]): Array<Record<str
     starvationDamagePerSec: sp.lifecycle.starvationDamagePerSec,
     reproductionCooldownSec: sp.lifecycle.reproductionCooldownSec,
     // Diet encoded as boolean flags
-    ...Object.fromEntries([...sp.diet.canEat].map((j) => ['canEat_' + j, 1])),
+    ...Object.fromEntries(Array.from(sp.diet.canEat).map((j) => ['canEat_' + j, 1])),
   }));
 }
 
@@ -371,8 +365,8 @@ async function main(): Promise<void> {
   let wanderEnabled = true;
   let pointerEnabled = false;
 
-  // 3. Spatial hash grid
-  const grid = new SpatialHashGrid(
+  // 3. Spatial hash grid (mutable — recreated when cap or world size changes)
+  let grid = new SpatialHashGrid(
     eco.config.width,
     eco.config.height,
     150,
@@ -493,8 +487,21 @@ async function main(): Promise<void> {
       }
       (pairwiseForce as { matrix: InteractionMatrix }).matrix = interactionMatrix;
 
-      // Rebuild spatial hash
-      grid.rebuild(eco.world);
+      // Recreate spatial hash grid if cap or world dimensions changed
+      if (grid.cellSize !== 150 ||
+          grid.cols !== Math.ceil(liveConfig.width / 150) ||
+          grid.rows !== Math.ceil(liveConfig.height / 150) ||
+          eco.config.populationCap !== liveConfig.populationCap) {
+        grid = new SpatialHashGrid(
+          liveConfig.width,
+          liveConfig.height,
+          150,
+          liveConfig.populationCap,
+        );
+      }
+
+      // Rebuild spatial hash (skip dead particles, only up to highWaterMark)
+      grid.rebuild(eco.world, eco.eco.alive, eco.highWaterMark);
 
       // Reset timing
       accumulator = 0;
@@ -508,10 +515,10 @@ async function main(): Promise<void> {
 
       // Update population graph colors and reset history
       popGraph.reset();
-      (popGraph as { speciesColors: number[] }).speciesColors = liveConfig.species.map(s => {
+      popGraph.setColors(liveConfig.species.map(s => {
         const hex = s.color;
         return parseInt(hex.slice(1), 16);
-      });
+      }));
 
       // Clear stale autosave
       clearAutosave();
@@ -543,8 +550,8 @@ async function main(): Promise<void> {
   }
 
   function applyForces(dt: number): void {
-    // Rebuild spatial hash
-    grid.rebuild(eco.world);
+    // Rebuild spatial hash (skip dead particles, only up to highWaterMark)
+    grid.rebuild(eco.world, eco.eco.alive, eco.highWaterMark);
 
     // Apply active forces
     pairwiseForce.apply(eco.world, grid, dt);
@@ -602,7 +609,7 @@ async function main(): Promise<void> {
 
         // Process ecosystem systems
         eco.processLifecycle(dt);
-        processEating(eco);
+        processEating(eco, grid);
         processReproduction(eco);
 
         // Population overflow protection: force-kill excess particles
@@ -984,7 +991,7 @@ async function main(): Promise<void> {
             starvationDamagePerSec: sp.lifecycle.starvationDamagePerSec,
             reproductionCooldownSec: sp.lifecycle.reproductionCooldownSec,
           },
-          diet: { canEat: [...sp.diet.canEat] },
+          diet: { canEat: Array.from(sp.diet.canEat) },
         })),
         interactionMatrix: matrixState.map(row =>
           row.map(cell => cell ? { strength: cell.strength, radius: cell.radius, falloff: cell.falloff } : null)
@@ -1008,10 +1015,10 @@ async function main(): Promise<void> {
       // Fix diet canEat references (shift indices > speciesIndex down by 1, remove speciesIndex)
       for (const sp of liveConfig.species) {
         const newCanEat = new Set<number>();
-        for (const idx of sp.diet.canEat) {
-          if (idx === speciesIndex) continue;
+        sp.diet.canEat.forEach((idx) => {
+          if (idx === speciesIndex) return;
           newCanEat.add(idx > speciesIndex ? idx - 1 : idx);
-        }
+        });
         sp.diet.canEat = newCanEat;
       }
       // Fix energyGainPerPrey: remove entry at speciesIndex
@@ -1048,7 +1055,7 @@ async function main(): Promise<void> {
             starvationDamagePerSec: sp.lifecycle.starvationDamagePerSec,
             reproductionCooldownSec: sp.lifecycle.reproductionCooldownSec,
           },
-          diet: { canEat: [...sp.diet.canEat] },
+          diet: { canEat: Array.from(sp.diet.canEat) },
         })),
         interactionMatrix: matrixState.map(row =>
           row.map(cell => cell ? { strength: cell.strength, radius: cell.radius, falloff: cell.falloff } : null)

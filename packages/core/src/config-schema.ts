@@ -166,7 +166,7 @@ function jsonToLifecycle(json: JsonLifecycleConfig): LifecycleConfig {
 /** Convert a DietConfig to JSON form (Set → Array). */
 function dietToJson(diet: DietConfig): JsonDietConfig {
   return {
-    canEat: [...diet.canEat],
+    canEat: Array.from(diet.canEat),
   };
 }
 
@@ -409,17 +409,26 @@ export function deserializeConfig(json: unknown): CritteriumConfig {
     throw new Error('Missing or invalid simulation config');
   }
   const simObj = sim as Record<string, unknown>;
+  // Type-check dimensions before clamping
   if (typeof simObj.width !== 'number' || typeof simObj.height !== 'number') {
     throw new Error('simulation.width and simulation.height must be numbers');
-  }
-  if (simObj.boundaryMode !== 'bounce' && simObj.boundaryMode !== 'wrap') {
-    throw new Error('simulation.boundaryMode must be "bounce" or "wrap"');
   }
   if (typeof simObj.seed !== 'number') {
     throw new Error('simulation.seed must be a number');
   }
   if (typeof simObj.populationCap !== 'number') {
     throw new Error('simulation.populationCap must be a number');
+  }
+  // Clamp dimensions to safe ranges
+  const w = Number.isFinite(simObj.width) && simObj.width >= 100 ? simObj.width : 800;
+  const h = Number.isFinite(simObj.height) && simObj.height >= 100 ? simObj.height : 600;
+  let cap = Number.isFinite(simObj.populationCap) && simObj.populationCap >= 1 ? simObj.populationCap : 600;
+  if (cap > 5000) cap = 5000;
+  simObj.width = w;
+  simObj.height = h;
+  simObj.populationCap = cap;
+  if (simObj.boundaryMode !== 'bounce' && simObj.boundaryMode !== 'wrap') {
+    throw new Error('simulation.boundaryMode must be "bounce" or "wrap"');
   }
 
   // Validate species
@@ -462,25 +471,51 @@ export function deserializeConfig(json: unknown): CritteriumConfig {
   };
 }
 
-/** Validate a single species config entry. */
+/** Validate a single species config entry. Range-clamps unsafe values. */
 function validateSpecies(sp: Record<string, unknown>, index: number): void {
   const req = (field: string) => {
     if (sp[field] === undefined) throw new Error(`species[${index}].${field} is required`);
   };
-  req('name');
-  req('count');
-  req('color');
-  req('radius');
-  req('initialSpeed');
-  req('maxSpeed');
-  req('energy');
-  req('lifecycle');
-  req('diet');
+  req('name'); req('count'); req('color'); req('radius');
+  req('initialSpeed'); req('maxSpeed'); req('energy'); req('lifecycle'); req('diet');
 
-  if (typeof sp.count !== 'number') throw new Error(`species[${index}].count must be a number`);
-  if (typeof sp.radius !== 'number') throw new Error(`species[${index}].radius must be a number`);
-  if (typeof sp.initialSpeed !== 'number') throw new Error(`species[${index}].initialSpeed must be a number`);
-  if (typeof sp.maxSpeed !== 'number') throw new Error(`species[${index}].maxSpeed must be a number`);
+  // Type checks + range clamping to prevent NaN/Infinity/zero-division crashes
+  sp.count = clampNum(sp.count, 0, 10000, 1, index, 'count');
+  sp.radius = clampNum(sp.radius, 0.5, 50, 3, index, 'radius');
+  sp.initialSpeed = clampNum(sp.initialSpeed, 0, 500, 50, index, 'initialSpeed');
+  sp.maxSpeed = clampNum(sp.maxSpeed, 1, 1000, 100, index, 'maxSpeed');
+
+  // Validate nested energy config
+  if (typeof sp.energy === 'object' && sp.energy !== null) {
+    const e = sp.energy as Record<string, unknown>;
+    e.maxEnergy = clampNum(e.maxEnergy, 1, 1e6, 100, index, 'energy.maxEnergy');
+    e.initialEnergy = clampNum(e.initialEnergy, 0, e.maxEnergy as number, 50, index, 'energy.initialEnergy');
+    e.reproductionCost = clampNum(e.reproductionCost, 0, e.maxEnergy as number, 20, index, 'energy.reproductionCost');
+    e.movementCostPerSec = clampNum(e.movementCostPerSec, 0, 1000, 2, index, 'energy.movementCostPerSec');
+    e.idleDrainPerSec = clampNum(e.idleDrainPerSec, 0, 1000, 1, index, 'energy.idleDrainPerSec');
+  }
+
+  // Validate nested lifecycle config
+  if (typeof sp.lifecycle === 'object' && sp.lifecycle !== null) {
+    const lc = sp.lifecycle as Record<string, unknown>;
+    lc.maxAgeSec = clampNum(lc.maxAgeSec, 1, 1e6, 60, index, 'lifecycle.maxAgeSec');
+    lc.starvationDamagePerSec = clampNum(lc.starvationDamagePerSec, 0, 1000, 5, index, 'lifecycle.starvationDamagePerSec');
+    lc.reproductionCooldownSec = clampNum(lc.reproductionCooldownSec, 0, 600, 5, index, 'lifecycle.reproductionCooldownSec');
+  }
+}
+
+/**
+ * Clamp a numeric value to a safe range.
+ * Returns `fallback` if the value is NaN, Infinity, or not a number.
+ */
+function clampNum(val: unknown, min: number, max: number, fallback: number, speciesIdx: number, field: string): number {
+  if (typeof val !== 'number' || !Number.isFinite(val)) {
+    console.warn(`[Critterium] species[${speciesIdx}].${field} = ${val}, using fallback ${fallback}`);
+    return fallback;
+  }
+  if (val < min) return min;
+  if (val > max) return max;
+  return val;
 }
 
 /** Validate a snapshot object. */

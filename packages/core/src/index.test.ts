@@ -526,6 +526,52 @@ describe('SpatialHashGrid', () => {
     expect(neighbors).toContain(1);
   });
 
+  // ─── selfIdx (co-located particle support) ──────────────────
+
+  it('queryRadius with selfIdx finds co-located particles (dSq=0)', () => {
+    // Two particles at the exact same position
+    const grid = makeGrid();
+    grid.clear();
+    grid.insert(0, 100, 100);
+    grid.insert(1, 100, 100);
+
+    const xArr = new Float32Array([100, 100]);
+    const yArr = new Float32Array([100, 100]);
+
+    // Without selfIdx: dSq > 0 filter excludes co-located particles
+    const neighborsNoSelf: number[] = [];
+    grid.queryRadius(100, 100, 50, xArr, yArr, 2, (idx) => {
+      neighborsNoSelf.push(idx);
+    });
+    expect(neighborsNoSelf).toHaveLength(0);
+
+    // With selfIdx=0: finds particle 1 (co-located, not self)
+    const neighborsWithSelf: number[] = [];
+    grid.queryRadius(100, 100, 50, xArr, yArr, 2, (idx) => {
+      neighborsWithSelf.push(idx);
+    }, 0);
+    expect(neighborsWithSelf).toEqual([1]);
+  });
+
+  it('queryRadius with selfIdx excludes self by index, not distance', () => {
+    // Particles at different positions
+    const grid = makeGrid();
+    grid.clear();
+    grid.insert(0, 100, 100);
+    grid.insert(1, 105, 100);
+
+    const xArr = new Float32Array([100, 105]);
+    const yArr = new Float32Array([100, 100]);
+
+    // With selfIdx=0: should find particle 1 but NOT particle 0
+    const neighbors: number[] = [];
+    grid.queryRadius(100, 100, 50, xArr, yArr, 2, (idx) => {
+      neighbors.push(idx);
+    }, 0);
+    expect(neighbors).toContain(1);
+    expect(neighbors).not.toContain(0);
+  });
+
   it('queryRadiusToArray collects into pre-allocated array', () => {
     const grid = makeGrid();
     grid.clear();
