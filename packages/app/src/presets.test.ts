@@ -10,11 +10,12 @@ const EXPECTED_PRESET_NAMES = [
   'Tiny Pond',
   'Zen Garden',
   'Rock Paper Scissors',
+  'Grasslands',
 ];
 
 describe('presets', () => {
-  it('exports exactly 7 built-in presets', () => {
-    expect(BUILTIN_PRESETS).toHaveLength(7);
+  it('exports exactly 8 built-in presets', () => {
+    expect(BUILTIN_PRESETS).toHaveLength(8);
   });
 
   it('BUILTIN_PRESET_NAMES matches expected list', () => {
@@ -247,5 +248,116 @@ describe('presets', () => {
     const speeds = species.map((s) => s.maxSpeed);
     expect(new Set(radii).size).toBe(1);
     expect(new Set(speeds).size).toBe(1);
+  });
+
+  // ── Grasslands — three-tier food web tests ────────────────
+
+  it('Grasslands has exactly 3 species', () => {
+    const gl = getBuiltinPreset('Grasslands');
+    expect(gl).toBeDefined();
+    expect(gl!.config.species).toHaveLength(3);
+  });
+
+  it('Grasslands species names are Grass, Rabbits, Foxes', () => {
+    const gl = getBuiltinPreset('Grasslands');
+    const names = gl!.config.species.map((s) => s.name);
+    expect(names).toEqual(['Grass', 'Rabbits', 'Foxes']);
+  });
+
+  it('Grasslands: Grass is a producer (canEat is empty)', () => {
+    const gl = getBuiltinPreset('Grasslands');
+    expect(gl!.config.species[0].diet.canEat).toEqual([]);
+  });
+
+  it('Grasslands: Rabbits eat Grass (canEat = [0])', () => {
+    const gl = getBuiltinPreset('Grasslands');
+    expect(gl!.config.species[1].diet.canEat).toContain(0);
+  });
+
+  it('Grasslands: Foxes eat Rabbits (canEat = [1])', () => {
+    const gl = getBuiltinPreset('Grasslands');
+    expect(gl!.config.species[2].diet.canEat).toContain(1);
+  });
+
+  it('Grasslands: three-tier food chain Grass → Rabbits → Foxes', () => {
+    const gl = getBuiltinPreset('Grasslands');
+    const species = gl!.config.species;
+    // Grass gains from nothing, Rabbits gain from Grass (idx 0), Foxes gain from Rabbits (idx 1)
+    expect(species[1].energy.energyGainPerPrey[0]).toBeGreaterThan(0);
+    expect(species[2].energy.energyGainPerPrey[1]).toBeGreaterThan(0);
+    // Grass should not gain from anything
+    expect(species[0].energy.energyGainPerPrey.every((v) => v === 0)).toBe(true);
+  });
+
+  it('Grasslands: Grass has the fastest reproduction (lowest cooldown)', () => {
+    const gl = getBuiltinPreset('Grasslands');
+    const cooldowns = gl!.config.species.map((s) => s.lifecycle.reproductionCooldownSec);
+    // Grass reproduces fastest
+    expect(cooldowns[0]).toBeLessThan(cooldowns[1]);
+    expect(cooldowns[0]).toBeLessThan(cooldowns[2]);
+  });
+
+  it('Grasslands: Grass is the slowest species (nearly stationary)', () => {
+    const gl = getBuiltinPreset('Grasslands');
+    const speeds = gl!.config.species.map((s) => s.maxSpeed);
+    // Grass is slowest, Foxes are fastest
+    expect(speeds[0]).toBeLessThan(speeds[1]);
+    expect(speeds[0]).toBeLessThan(speeds[2]);
+  });
+
+  it('Grasslands: Rabbits are attracted to Grass (foraging)', () => {
+    const gl = getBuiltinPreset('Grasslands');
+    const m = gl!.config.interactionMatrix;
+    // Rabbits (row 1) attracted to Grass (col 0)
+    expect(m[1][0]!.strength).toBeGreaterThan(0);
+  });
+
+  it('Grasslands: Rabbits flee Foxes (predator avoidance)', () => {
+    const gl = getBuiltinPreset('Grasslands');
+    const m = gl!.config.interactionMatrix;
+    // Rabbits (row 1) flee Foxes (col 2)
+    expect(m[1][2]!.strength).toBeLessThan(0);
+  });
+
+  it('Grasslands: Foxes chase Rabbits (hunting)', () => {
+    const gl = getBuiltinPreset('Grasslands');
+    const m = gl!.config.interactionMatrix;
+    // Foxes (row 2) chase Rabbits (col 1)
+    expect(m[2][1]!.strength).toBeGreaterThan(0);
+  });
+
+  it('Grasslands: Foxes are territorial (self-repulsion)', () => {
+    const gl = getBuiltinPreset('Grasslands');
+    const m = gl!.config.interactionMatrix;
+    // Foxes (row 2) self-repel (col 2)
+    expect(m[2][2]!.strength).toBeLessThan(0);
+  });
+
+  it('Grasslands: Rabbits flock with own kind (positive self-interaction)', () => {
+    const gl = getBuiltinPreset('Grasslands');
+    const m = gl!.config.interactionMatrix;
+    // Rabbits (row 1) attract own kind (col 1)
+    expect(m[1][1]!.strength).toBeGreaterThan(0);
+  });
+
+  it('Grasslands: Grass ignores animals (null entries to Rabbits and Foxes)', () => {
+    const gl = getBuiltinPreset('Grasslands');
+    const m = gl!.config.interactionMatrix;
+    // Grass (row 0) doesn't react to Rabbits (col 1) or Foxes (col 2)
+    expect(m[0][1]).toBeNull();
+    expect(m[0][2]).toBeNull();
+  });
+
+  it('Grasslands: all three species have distinct colors', () => {
+    const gl = getBuiltinPreset('Grasslands');
+    const colors = gl!.config.species.map((s) => s.color);
+    const unique = new Set(colors);
+    expect(unique.size).toBe(3);
+  });
+
+  it('Grasslands: total initial population is within populationCap', () => {
+    const gl = getBuiltinPreset('Grasslands');
+    const total = gl!.config.species.reduce((sum, s) => sum + s.count, 0);
+    expect(total).toBeLessThanOrEqual(gl!.config.simulation.populationCap!);
   });
 });

@@ -791,6 +791,123 @@ const ROCK_PAPER_SCISSORS: EcosystemPreset = preset(
   },
 );
 
+// ─── 8. Grasslands (Predator/Prey/Vegetation) ────────────────
+
+const GRASSLANDS: EcosystemPreset = preset(
+  'Grasslands',
+  'Classic three-tier food web: Grass regrows fast, Rabbits graze, Foxes hunt — a self-sustaining ecosystem.',
+  {
+    version: 1,
+    simulation: {
+      width: 800,
+      height: 600,
+      boundaryMode: 'wrap',
+      seed: 42,
+      populationCap: 500,
+    },
+    species: [
+      // ── Producer: Grass ──────────────────────────────────────
+      {
+        name: 'Grass',
+        count: 200,
+        color: '#3aaa3a',
+        radius: 2,
+        initialSpeed: 2,
+        maxSpeed: 5,
+        energy: {
+          maxEnergy: 30,
+          initialEnergy: 20,
+          movementCostPerSec: 0,
+          reproductionCost: 5,
+          idleDrainPerSec: 0.1,
+          energyGainPerPrey: [0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 60,
+          starvationDamagePerSec: 1,
+          reproductionCooldownSec: 1.5,
+        },
+        diet: {
+          canEat: [],
+        },
+      },
+      // ── Primary consumer: Rabbits ────────────────────────────
+      {
+        name: 'Rabbits',
+        count: 100,
+        color: '#d4a373',
+        radius: 3,
+        initialSpeed: 55,
+        maxSpeed: 100,
+        energy: {
+          maxEnergy: 80,
+          initialEnergy: 40,
+          movementCostPerSec: 1.5,
+          reproductionCost: 20,
+          idleDrainPerSec: 1,
+          energyGainPerPrey: [15, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 40,
+          starvationDamagePerSec: 6,
+          reproductionCooldownSec: 3,
+        },
+        diet: {
+          canEat: [0],
+        },
+        stamina: {
+          sprintDurationSec: 6,
+          sprintCooldownSec: 3,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.6,
+        },
+      },
+      // ── Secondary consumer: Foxes ────────────────────────────
+      {
+        name: 'Foxes',
+        count: 15,
+        color: '#cc4125',
+        radius: 5,
+        initialSpeed: 65,
+        maxSpeed: 120,
+        energy: {
+          maxEnergy: 150,
+          initialEnergy: 80,
+          movementCostPerSec: 2.5,
+          reproductionCost: 50,
+          idleDrainPerSec: 2,
+          energyGainPerPrey: [0, 35, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 70,
+          starvationDamagePerSec: 4,
+          reproductionCooldownSec: 10,
+        },
+        diet: {
+          canEat: [1],
+        },
+        stamina: {
+          sprintDurationSec: 3,
+          sprintCooldownSec: 5,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.4,
+        },
+      },
+    ],
+    // src=row (how this species reacts to target col)
+    //         Grass       Rabbits     Foxes
+    interactionMatrix: [
+      /* Grass   */ [{ strength: -15, radius: 30, falloff: 'linear' }, null, null],
+      /* Rabbits */ [{ strength: 40, radius: 100, falloff: 'linear' }, { strength: 20, radius: 50, falloff: 'linear' }, { strength: -80, radius: 130, falloff: 'linear' }],
+      /* Foxes   */ [null, { strength: 60, radius: 160, falloff: 'linear' }, { strength: -30, radius: 60, falloff: 'linear' }],
+    ],
+    forces: {
+      drag: { coefficient: 0.8 },
+      wander: { strength: 35, rate: 2.5 },
+    },
+  },
+);
+
 // ─── Export all presets ───────────────────────────────────────
 
 export const BUILTIN_PRESETS: EcosystemPreset[] = [
@@ -801,6 +918,7 @@ export const BUILTIN_PRESETS: EcosystemPreset[] = [
   TINY_POND,
   ZEN_GARDEN,
   ROCK_PAPER_SCISSORS,
+  GRASSLANDS,
 ];
 
 export const BUILTIN_PRESET_NAMES: string[] = BUILTIN_PRESETS.map((p) => p.name);
