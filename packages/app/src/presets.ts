@@ -1541,6 +1541,174 @@ const TORNADO_ALLEY: EcosystemPreset = preset(
   },
 );
 
+// ─── 13. Deep Sea Vent ──────────────────────────────────────
+
+const DEEP_SEA_VENT: EcosystemPreset = preset(
+  'Deep Sea Vent',
+  'A hydrothermal vent on the ocean floor: Chemosynthetic Bacteria bloom, Tube Worms filter-feed, Crabs scavenge, and an Octopus hunts — all drifting in the slow upwelling of the vent plume.',
+  {
+    version: 1,
+    simulation: {
+      width: 800,
+      height: 600,
+      boundaryMode: 'wrap',
+      seed: 80085,
+      populationCap: 600,
+    },
+    species: [
+      // ── Producer: Chemosynthetic Bacteria (tiny, slow, fast reproduction) ─
+      {
+        name: 'Bacteria',
+        count: 250,
+        color: '#ff7675',
+        radius: 1.5,
+        initialSpeed: 5,
+        maxSpeed: 15,
+        energy: {
+          maxEnergy: 35,
+          initialEnergy: 22,
+          movementCostPerSec: 0.1,
+          reproductionCost: 6,
+          idleDrainPerSec: 0.1,
+          energyGainPerPrey: [0, 0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 50,
+          starvationDamagePerSec: 1,
+          reproductionCooldownSec: 2,
+        },
+        diet: {
+          canEat: [],
+        },
+      },
+      // ── Primary consumer: Tube Worms (medium, very slow, sessile filter-feeder)
+      {
+        name: 'Tube Worms',
+        count: 80,
+        color: '#a29bfe',
+        radius: 3,
+        initialSpeed: 3,
+        maxSpeed: 10,
+        energy: {
+          maxEnergy: 70,
+          initialEnergy: 40,
+          movementCostPerSec: 0.2,
+          reproductionCost: 18,
+          idleDrainPerSec: 0.5,
+          energyGainPerPrey: [12, 0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 80,
+          starvationDamagePerSec: 3,
+          reproductionCooldownSec: 6,
+        },
+        diet: {
+          canEat: [0],
+        },
+      },
+      // ── Secondary consumer: Crabs (medium, bottom-dwelling scavenger) ────
+      {
+        name: 'Crabs',
+        count: 40,
+        color: '#fdcb6e',
+        radius: 4,
+        initialSpeed: 30,
+        maxSpeed: 65,
+        energy: {
+          maxEnergy: 110,
+          initialEnergy: 60,
+          movementCostPerSec: 1.2,
+          reproductionCost: 30,
+          idleDrainPerSec: 1,
+          energyGainPerPrey: [0, 28, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 60,
+          starvationDamagePerSec: 4,
+          reproductionCooldownSec: 8,
+        },
+        diet: {
+          canEat: [1],
+        },
+        stamina: {
+          sprintDurationSec: 4,
+          sprintCooldownSec: 4,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.5,
+        },
+      },
+      // ── Apex predator: Octopus (fast, mobile, solitary hunter) ──────────
+      {
+        name: 'Octopus',
+        count: 8,
+        color: '#2d3436',
+        radius: 6,
+        initialSpeed: 50,
+        maxSpeed: 100,
+        energy: {
+          maxEnergy: 180,
+          initialEnergy: 100,
+          movementCostPerSec: 2,
+          reproductionCost: 60,
+          idleDrainPerSec: 1.5,
+          energyGainPerPrey: [0, 0, 48, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 90,
+          starvationDamagePerSec: 3,
+          reproductionCooldownSec: 15,
+        },
+        diet: {
+          canEat: [2],
+        },
+        stamina: {
+          sprintDurationSec: 3,
+          sprintCooldownSec: 6,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.4,
+        },
+      },
+    ],
+    // src=row (how this species reacts to target col)
+    //          Bacteria  Worms     Crabs     Octopus
+    interactionMatrix: [
+      /* Bacteria */ [{ strength: -10, radius: 35, falloff: 'linear' }, null, null, null],
+      /* Worms    */ [
+        { strength: 35, radius: 85, falloff: 'linear' },
+        { strength: -15, radius: 45, falloff: 'linear' },
+        null,
+        null,
+      ],
+      /* Crabs    */ [
+        null,
+        { strength: 45, radius: 110, falloff: 'linear' },
+        { strength: -12, radius: 40, falloff: 'linear' },
+        { strength: -55, radius: 120, falloff: 'linear' },
+      ],
+      /* Octopus  */ [
+        null,
+        null,
+        { strength: 55, radius: 140, falloff: 'linear' },
+        { strength: -25, radius: 70, falloff: 'linear' },
+      ],
+    ],
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.6 } },
+      { type: 'wander', enabled: true, params: { strength: 25, rate: 1.5 } },
+      // Gentle downward sinking (low-strength gravity).
+      { type: 'gravity', enabled: true, params: { acceleration: 30 } },
+      // Vent plume: upward flow current counteracting gravity.
+      // FlowFieldForce uniform mode: direction = [cos(angle), sin(angle)].
+      // angle = -π/2 → [0, -1] → pure upward force (negative y = up on screen).
+      {
+        type: 'flow-field',
+        enabled: true,
+        params: { strength: 25, mode: 'uniform', angle: -Math.PI / 2, turbulenceScale: 0.01 },
+      },
+    ],
+  },
+);
+
 // ─── Export all presets ───────────────────────────────────────
 
 export const BUILTIN_PRESETS: EcosystemPreset[] = [
@@ -1556,6 +1724,7 @@ export const BUILTIN_PRESETS: EcosystemPreset[] = [
   FISHES,
   CORAL_REEF,
   TORNADO_ALLEY,
+  DEEP_SEA_VENT,
 ];
 
 export const BUILTIN_PRESET_NAMES: string[] = BUILTIN_PRESETS.map((p) => p.name);

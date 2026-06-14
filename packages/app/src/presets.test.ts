@@ -15,11 +15,12 @@ const EXPECTED_PRESET_NAMES = [
   'Fishes',
   'Coral Reef',
   'Tornado Alley',
+  'Deep Sea Vent',
 ];
 
 describe('presets', () => {
-  it('exports exactly 12 built-in presets', () => {
-    expect(BUILTIN_PRESETS).toHaveLength(12);
+  it('exports exactly 13 built-in presets', () => {
+    expect(BUILTIN_PRESETS).toHaveLength(13);
   });
 
   it('BUILTIN_PRESET_NAMES matches expected list', () => {
@@ -938,5 +939,202 @@ describe('presets', () => {
     const colors = tornado!.config.species.map((s) => s.color);
     const unique = new Set(colors);
     expect(unique.size).toBe(3);
+  });
+
+  // ── Deep Sea Vent — hydrothermal vent ecosystem tests ───────
+
+  it('Deep Sea Vent has exactly 4 species', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    expect(dsv).toBeDefined();
+    expect(dsv!.config.species).toHaveLength(4);
+  });
+
+  it('Deep Sea Vent species names are Bacteria, Tube Worms, Crabs, Octopus', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    const names = dsv!.config.species.map((s) => s.name);
+    expect(names).toEqual(['Bacteria', 'Tube Worms', 'Crabs', 'Octopus']);
+  });
+
+  it('Deep Sea Vent: populationCap is 600', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    expect(dsv!.config.simulation.populationCap).toBe(600);
+  });
+
+  it('Deep Sea Vent: total initial population is within populationCap', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    const total = dsv!.config.species.reduce((sum, s) => sum + s.count, 0);
+    expect(total).toBeLessThanOrEqual(dsv!.config.simulation.populationCap!);
+  });
+
+  it('Deep Sea Vent: interaction matrix is 4×4', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    const m = dsv!.config.interactionMatrix;
+    expect(m).toHaveLength(4);
+    for (const row of m) {
+      expect(row).toHaveLength(4);
+    }
+  });
+
+  // ── Food chain tests ──────────────────────────────────────
+
+  it('Deep Sea Vent: Bacteria is a producer (canEat empty)', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    expect(dsv!.config.species[0].diet.canEat).toEqual([]);
+  });
+
+  it('Deep Sea Vent: Tube Worms eat Bacteria (canEat [0])', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    expect(dsv!.config.species[1].diet.canEat).toEqual([0]);
+  });
+
+  it('Deep Sea Vent: Crabs eat Tube Worms (canEat [1])', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    expect(dsv!.config.species[2].diet.canEat).toEqual([1]);
+  });
+
+  it('Deep Sea Vent: Octopus eats Crabs (canEat [2])', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    expect(dsv!.config.species[3].diet.canEat).toEqual([2]);
+  });
+
+  it('Deep Sea Vent: each species gains energy only from its prey', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    const species = dsv!.config.species;
+    // Bacteria gains from nothing
+    expect(species[0].energy.energyGainPerPrey.every((v) => v === 0)).toBe(true);
+    // Tube Worms gain from Bacteria (idx 0)
+    expect(species[1].energy.energyGainPerPrey[0]).toBeGreaterThan(0);
+    expect(species[1].energy.energyGainPerPrey[1]).toBe(0);
+    // Crabs gain from Tube Worms (idx 1)
+    expect(species[2].energy.energyGainPerPrey[1]).toBeGreaterThan(0);
+    expect(species[2].energy.energyGainPerPrey[2]).toBe(0);
+    // Octopus gains from Crabs (idx 2)
+    expect(species[3].energy.energyGainPerPrey[2]).toBeGreaterThan(0);
+    expect(species[3].energy.energyGainPerPrey[3]).toBe(0);
+  });
+
+  it('Deep Sea Vent: energyGainPerPrey arrays have length 4', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    for (const sp of dsv!.config.species) {
+      expect(sp.energy.energyGainPerPrey).toHaveLength(4);
+    }
+  });
+
+  // ── Interaction direction tests ───────────────────────────
+
+  it('Deep Sea Vent: Tube Worms are attracted to Bacteria (positive)', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    const m = dsv!.config.interactionMatrix;
+    expect(m[1][0]).not.toBeNull();
+    expect(m[1][0]!.strength).toBeGreaterThan(0);
+  });
+
+  it('Deep Sea Vent: Crabs chase Tube Worms (positive) and flee Octopus (negative)', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    const m = dsv!.config.interactionMatrix;
+    // Crabs (row 2) attracted to Worms (col 1)
+    expect(m[2][1]).not.toBeNull();
+    expect(m[2][1]!.strength).toBeGreaterThan(0);
+    // Crabs (row 2) flee Octopus (col 3)
+    expect(m[2][3]).not.toBeNull();
+    expect(m[2][3]!.strength).toBeLessThan(0);
+  });
+
+  it('Deep Sea Vent: Octopus chases Crabs (positive)', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    const m = dsv!.config.interactionMatrix;
+    // Octopus (row 3) attracted to Crabs (col 2)
+    expect(m[3][2]).not.toBeNull();
+    expect(m[3][2]!.strength).toBeGreaterThan(0);
+  });
+
+  it('Deep Sea Vent: Octopus is solitary (negative self-interaction)', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    const m = dsv!.config.interactionMatrix;
+    expect(m[3][3]).not.toBeNull();
+    expect(m[3][3]!.strength).toBeLessThan(0);
+  });
+
+  it('Deep Sea Vent: Bacteria mildly repel each other (negative self)', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    const m = dsv!.config.interactionMatrix;
+    expect(m[0][0]).not.toBeNull();
+    expect(m[0][0]!.strength).toBeLessThan(0);
+  });
+
+  // ── Force tests ───────────────────────────────────────────
+
+  it('Deep Sea Vent: gravity force present and downward (positive acceleration)', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    const gravity = dsv!.config.forces.find((f) => f.type === 'gravity');
+    expect(gravity).toBeDefined();
+    expect(gravity!.enabled).toBe(true);
+    // Positive acceleration = downward (sinking)
+    expect(gravity!.params.acceleration).toBeGreaterThan(0);
+    // Low strength for gentle sinking (< default 200)
+    expect(gravity!.params.acceleration).toBeLessThan(100);
+  });
+
+  it('Deep Sea Vent: flow-field force present (vent plume)', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    const flowField = dsv!.config.forces.find((f) => f.type === 'flow-field');
+    expect(flowField).toBeDefined();
+    expect(flowField!.enabled).toBe(true);
+    expect(flowField!.params.strength).toBeGreaterThan(0);
+  });
+
+  it('Deep Sea Vent: flow-field points upward (negative y direction)', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    const flowField = dsv!.config.forces.find((f) => f.type === 'flow-field')!;
+    const angle = flowField.params.angle as number;
+    // FlowFieldForce uniform: direction = [cos(angle), sin(angle)]
+    // Upward = negative y → sin(angle) < 0
+    expect(Math.sin(angle)).toBeLessThan(0);
+    // Primarily vertical (cos ≈ 0 for ±π/2)
+    expect(Math.abs(Math.cos(angle))).toBeLessThan(0.01);
+  });
+
+  // ── Size hierarchy tests ──────────────────────────────────
+
+  it('Deep Sea Vent: Bacteria is the smallest species (radius)', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    const radii = dsv!.config.species.map((s) => s.radius);
+    expect(radii[0]).toBeLessThan(radii[1]);
+    expect(radii[0]).toBeLessThan(radii[2]);
+    expect(radii[0]).toBeLessThan(radii[3]);
+  });
+
+  it('Deep Sea Vent: Octopus is the largest species (radius)', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    const radii = dsv!.config.species.map((s) => s.radius);
+    expect(radii[3]).toBeGreaterThan(radii[0]);
+    expect(radii[3]).toBeGreaterThan(radii[1]);
+    expect(radii[3]).toBeGreaterThan(radii[2]);
+  });
+
+  it('Deep Sea Vent: Octopus is the fastest species (maxSpeed)', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    const speeds = dsv!.config.species.map((s) => s.maxSpeed);
+    expect(speeds[3]).toBeGreaterThan(speeds[0]);
+    expect(speeds[3]).toBeGreaterThan(speeds[1]);
+    expect(speeds[3]).toBeGreaterThan(speeds[2]);
+  });
+
+  it('Deep Sea Vent: Bacteria reproduces fastest (lowest cooldown)', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    const cooldowns = dsv!.config.species.map((s) => s.lifecycle.reproductionCooldownSec);
+    // Bacteria (idx 0) has the shortest reproduction cooldown
+    expect(cooldowns[0]).toBeLessThan(cooldowns[1]);
+    expect(cooldowns[0]).toBeLessThan(cooldowns[2]);
+    expect(cooldowns[0]).toBeLessThan(cooldowns[3]);
+  });
+
+  // ── Visual distinction tests ──────────────────────────────
+
+  it('Deep Sea Vent: all four species have distinct colors', () => {
+    const dsv = getBuiltinPreset('Deep Sea Vent');
+    const colors = dsv!.config.species.map((s) => s.color);
+    const unique = new Set(colors);
+    expect(unique.size).toBe(4);
   });
 });
