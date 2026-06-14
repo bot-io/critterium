@@ -305,7 +305,9 @@ test.describe('CRT-14: Export/Import config files', () => {
 
     // Pause the simulation so state doesn't change between exports
     // Pause button is in the Simulation section (top of panel)
-    await page.locator('.crit-panel').evaluate((el) => { el.scrollTop = 0; });
+    await page.locator('.crit-panel').evaluate((el) => {
+      el.scrollTop = 0;
+    });
     const pauseButton = page.locator('button:has-text("Pause")').first();
     if (await pauseButton.isVisible()) {
       await pauseButton.click();
@@ -313,7 +315,9 @@ test.describe('CRT-14: Export/Import config files', () => {
     }
 
     // Scroll back to Actions section for Export button
-    await page.locator('.crit-panel').evaluate((el) => { el.scrollTop = el.scrollHeight; });
+    await page.locator('.crit-panel').evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
 
     // Export twice
     const exportButton = page.locator('button:has-text("Export")').first();

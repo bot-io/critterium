@@ -181,7 +181,13 @@ test.describe('Settings stress test — exercise every control', () => {
 
         // Exercise Energy sub-section
         await expandSubSection(activePanel, 'Energy');
-        for (const label of ['Max Energy', 'Init Energy', 'Repro Cost', 'Move Cost/s', 'Idle Drain/s']) {
+        for (const label of [
+          'Max Energy',
+          'Init Energy',
+          'Repro Cost',
+          'Move Cost/s',
+          'Idle Drain/s',
+        ]) {
           await moveSliderByLabel(activePanel, label);
         }
 
@@ -258,7 +264,9 @@ test.describe('Settings stress test — exercise every control', () => {
     // ── 7. Exercise Interaction Matrix section ─────────────────────
     await expandSection('Interaction Matrix');
     try {
-      const matrixSection = panel.locator('.crit-section').filter({ hasText: 'Interaction Matrix' });
+      const matrixSection = panel
+        .locator('.crit-section')
+        .filter({ hasText: 'Interaction Matrix' });
 
       // Click first 3 matrix cells
       const matrixCells = matrixSection.locator('.crit-matrix-cell');
@@ -390,7 +398,10 @@ test.describe('Settings stress test — exercise every control', () => {
     // ── 13. Change speed + pop cap sliders ─────────────────────────
     try {
       const simSection = panel.locator('.crit-section').filter({ hasText: 'Simulation' });
-      const speedSlider = simSection.locator('.crit-row').filter({ hasText: 'Speed' }).locator('input[type="range"]');
+      const speedSlider = simSection
+        .locator('.crit-row')
+        .filter({ hasText: 'Speed' })
+        .locator('input[type="range"]');
       if (await speedSlider.isVisible()) {
         await speedSlider.fill('2.0', { force: true });
         await page.waitForTimeout(50);
@@ -402,7 +413,10 @@ test.describe('Settings stress test — exercise every control', () => {
     }
     try {
       const simSection = panel.locator('.crit-section').filter({ hasText: 'Simulation' });
-      const popCapSlider = simSection.locator('.crit-row').filter({ hasText: 'Pop Cap' }).locator('input[type="range"]');
+      const popCapSlider = simSection
+        .locator('.crit-row')
+        .filter({ hasText: 'Pop Cap' })
+        .locator('input[type="range"]');
       if (await popCapSlider.isVisible()) {
         await popCapSlider.fill('800', { force: true });
         await page.waitForTimeout(50);
