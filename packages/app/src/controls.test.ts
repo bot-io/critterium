@@ -6,7 +6,8 @@ import {
   getSliderValue,
   getAllSpeciesCounts,
 } from './controls.js';
-import type { ControlsPanelOptions } from './controls.js';
+import type { ControlsPanelOptions, PipelineForceEntry } from './controls.js';
+import type { ForceTypeDescriptor } from '@critterium/core';
 
 function makeOptions(overrides: Partial<ControlsPanelOptions> = {}): ControlsPanelOptions {
   return {
@@ -17,6 +18,10 @@ function makeOptions(overrides: Partial<ControlsPanelOptions> = {}): ControlsPan
     onPopulationCapChange: vi.fn(),
     onForceToggle: vi.fn(),
     onForceChange: vi.fn(),
+    onAddForce: vi.fn(),
+    onRemoveForce: vi.fn(),
+    onSetForceEnabled: vi.fn(),
+    onSetForceParam: vi.fn(),
     onMatrixChange: vi.fn(),
     onRandomizeMatrix: vi.fn(),
     onClearMatrix: vi.fn(),
@@ -39,6 +44,59 @@ function makeOptions(overrides: Partial<ControlsPanelOptions> = {}): ControlsPan
     ...overrides,
   };
 }
+
+// ─── Test fixtures for dynamic force pipeline (CRT-38) ─────────
+
+/** Minimal force type descriptors mirroring the real registry. */
+const TEST_FORCE_TYPES: ForceTypeDescriptor[] = [
+  {
+    type: 'drag',
+    displayName: 'Drag',
+    description: 'Linear velocity damping.',
+    defaultParams: { coefficient: 0.8 },
+    paramSchema: [
+      {
+        key: 'coefficient',
+        label: 'Coefficient',
+        type: 'number',
+        min: 0,
+        max: 10,
+        step: 0.1,
+        default: 0.8,
+      },
+    ],
+  },
+  {
+    type: 'vortex',
+    displayName: 'Vortex',
+    description: 'Swirl force around center.',
+    defaultParams: { strength: 150, radius: 300, falloff: 'linear' },
+    paramSchema: [
+      {
+        key: 'strength',
+        label: 'Swirl',
+        type: 'number',
+        min: -500,
+        max: 500,
+        step: 1,
+        default: 150,
+      },
+      { key: 'radius', label: 'Radius', type: 'number', min: 10, max: 2000, step: 1, default: 300 },
+      {
+        key: 'falloff',
+        label: 'Falloff',
+        type: 'select',
+        default: 'linear',
+        options: ['linear', 'inverse', 'constant'],
+      },
+    ],
+  },
+];
+
+const TEST_PIPELINE: PipelineForceEntry[] = [
+  { type: 'drag', enabled: true, params: { coefficient: 0.8 } },
+  { type: 'vortex', enabled: false, params: { strength: 150, radius: 300, falloff: 'linear' } },
+];
 
 describe('controls panel', () => {
   beforeEach(() => {
@@ -324,5 +382,228 @@ describe('controls panel', () => {
     const sliders = panel.querySelectorAll('input[type="range"]');
     const maxes = Array.from(sliders).map((s) => (s as HTMLInputElement).max);
     expect(maxes).toContain('600');
+  });
+});
+
+// ─── Dynamic Force Pipeline UI (CRT-38) ──────────────────────────
+
+describe('dynamic force pipeline UI (CRT-38)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  function makePipelineOptions(
+    overrides: Partial<ControlsPanelOptions> = {},
+  ): ControlsPanelOptions {
+    return makeOptions({
+      pipelineForces: TEST_PIPELINE,
+      forceTypeDescriptors: TEST_FORCE_TYPES,
+      ...overrides,
+    });
+  }
+
+  // ── Force row rendering ──────────────────────────────────────
+
+  it('renders one force row per pipeline entry', () => {
+    const panel = createControlsPanel(makePipelineOptions());
+    const rows = panel.querySelectorAll('.crit-force-row');
+    expect(rows.length).toBe(2);
+  });
+
+  it('force rows have correct data attributes', () => {
+    const panel = createControlsPanel(makePipelineOptions());
+    const rows = panel.querySelectorAll('.crit-force-row');
+    expect((rows[0] as HTMLElement).dataset.forceType).toBe('drag');
+    expect((rows[1] as HTMLElement).dataset.forceType).toBe('vortex');
+    expect((rows[0] as HTMLElement).dataset.forceIndex).toBe('0');
+    expect((rows[1] as HTMLElement).dataset.forceIndex).toBe('1');
+  });
+
+  it('each force row shows the display name from descriptor', () => {
+    const panel = createControlsPanel(makePipelineOptions());
+    const names = Array.from(panel.querySelectorAll('.crit-force-name')).map((e) => e.textContent);
+    expect(names).toContain('Drag');
+    expect(names).toContain('Vortex');
+  });
+
+  it('force rows render toggle buttons with correct enabled state', () => {
+    const panel = createControlsPanel(makePipelineOptions());
+    const forceToggles = panel.querySelectorAll('.crit-force-row .crit-toggle');
+    expect(forceToggles.length).toBe(2);
+    // Drag is enabled, vortex is disabled
+    expect(forceToggles[0].classList.contains('on')).toBe(true);
+    expect(forceToggles[1].classList.contains('on')).toBe(false);
+  });
+
+  it('each force row has a delete button', () => {
+    const panel = createControlsPanel(makePipelineOptions());
+    const delBtns = panel.querySelectorAll('.crit-force-row .crit-btn-danger');
+    expect(delBtns.length).toBe(2);
+    for (const btn of Array.from(delBtns)) {
+      expect(btn.textContent).toContain('✕');
+    }
+  });
+
+  // ── Parameter sliders from paramSchema ───────────────────────
+
+  it('renders parameter sliders from paramSchema', () => {
+    const panel = createControlsPanel(makePipelineOptions());
+    // Drag has 1 param (coefficient), Vortex has 2 number params + 1 select
+    const vortexRow = panel.querySelector('.crit-force-row[data-force-type="vortex"]');
+    const sliders = vortexRow!.querySelectorAll('input[type="range"]');
+    expect(sliders.length).toBe(2); // strength + radius
+  });
+
+  it('slider min/max/step match paramSchema', () => {
+    const panel = createControlsPanel(makePipelineOptions());
+    const vortexRow = panel.querySelector('.crit-force-row[data-force-type="vortex"]');
+    const sliders = vortexRow!.querySelectorAll('input[type="range"]');
+    const strengthSlider = sliders[0] as HTMLInputElement;
+    expect(strengthSlider.min).toBe('-500');
+    expect(strengthSlider.max).toBe('500');
+    expect(strengthSlider.step).toBe('1');
+  });
+
+  it('slider initial value comes from pipeline params', () => {
+    const panel = createControlsPanel(makePipelineOptions());
+    const dragRow = panel.querySelector('.crit-force-row[data-force-type="drag"]');
+    const slider = dragRow!.querySelector('input[type="range"]') as HTMLInputElement;
+    expect(slider.value).toBe('0.8');
+  });
+
+  it('renders select dropdown for select-type params', () => {
+    const panel = createControlsPanel(makePipelineOptions());
+    const vortexRow = panel.querySelector('.crit-force-row[data-force-type="vortex"]');
+    const selects = vortexRow!.querySelectorAll('select.crit-select');
+    expect(selects.length).toBe(1); // falloff
+  });
+
+  // ── "+ Add Force" control ────────────────────────────────────
+
+  it('renders "+ Add Force" control', () => {
+    const panel = createControlsPanel(makePipelineOptions());
+    const addRow = panel.querySelector('.crit-force-add-row');
+    expect(addRow).not.toBeNull();
+  });
+
+  it('add force dropdown lists all force type descriptors', () => {
+    const panel = createControlsPanel(makePipelineOptions());
+    const addSelect = panel.querySelector('.crit-force-add-select') as HTMLSelectElement;
+    expect(addSelect).not.toBeNull();
+    const optionValues = Array.from(addSelect.options).map((o) => o.value);
+    expect(optionValues).toContain('drag');
+    expect(optionValues).toContain('vortex');
+  });
+
+  it('add force dropdown has a disabled placeholder option', () => {
+    const panel = createControlsPanel(makePipelineOptions());
+    const addSelect = panel.querySelector('.crit-force-add-select') as HTMLSelectElement;
+    const placeholder = addSelect.querySelector('option[disabled]');
+    expect(placeholder).not.toBeNull();
+    expect(placeholder!.textContent).toContain('Add Force');
+  });
+
+  it('clicking "+ Add" button triggers onAddForce with selected type', () => {
+    const onAddForce = vi.fn();
+    const panel = createControlsPanel(makePipelineOptions({ onAddForce }));
+    const addSelect = panel.querySelector('.crit-force-add-select') as HTMLSelectElement;
+    addSelect.value = 'vortex';
+    addSelect.selectedIndex = 2; // skip placeholder + drag
+    const addBtn = panel.querySelector('.crit-force-add-row .crit-btn') as HTMLElement;
+    addBtn.click();
+    expect(onAddForce).toHaveBeenCalledWith('vortex');
+  });
+
+  it('clicking "+ Add" without selection does nothing', () => {
+    const onAddForce = vi.fn();
+    const panel = createControlsPanel(makePipelineOptions({ onAddForce }));
+    const addBtn = panel.querySelector('.crit-force-add-row .crit-btn') as HTMLElement;
+    addBtn.click(); // placeholder is selected
+    expect(onAddForce).not.toHaveBeenCalled();
+  });
+
+  // ── Callback wiring ──────────────────────────────────────────
+
+  it('clicking delete button triggers onRemoveForce with correct index', () => {
+    const onRemoveForce = vi.fn();
+    const panel = createControlsPanel(makePipelineOptions({ onRemoveForce }));
+    const delBtns = panel.querySelectorAll('.crit-force-row .crit-btn-danger');
+    (delBtns[1] as HTMLElement).click(); // delete vortex (index 1)
+    expect(onRemoveForce).toHaveBeenCalledWith(1);
+  });
+
+  it('clicking toggle triggers onSetForceEnabled with correct index + state', () => {
+    const onSetForceEnabled = vi.fn();
+    const panel = createControlsPanel(makePipelineOptions({ onSetForceEnabled }));
+    const forceToggles = panel.querySelectorAll('.crit-force-row .crit-toggle');
+    // Click vortex toggle (index 1, currently disabled → enable)
+    (forceToggles[1] as HTMLElement).click();
+    expect(onSetForceEnabled).toHaveBeenCalledWith(1, true);
+    // Click again → disable
+    (forceToggles[1] as HTMLElement).click();
+    expect(onSetForceEnabled).toHaveBeenCalledWith(1, false);
+  });
+
+  it('changing a slider triggers onSetForceParam with index + param + value', () => {
+    const onSetForceParam = vi.fn();
+    const panel = createControlsPanel(makePipelineOptions({ onSetForceParam }));
+    const dragRow = panel.querySelector('.crit-force-row[data-force-type="drag"]');
+    const slider = dragRow!.querySelector('input[type="range"]') as HTMLInputElement;
+    slider.value = '2.5';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(onSetForceParam).toHaveBeenCalledWith(0, 'coefficient', 2.5);
+  });
+
+  it('changing a select dropdown triggers onSetForceParam', () => {
+    const onSetForceParam = vi.fn();
+    const panel = createControlsPanel(makePipelineOptions({ onSetForceParam }));
+    const vortexRow = panel.querySelector('.crit-force-row[data-force-type="vortex"]');
+    const select = vortexRow!.querySelector('select.crit-select') as HTMLSelectElement;
+    select.value = 'inverse';
+    select.selectedIndex = 1; // linear=0, inverse=1, constant=2
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(onSetForceParam).toHaveBeenCalledWith(1, 'falloff', 1);
+  });
+
+  // ── Empty pipeline ───────────────────────────────────────────
+
+  it('renders add control even with empty pipeline', () => {
+    const panel = createControlsPanel(
+      makeOptions({
+        pipelineForces: [],
+        forceTypeDescriptors: TEST_FORCE_TYPES,
+      }),
+    );
+    const forceRows = panel.querySelectorAll('.crit-force-row');
+    expect(forceRows.length).toBe(0);
+    const addRow = panel.querySelector('.crit-force-add-row');
+    expect(addRow).not.toBeNull();
+  });
+
+  // ── Backward compatibility ───────────────────────────────────
+
+  it('falls back to legacy hardcoded sliders when pipelineForces not provided', () => {
+    const panel = createControlsPanel(makeOptions());
+    // Legacy mode uses makeToggle (no .crit-force-row)
+    const forceRows = panel.querySelectorAll('.crit-force-row');
+    expect(forceRows.length).toBe(0);
+    // But still has toggles for drag/wander/pointer
+    const toggles = panel.querySelectorAll('.crit-toggle');
+    expect(toggles.length).toBeGreaterThanOrEqual(3);
+  });
+
+  // ── Force without descriptor ─────────────────────────────────
+
+  it('renders force row even when descriptor is missing (unknown type)', () => {
+    const panel = createControlsPanel(
+      makeOptions({
+        pipelineForces: [{ type: 'unknown-xyz', enabled: true, params: {} }],
+        forceTypeDescriptors: TEST_FORCE_TYPES,
+      }),
+    );
+    const rows = panel.querySelectorAll('.crit-force-row');
+    expect(rows.length).toBe(1);
+    const name = rows[0].querySelector('.crit-force-name')?.textContent;
+    expect(name).toBe('unknown-xyz'); // falls back to type string
   });
 });

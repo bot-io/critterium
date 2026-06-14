@@ -6,10 +6,17 @@
  * Dark semi-transparent panel, monospace font, mobile-friendly.
  */
 
-import type { CritteriumConfig } from '@critterium/core';
+import type { CritteriumConfig, ForceTypeDescriptor } from '@critterium/core';
 import { BUILTIN_PRESET_NAMES } from './presets.js';
 
 // ─── Options Interface ────────────────────────────────────────
+
+/** A force entry in the runtime pipeline (mirrors JsonForceEntry from core). */
+export interface PipelineForceEntry {
+  type: string;
+  enabled: boolean;
+  params: Record<string, unknown>;
+}
 
 export interface ControlsPanelOptions {
   onTogglePause?: (paused: boolean) => void;
@@ -19,6 +26,11 @@ export interface ControlsPanelOptions {
   onPopulationCapChange?: (cap: number) => void;
   onForceToggle?: (forceId: string, enabled: boolean) => void;
   onForceChange?: (forceId: string, param: string, value: number) => void;
+  // ─── Dynamic Force Pipeline (CRT-38) ──────────────────────────
+  onAddForce?: (typeId: string) => void;
+  onRemoveForce?: (index: number) => void;
+  onSetForceEnabled?: (index: number, enabled: boolean) => void;
+  onSetForceParam?: (index: number, param: string, value: number) => void;
   onMatrixChange?: (
     i: number,
     j: number,
@@ -47,6 +59,8 @@ export interface ControlsPanelOptions {
   speciesNames?: string[];
   speciesColors?: string[];
   initialForceValues?: Record<string, Record<string, number>>;
+  pipelineForces?: PipelineForceEntry[];
+  forceTypeDescriptors?: ForceTypeDescriptor[];
   initialMatrixValues?: Array<Array<{ strength: number; radius: number; falloff: string } | null>>;
   initialSpeciesValues?: Array<Record<string, number>>;
   maxCount?: number;
@@ -295,6 +309,28 @@ const STYLES = `
     padding: 3px 0; cursor: pointer; user-select: none; -webkit-user-select: none;
   }
 
+  /* ─── Dynamic Force Management (CRT-38) ────────────────────── */
+  .crit-force-row {
+    border-left: 2px solid rgba(100,180,255,0.25);
+    padding: 4px 0 4px 8px; margin: 4px 0;
+    border-radius: 0 4px 4px 0;
+  }
+  .crit-force-hdr {
+    display: flex; align-items: center; gap: 6px; margin-bottom: 2px;
+  }
+  .crit-force-name {
+    font-size: 11px; font-weight: 600; color: #bbb; flex: 1;
+  }
+  .crit-force-add-row {
+    display: flex; gap: 4px; align-items: center; margin: 6px 0;
+  }
+  .crit-force-add-select {
+    flex: 1; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 3px; color: #eee; font: 11px 'Consolas', monospace;
+    padding: 4px 6px; outline: none; cursor: pointer;
+  }
+  .crit-force-add-select option { background: #1a1a1e; color: #eee; }
+
   .crit-matrix-grid { display: grid; gap: 2px; margin-top: 6px; }
   .crit-matrix-cell {
     display: flex; flex-direction: column; align-items: center;
@@ -403,6 +439,121 @@ function makeFalloffSelect(initial: string, onChange: (v: string) => void): HTML
   sel.addEventListener('change', () => onChange(sel.value));
   row.appendChild(lbl);
   row.appendChild(sel);
+  return row;
+}
+
+// ─── Dynamic Force Management Helpers (CRT-38) ──────────────
+
+/**
+ * Create a parameter control (slider or select dropdown) from a paramSchema entry.
+ * For 'number' type: creates a slider row.
+ * For 'select' type: creates a dropdown row.
+ */
+function makeParamControl(
+  schema: {
+    key: string;
+    label: string;
+    type: string;
+    min?: number;
+    max?: number;
+    step?: number;
+    default: number | string;
+    options?: string[];
+  },
+  currentValue: unknown,
+  onParamChange: (param: string, value: number) => void,
+): HTMLElement {
+  if (schema.type === 'select' && schema.options) {
+    const row = el('div', 'crit-row');
+    const lbl = el('span', 'crit-label');
+    lbl.textContent = schema.label;
+    lbl.title = schema.label;
+    const sel = document.createElement('select');
+    sel.className = 'crit-select';
+    for (const opt of schema.options) {
+      const o = document.createElement('option');
+      o.value = opt;
+      o.textContent = opt;
+      const curVal = String(currentValue ?? schema.default);
+      if (opt === curVal) o.selected = true;
+      sel.appendChild(o);
+    }
+    sel.addEventListener('change', () => {
+      // Encode select choice as a number for compatibility with onSetForceParam signature.
+      // The actual string value is stored in main.ts via onForceChange-style handling.
+      const idx = schema.options!.indexOf(sel.value);
+      onParamChange(schema.key, idx);
+    });
+    row.appendChild(lbl);
+    row.appendChild(sel);
+    return row;
+  }
+
+  // Number slider
+  const min = schema.min ?? 0;
+  const max = schema.max ?? 100;
+  const step = schema.step ?? 1;
+  const initial = typeof currentValue === 'number' ? currentValue : (schema.default as number);
+  return makeSlider(schema.label, min, max, step, initial, (v) => onParamChange(schema.key, v));
+}
+
+/**
+ * Build a single force row with toggle, type label, delete button, and parameter sliders.
+ */
+function makeForceRow(
+  index: number,
+  entry: PipelineForceEntry,
+  descriptor: ForceTypeDescriptor | undefined,
+  opts: ControlsPanelOptions,
+): HTMLElement {
+  const row = el('div', 'crit-force-row');
+  row.dataset.forceIndex = String(index);
+  row.dataset.forceType = entry.type;
+
+  // Header: toggle + name + delete
+  const hdr = el('div', 'crit-force-hdr');
+
+  // Enable/disable toggle
+  const toggleBtn = el('button', 'crit-toggle' + (entry.enabled ? ' on' : ''));
+  toggleBtn.title = 'Enable/Disable';
+  let toggleState = entry.enabled;
+  toggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleState = !toggleState;
+    toggleBtn.classList.toggle('on', toggleState);
+    opts.onSetForceEnabled?.(index, toggleState);
+  });
+  hdr.appendChild(toggleBtn);
+
+  // Name label
+  const nameEl = el('span', 'crit-force-name');
+  nameEl.textContent = descriptor?.displayName ?? entry.type;
+  nameEl.title = descriptor?.description ?? entry.type;
+  hdr.appendChild(nameEl);
+
+  // Delete button
+  const delBtn = el('button', 'crit-btn crit-btn-small crit-btn-danger');
+  delBtn.textContent = '✕';
+  delBtn.title = 'Remove force';
+  delBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    opts.onRemoveForce?.(index);
+  });
+  hdr.appendChild(delBtn);
+
+  row.appendChild(hdr);
+
+  // Parameter sliders (only for number/select params)
+  if (descriptor) {
+    for (const paramSchema of descriptor.paramSchema) {
+      const paramVal = entry.params[paramSchema.key];
+      const paramRow = makeParamControl(paramSchema, paramVal, (param, value) => {
+        opts.onSetForceParam?.(index, param, value);
+      });
+      row.appendChild(paramRow);
+    }
+  }
+
   return row;
 }
 
@@ -911,6 +1062,35 @@ function buildSubSection(title: string, buildBody: (body: HTMLElement) => void):
 // ─── Forces Section ───────────────────────────────────────────
 
 function buildForcesSection(opts: ControlsPanelOptions): HTMLElement {
+  // CRT-38: Dynamic force pipeline rendering.
+  // If pipelineForces is provided, render dynamic force rows + "Add Force" button.
+  // Otherwise, fall back to the legacy hardcoded sliders.
+  const pipeline = opts.pipelineForces;
+  const descriptors = opts.forceTypeDescriptors ?? [];
+  const descriptorMap = new Map(descriptors.map((d) => [d.type, d]));
+
+  if (pipeline && pipeline.length > 0) {
+    return makeSection('Forces', (body) => {
+      // Render one row per pipeline force
+      for (let i = 0; i < pipeline.length; i++) {
+        const entry = pipeline[i];
+        const descriptor = descriptorMap.get(entry.type);
+        body.appendChild(makeForceRow(i, entry, descriptor, opts));
+      }
+
+      // "+ Add Force" dropdown + button
+      body.appendChild(buildAddForceControl(opts, descriptors));
+    });
+  }
+
+  if (pipeline && pipeline.length === 0) {
+    // Pipeline exists but is empty — show Add button only
+    return makeSection('Forces', (body) => {
+      body.appendChild(buildAddForceControl(opts, descriptors));
+    });
+  }
+
+  // Legacy: hardcoded sliders (backward compatibility)
   const fv = opts.initialForceValues ?? {};
 
   return makeSection('Forces', (body) => {
@@ -992,6 +1172,51 @@ function buildForcesSection(opts: ControlsPanelOptions): HTMLElement {
       }),
     );
   });
+}
+
+/**
+ * Build the "+ Add Force" control: a dropdown of available force types
+ * and an "Add" button that triggers onAddForce with the selected type.
+ */
+function buildAddForceControl(
+  opts: ControlsPanelOptions,
+  descriptors: ForceTypeDescriptor[],
+): HTMLElement {
+  const addRow = el('div', 'crit-force-add-row');
+
+  const sel = document.createElement('select');
+  sel.className = 'crit-force-add-select';
+
+  // Placeholder option
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = '+ Add Force…';
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  sel.appendChild(placeholder);
+
+  // One option per registered force type
+  for (const desc of descriptors) {
+    const o = document.createElement('option');
+    o.value = desc.type;
+    o.textContent = desc.displayName + ' (' + desc.type + ')';
+    sel.appendChild(o);
+  }
+
+  addRow.appendChild(sel);
+
+  const addBtn = el('button', 'crit-btn crit-btn-small crit-btn-add-species');
+  addBtn.textContent = '+ Add';
+  addBtn.addEventListener('click', () => {
+    if (sel.value) {
+      opts.onAddForce?.(sel.value);
+      // Reset to placeholder
+      sel.selectedIndex = 0;
+    }
+  });
+  addRow.appendChild(addBtn);
+
+  return addRow;
 }
 
 // ─── Interaction Matrix Section ───────────────────────────────

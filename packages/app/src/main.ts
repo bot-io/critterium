@@ -16,6 +16,7 @@ import {
   PairwiseForce,
   PointerForce,
   createForce,
+  listForceTypes,
   type InteractionEntry,
   type FalloffType,
   type Force,
@@ -908,6 +909,9 @@ async function main(): Promise<void> {
       pointer: { strength: 200, radius: 150, falloff: 0, _enabled: 0 },
       _popCap: liveConfig.populationCap as unknown as Record<string, number>,
     },
+    // CRT-38: Dynamic force pipeline data + descriptors
+    pipelineForces: getPipelineForceEntries(),
+    forceTypeDescriptors: listForceTypes(),
 
     onTogglePause: (p: boolean) => {
       paused = p;
@@ -972,6 +976,39 @@ async function main(): Promise<void> {
         setForceParam('pointer', 'falloff', param.replace('falloff_', ''));
       } else {
         setForceParam(forceId, param, value);
+      }
+    },
+
+    // CRT-38: Dynamic force pipeline callbacks
+    onAddForce: (typeId: string) => {
+      const idx = addForce(typeId);
+      if (idx >= 0) {
+        // Rebuild the controls panel forces section to include the new force
+        // (the new force row appears with default params from the registry)
+      }
+    },
+
+    onRemoveForce: (index: number) => {
+      removeForce(index);
+    },
+
+    onSetForceEnabled: (index: number, enabled: boolean) => {
+      setForceEnabled(index, enabled);
+    },
+
+    onSetForceParam: (index: number, param: string, value: number) => {
+      // For select-type params, the value is an index into the options array
+      const entry = forcePipeline[index];
+      if (!entry) return;
+      const descriptor = listForceTypes().find((d) => d.type === entry.force.id);
+      const paramSchema = descriptor?.paramSchema.find((p) => p.key === param);
+      if (paramSchema?.type === 'select' && paramSchema.options) {
+        const optValue = paramSchema.options[value];
+        if (optValue !== undefined) {
+          setForceParam(entry.force.id, param, optValue);
+        }
+      } else {
+        setForceParam(entry.force.id, param, value);
       }
     },
 
@@ -1495,7 +1532,7 @@ async function main(): Promise<void> {
   }
 
   // Expose force pipeline management API for debugging / future UI (CRT-37)
-  ;(window as unknown as { __critterium: Record<string, unknown> }).__critterium = {
+  (window as unknown as { __critterium: Record<string, unknown> }).__critterium = {
     addForce,
     removeForce,
     setForceEnabled,
