@@ -1405,6 +1405,142 @@ const CORAL_REEF: EcosystemPreset = preset(
   },
 );
 
+// ─── 12. Tornado Alley ──────────────────────────────────────
+
+const TORNADO_ALLEY: EcosystemPreset = preset(
+  'Tornado Alley',
+  'A chaotic vortex sweeps Dust Motes, Debris, and Birds around a swirling core. Heavy turbulence, strong inward radial pull, and turbulent flow fields create unpredictable, lifelike storm motion.',
+  {
+    version: 1,
+    simulation: {
+      width: 800,
+      height: 600,
+      boundaryMode: 'wrap',
+      seed: 531,
+      populationCap: 400,
+    },
+    species: [
+      // ── Dust Motes (light, fast, small) — swirl in wisps ───────
+      {
+        name: 'Dust Motes',
+        count: 180,
+        color: '#dfe6e9',
+        radius: 1.5,
+        initialSpeed: 90,
+        maxSpeed: 140,
+        energy: {
+          maxEnergy: 60,
+          initialEnergy: 40,
+          movementCostPerSec: 0.3,
+          reproductionCost: 15,
+          idleDrainPerSec: 0.2,
+          energyGainPerPrey: [0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 120,
+          starvationDamagePerSec: 2,
+          reproductionCooldownSec: 8,
+        },
+        diet: {
+          canEat: [],
+        },
+      },
+      // ── Debris (heavy, medium, large) — collides with everything ─
+      {
+        name: 'Debris',
+        count: 60,
+        color: '#a4b0be',
+        radius: 6,
+        initialSpeed: 50,
+        maxSpeed: 85,
+        energy: {
+          maxEnergy: 120,
+          initialEnergy: 80,
+          movementCostPerSec: 1.5,
+          reproductionCost: 40,
+          idleDrainPerSec: 0.6,
+          energyGainPerPrey: [0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 180,
+          starvationDamagePerSec: 1.5,
+          reproductionCooldownSec: 15,
+        },
+        diet: {
+          canEat: [],
+        },
+      },
+      // ── Birds (medium, fast, flocking) — flock through the storm ─
+      {
+        name: 'Birds',
+        count: 40,
+        color: '#2f3542',
+        radius: 3,
+        initialSpeed: 80,
+        maxSpeed: 120,
+        energy: {
+          maxEnergy: 80,
+          initialEnergy: 50,
+          movementCostPerSec: 0.8,
+          reproductionCost: 20,
+          idleDrainPerSec: 0.4,
+          energyGainPerPrey: [0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 100,
+          starvationDamagePerSec: 3,
+          reproductionCooldownSec: 10,
+        },
+        diet: {
+          canEat: [],
+        },
+      },
+    ],
+    // src=row (how this species reacts to target col)
+    //          Dust     Debris   Birds
+    interactionMatrix: [
+      /* Dust   */ [
+        { strength: 20, radius: 50, falloff: 'linear' },
+        { strength: -40, radius: 70, falloff: 'linear' },
+        null,
+      ],
+      /* Debris */ [
+        { strength: -40, radius: 70, falloff: 'linear' },
+        { strength: -50, radius: 60, falloff: 'linear' },
+        { strength: -45, radius: 80, falloff: 'linear' },
+      ],
+      /* Birds  */ [
+        null,
+        { strength: -45, radius: 80, falloff: 'linear' },
+        { strength: 30, radius: 90, falloff: 'linear' },
+      ],
+    ],
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.5 } },
+      { type: 'wander', enabled: true, params: { strength: 60, rate: 5 } },
+      {
+        type: 'flow-field',
+        enabled: true,
+        params: { strength: 30, mode: 'turbulence', angle: 0, turbulenceScale: 0.04 },
+      },
+      {
+        // Strong swirl (300) at canvas center, with inward radial pull (negative).
+        // VortexForce radialStrength: positive = outward, negative = inward.
+        type: 'vortex',
+        enabled: true,
+        params: {
+          cx: 400,
+          cy: 300,
+          strength: 300,
+          radialStrength: -80,
+          radius: 320,
+          falloff: 'linear',
+        },
+      },
+    ],
+  },
+);
+
 // ─── Export all presets ───────────────────────────────────────
 
 export const BUILTIN_PRESETS: EcosystemPreset[] = [
@@ -1419,6 +1555,7 @@ export const BUILTIN_PRESETS: EcosystemPreset[] = [
   BIRDS,
   FISHES,
   CORAL_REEF,
+  TORNADO_ALLEY,
 ];
 
 export const BUILTIN_PRESET_NAMES: string[] = BUILTIN_PRESETS.map((p) => p.name);

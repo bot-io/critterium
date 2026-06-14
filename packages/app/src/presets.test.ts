@@ -14,11 +14,12 @@ const EXPECTED_PRESET_NAMES = [
   'Birds',
   'Fishes',
   'Coral Reef',
+  'Tornado Alley',
 ];
 
 describe('presets', () => {
-  it('exports exactly 11 built-in presets', () => {
-    expect(BUILTIN_PRESETS).toHaveLength(11);
+  it('exports exactly 12 built-in presets', () => {
+    expect(BUILTIN_PRESETS).toHaveLength(12);
   });
 
   it('BUILTIN_PRESET_NAMES matches expected list', () => {
@@ -786,5 +787,156 @@ describe('presets', () => {
     const reef = getBuiltinPreset('Coral Reef');
     const total = reef!.config.species.reduce((sum, s) => sum + s.count, 0);
     expect(total).toBeLessThanOrEqual(reef!.config.simulation.populationCap!);
+  });
+
+  // ── Tornado Alley — chaotic vortex preset tests ────────────
+
+  it('Tornado Alley has exactly 3 species', () => {
+    const tornado = getBuiltinPreset('Tornado Alley');
+    expect(tornado).toBeDefined();
+    expect(tornado!.config.species).toHaveLength(3);
+  });
+
+  it('Tornado Alley species names are Dust Motes, Debris, Birds', () => {
+    const tornado = getBuiltinPreset('Tornado Alley');
+    const names = tornado!.config.species.map((s) => s.name);
+    expect(names).toEqual(['Dust Motes', 'Debris', 'Birds']);
+  });
+
+  it('Tornado Alley: populationCap is 400', () => {
+    const tornado = getBuiltinPreset('Tornado Alley');
+    expect(tornado!.config.simulation.populationCap).toBe(400);
+  });
+
+  it('Tornado Alley: total initial population is within populationCap', () => {
+    const tornado = getBuiltinPreset('Tornado Alley');
+    const total = tornado!.config.species.reduce((sum, s) => sum + s.count, 0);
+    expect(total).toBeLessThanOrEqual(tornado!.config.simulation.populationCap!);
+  });
+
+  it('Tornado Alley: interaction matrix is 3×3', () => {
+    const tornado = getBuiltinPreset('Tornado Alley');
+    const m = tornado!.config.interactionMatrix;
+    expect(m).toHaveLength(3);
+    for (const row of m) {
+      expect(row).toHaveLength(3);
+    }
+  });
+
+  it('Tornado Alley: no predation — all canEat arrays empty', () => {
+    const tornado = getBuiltinPreset('Tornado Alley');
+    for (const sp of tornado!.config.species) {
+      expect(sp.diet.canEat).toEqual([]);
+    }
+  });
+
+  it('Tornado Alley: no energy gain from prey (all energyGainPerPrey zero)', () => {
+    const tornado = getBuiltinPreset('Tornado Alley');
+    for (const sp of tornado!.config.species) {
+      expect(sp.energy.energyGainPerPrey).toHaveLength(3);
+      expect(sp.energy.energyGainPerPrey.every((v) => v === 0)).toBe(true);
+    }
+  });
+
+  it('Tornado Alley: Debris repels everything (row 1 all negative)', () => {
+    const tornado = getBuiltinPreset('Tornado Alley');
+    const m = tornado!.config.interactionMatrix;
+    // Debris (row 1) reacts negatively to Dust (col 0), Debris (col 1), Birds (col 2)
+    for (let col = 0; col < 3; col++) {
+      expect(m[1][col]).not.toBeNull();
+      expect(m[1][col]!.strength).toBeLessThan(0);
+    }
+  });
+
+  it('Tornado Alley: Birds mildly flock (positive self-cohesion)', () => {
+    const tornado = getBuiltinPreset('Tornado Alley');
+    const m = tornado!.config.interactionMatrix;
+    // Birds (row 2) attract own kind (col 2)
+    expect(m[2][2]).not.toBeNull();
+    expect(m[2][2]!.strength).toBeGreaterThan(0);
+  });
+
+  it('Tornado Alley: Dust Motes weakly cohere (positive self-attraction)', () => {
+    const tornado = getBuiltinPreset('Tornado Alley');
+    const m = tornado!.config.interactionMatrix;
+    // Dust (row 0) attract own kind (col 0) — dust wisps
+    expect(m[0][0]).not.toBeNull();
+    expect(m[0][0]!.strength).toBeGreaterThan(0);
+  });
+
+  it('Tornado Alley: forces include a vortex', () => {
+    const tornado = getBuiltinPreset('Tornado Alley');
+    const vortex = tornado!.config.forces.find((f) => f.type === 'vortex');
+    expect(vortex).toBeDefined();
+    expect(vortex!.enabled).toBe(true);
+  });
+
+  it('Tornado Alley: vortex swirl strength ~300', () => {
+    const tornado = getBuiltinPreset('Tornado Alley');
+    const vortex = tornado!.config.forces.find((f) => f.type === 'vortex')!;
+    // Strong swirl around 300 (accept 250–350)
+    expect(vortex.params.strength).toBeGreaterThanOrEqual(250);
+    expect(vortex.params.strength).toBeLessThanOrEqual(350);
+  });
+
+  it('Tornado Alley: vortex centered at canvas midpoint', () => {
+    const tornado = getBuiltinPreset('Tornado Alley');
+    const vortex = tornado!.config.forces.find((f) => f.type === 'vortex')!;
+    const { width, height } = tornado!.config.simulation;
+    expect(vortex.params.cx).toBe(width / 2);
+    expect(vortex.params.cy).toBe(height / 2);
+  });
+
+  it('Tornado Alley: vortex has inward radial pull (negative radialStrength)', () => {
+    const tornado = getBuiltinPreset('Tornado Alley');
+    const vortex = tornado!.config.forces.find((f) => f.type === 'vortex')!;
+    // Negative radialStrength = inward pull (toward center)
+    expect(vortex.params.radialStrength).toBeLessThan(0);
+  });
+
+  it('Tornado Alley: forces include a turbulent flow field', () => {
+    const tornado = getBuiltinPreset('Tornado Alley');
+    const flowField = tornado!.config.forces.find((f) => f.type === 'flow-field');
+    expect(flowField).toBeDefined();
+    expect(flowField!.enabled).toBe(true);
+    expect(flowField!.params.mode).toBe('turbulence');
+    expect(flowField!.params.strength).toBeGreaterThan(0);
+    expect(flowField!.params.turbulenceScale).toBeGreaterThan(0);
+  });
+
+  it('Tornado Alley: wander force present with high rate (chaotic motion)', () => {
+    const tornado = getBuiltinPreset('Tornado Alley');
+    const wander = tornado!.config.forces.find((f) => f.type === 'wander')!;
+    expect(wander.enabled).toBe(true);
+    expect(wander.params.strength).toBeGreaterThan(0);
+    // High wander rate for chaotic motion (> default 2.5)
+    expect(wander.params.rate).toBeGreaterThan(2.5);
+  });
+
+  it('Tornado Alley: Dust Motes are the lightest/fastest (highest maxSpeed, smallest radius)', () => {
+    const tornado = getBuiltinPreset('Tornado Alley');
+    const species = tornado!.config.species;
+    const speeds = species.map((s) => s.maxSpeed);
+    const radii = species.map((s) => s.radius);
+    // Dust Motes (idx 0) — fastest and smallest
+    expect(speeds[0]).toBeGreaterThan(speeds[1]);
+    expect(radii[0]).toBeLessThan(radii[1]);
+    expect(radii[0]).toBeLessThan(radii[2]);
+  });
+
+  it('Tornado Alley: Debris is the heaviest (largest radius)', () => {
+    const tornado = getBuiltinPreset('Tornado Alley');
+    const species = tornado!.config.species;
+    const radii = species.map((s) => s.radius);
+    // Debris (idx 1) is the largest
+    expect(radii[1]).toBeGreaterThan(radii[0]);
+    expect(radii[1]).toBeGreaterThan(radii[2]);
+  });
+
+  it('Tornado Alley: all three species have distinct colors', () => {
+    const tornado = getBuiltinPreset('Tornado Alley');
+    const colors = tornado!.config.species.map((s) => s.color);
+    const unique = new Set(colors);
+    expect(unique.size).toBe(3);
   });
 });
