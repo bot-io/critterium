@@ -102,22 +102,23 @@ describe('AdaptiveQuality', () => {
   });
 
   it('upgrade has 5-second cooldown', () => {
-    const now = performance.now() / 1000;
+    // Mock time from the start to avoid real-time flakiness under parallel load.
+    // The constructor sets lastUpgradeTime = 0; using a fixed start time of 0
+    // keeps the cooldown math deterministic regardless of process uptime.
+    let fakeTime = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => fakeTime * 1000);
 
     // Drop to low
     for (let i = 0; i < 7; i++) aq.update(10);
     expect(aq.level).toBe('low');
 
-    // Try to upgrade immediately — should be blocked
-    const origNow = performance.now;
-    let fakeTime = now + 1; // only 1 second later
-    vi.spyOn(performance, 'now').mockImplementation(() => fakeTime * 1000);
-
+    // Try to upgrade immediately — should be blocked (only 1 second later)
+    fakeTime = 1; // only 1 second later
     for (let i = 0; i < 7; i++) aq.update(60);
     expect(aq.level).toBe('low'); // still low, cooldown not elapsed
 
     // Advance past 5 seconds
-    fakeTime = now + 6;
+    fakeTime = 6;
     for (let i = 0; i < 7; i++) aq.update(60);
     expect(aq.level).toBe('high'); // now upgraded
 
