@@ -80,38 +80,28 @@ describe('Reproduction — deterministic when dt >> interval', () => {
   });
 });
 
-// ─── Probabilistic reproduction with realistic dt ──────────────
+// ─── Cooldown-gated reproduction ──────────────────────────────
 
-describe('Reproduction — probabilistic with realistic dt', () => {
-  it('does NOT reproduce every tick when dt is small', () => {
-    // With interval=5s and dt=1/60≈0.0167s, probability per tick = 0.0167/5 = 0.33%
-    // Over 10 ticks, expected reproductions = 10 * 0.0033 = 0.033
-    // So almost certainly no reproduction in 10 ticks
+describe('Reproduction — cooldown-gated (no probability)', () => {
+  it('reproduces immediately when cooldown is 0 and energy is sufficient', () => {
+    // With cooldown=0 and energy sufficient, reproduction should fire on the
+    // FIRST tick — no probabilistic delay.
     let reproduced = 0;
     const trials = 200;
 
     for (let trial = 0; trial < trials; trial++) {
-      const cfg = makeConfig([reproSpecies(5)], 500);
-      const eco = new EcosystemWorld(cfg);
-      // Different seed each trial for different rng
+      const cfg = makeConfig([reproSpecies(0)], 500); // cooldownSec=0
       cfg.seed = trial * 1000 + 42;
-      const eco2 = new EcosystemWorld(cfg);
-      eco2.eco.reproductionCooldown[0] = 0;
+      const eco = new EcosystemWorld(cfg);
+      eco.eco.reproductionCooldown[0] = 0;
 
-      // Run 10 ticks at 60fps
-      let anyBorn = false;
-      for (let tick = 0; tick < 10; tick++) {
-        const born = processReproduction(eco2, 1 / 60);
-        if (born > 0) anyBorn = true;
-      }
-
-      if (anyBorn) reproduced++;
+      // Run 1 tick at 60fps — should reproduce immediately
+      const born = processReproduction(eco, 1 / 60);
+      if (born > 0) reproduced++;
     }
 
-    // With 0.33% per tick over 10 ticks: P(at least 1) ≈ 3.3%
-    // So out of 200 trials, expect ~6-7 reproductions.
-    // Allow generous bounds: 0-25 reproductions out of 200
-    expect(reproduced).toBeLessThan(trials * 0.2); // < 20% (should be ~3%)
+    // With cooldown=0, ALL trials should reproduce on the first eligible tick
+    expect(reproduced).toBe(trials);
   });
 
   it('reproduces roughly on schedule over many ticks', () => {

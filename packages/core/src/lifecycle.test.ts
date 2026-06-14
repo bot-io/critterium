@@ -439,8 +439,8 @@ describe('lifecycle: reproduction deep tests', () => {
     // reproductionCooldownSec=0 → initial cooldown is rng()*0 = 0
     expect(eco.eco.reproductionCooldown[0]).toBe(0);
     eco.tryReproduce(0, 100);
-    // After reproduction, cooldown = max(1, 0) = 1
-    expect(eco.eco.reproductionCooldown[0]).toBe(1);
+    // After reproduction, cooldown = reproductionCooldownSec (0 means no cooldown)
+    expect(eco.eco.reproductionCooldown[0]).toBe(0);
   });
 
   it('multiple eligible parents all reproduce in one processReproduction call', () => {

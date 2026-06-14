@@ -243,11 +243,11 @@ export class EcosystemWorld {
    * Attempt reproduction for a particle.
    * Returns child index if successful, -1 if not.
    *
-   * Reproduction is probabilistic: after the cooldown expires, each tick has
-   * a random chance to reproduce (if energy allows). The average time between
-   * successful reproductions ≈ reproductionCooldownSec.
+   * Reproduction is cooldown-gated: after the cooldown expires, the particle
+   * reproduces immediately if it has enough energy. No probabilistic gate —
+   * the cooldown alone controls the rate.
    */
-  tryReproduce(index: number, dt: number = 0.016): number {
+  tryReproduce(index: number, _dt: number = 0.016): number {
     if (this.eco.alive[index] === DEAD) return -1;
     if (this.isAtCap) return -1;
 
@@ -259,24 +259,21 @@ export class EcosystemWorld {
     // Energy gate
     if (this.eco.energy[index] < species.energy.reproductionCost) return -1;
 
-    // Random chance: average reproduction interval = reproductionCooldownSec.
-    // This spreads reproduction across time so not all particles spawn simultaneously.
-    const interval = Math.max(1, species.lifecycle.reproductionCooldownSec);
-    if (this.rng() > dt / interval) return -1;
-
-    // Deduct energy
-    this.eco.energy[index] -= species.energy.reproductionCost;
-
-    // Reset cooldown
-    this.eco.reproductionCooldown[index] = interval;
-
-    // Spawn child near parent
+    // Spawn child near parent FIRST — only deduct energy if spawn succeeds
     const offsetX = (this.rng() - 0.5) * 20;
     const offsetY = (this.rng() - 0.5) * 20;
     const childX = this.world.x[index] + offsetX;
     const childY = this.world.y[index] + offsetY;
 
     const childIdx = this.spawn(speciesIdx, childX, childY);
+    if (childIdx < 0) return -1; // spawn failed — don't punish parent
+
+    // Deduct energy only after successful spawn
+    this.eco.energy[index] -= species.energy.reproductionCost;
+
+    // Reset cooldown
+    this.eco.reproductionCooldown[index] = species.lifecycle.reproductionCooldownSec;
+
     return childIdx;
   }
 

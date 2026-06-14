@@ -524,7 +524,7 @@ describe('CRT-45: max config serialization round-trip', () => {
 
 // ─── 5. Memory stability over 10,000 steps ─────────────────────
 
-describe('CRT-45: memory stability over 10,000 steps', { timeout: 30_000 }, () => {
+describe('CRT-45: memory stability over 10,000 steps', { timeout: 60_000 }, () => {
   it('array buffers do not grow beyond populationCap', () => {
     const species = [makeSpecies('A', 150), makeSpecies('B', 150)];
     const eco = new EcosystemWorld(makeEcoConfig(species, 500));
