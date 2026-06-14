@@ -1071,69 +1071,56 @@ async function main(): Promise<void> {
       const sp = liveConfig.species[speciesIndex];
       if (!sp) return;
 
+      // Structural changes that require a full simulation rebuild
+      const STRUCTURAL = new Set(['count']);
+
       if (param === 'name' && typeof value === 'string') {
         sp.name = value;
       } else if (param === 'color' && typeof value === 'string') {
         sp.color = value;
         syncRendererVisuals();
-      } else if (param === 'count' && typeof value === 'number') {
-        sp.count = value;
-        rebuildSimulation();
       } else if (param === 'radius' && typeof value === 'number') {
         sp.radius = value;
         syncRendererVisuals();
-        rebuildSimulation();
-      } else if (param === 'initialSpeed' && typeof value === 'number') {
-        sp.initialSpeed = value;
+        // No rebuild needed — eating.ts reads radius live from species config
+      } else if (STRUCTURAL.has(param) && typeof value === 'number') {
+        (sp as unknown as Record<string, unknown>)[param] = value;
         rebuildSimulation();
       } else if (param === 'maxSpeed' && typeof value === 'number') {
         sp.maxSpeed = value;
-        rebuildSimulation();
-      } else if (param === 'maxEnergy' && typeof value === 'number') {
-        sp.energy.maxEnergy = value;
-        rebuildSimulation();
+        // Live update World's maxSpeeds lookup — no rebuild
+        eco.world.updateMaxSpeed(speciesIndex, value);
+      } else if (param === 'initialSpeed' && typeof value === 'number') {
+        sp.initialSpeed = value;
+        // Only affects new spawns — no rebuild needed
       } else if (param === 'initialEnergy' && typeof value === 'number') {
         sp.energy.initialEnergy = value;
-        rebuildSimulation();
-      } else if (param === 'reproductionCost' && typeof value === 'number') {
-        sp.energy.reproductionCost = value;
-        rebuildSimulation();
-      } else if (param === 'movementCostPerSec' && typeof value === 'number') {
-        sp.energy.movementCostPerSec = value;
-        rebuildSimulation();
-      } else if (param === 'idleDrainPerSec' && typeof value === 'number') {
-        sp.energy.idleDrainPerSec = value;
-        rebuildSimulation();
-      } else if (param === 'maxAgeSec' && typeof value === 'number') {
-        sp.lifecycle.maxAgeSec = value;
-        rebuildSimulation();
-      } else if (param === 'starvationDamagePerSec' && typeof value === 'number') {
-        sp.lifecycle.starvationDamagePerSec = value;
-        rebuildSimulation();
-      } else if (param === 'reproductionCooldownSec' && typeof value === 'number') {
-        sp.lifecycle.reproductionCooldownSec = value;
-        rebuildSimulation();
+        // Only affects new spawns — no rebuild needed
       } else if (param.startsWith('canEat_') && typeof value === 'boolean') {
         const targetIdx = parseInt(param.replace('canEat_', ''));
         if (value) sp.diet.canEat.add(targetIdx);
         else sp.diet.canEat.delete(targetIdx);
-        rebuildSimulation();
-      } else if (param === 'sprintDurationSec' && typeof value === 'number') {
-        if (!sp.stamina) sp.stamina = defaultStaminaConfig();
-        sp.stamina.sprintDurationSec = value;
-        rebuildSimulation();
-      } else if (param === 'sprintCooldownSec' && typeof value === 'number') {
-        if (!sp.stamina) sp.stamina = defaultStaminaConfig();
-        sp.stamina.sprintCooldownSec = value;
-        rebuildSimulation();
-      } else if (param === 'sprintSpeedMultiplier' && typeof value === 'number') {
-        if (!sp.stamina) sp.stamina = defaultStaminaConfig();
-        sp.stamina.sprintSpeedMultiplier = value;
-        rebuildSimulation();
-      } else if (param === 'tiredSpeedMultiplier' && typeof value === 'number') {
-        if (!sp.stamina) sp.stamina = defaultStaminaConfig();
-        sp.stamina.tiredSpeedMultiplier = value;
-        rebuildSimulation();
+        // eating.ts reads canEat live — no rebuild needed
+      } else if (param.startsWith('energyGainPerPrey_') && typeof value === 'number') {
+        const targetIdx = parseInt(param.replace('energyGainPerPrey_', ''));
+        while (sp.energy.energyGainPerPrey.length <= targetIdx) sp.energy.energyGainPerPrey.push(0);
+        sp.energy.energyGainPerPrey[targetIdx] = value;
+        // eating.ts reads energyGainPerPrey live — no rebuild needed
+      } else if (typeof value === 'number') {
+        // All other numeric params: maxEnergy, reproductionCost, movementCostPerSec,
+        // idleDrainPerSec, maxAgeSec, starvationDamagePerSec, reproductionCooldownSec,
+        // sprintDurationSec, sprintCooldownSec, sprintSpeedMultiplier, tiredSpeedMultiplier
+        // These are read live by processLifecycle/processStamina — no rebuild needed
+        if (param in sp.energy) {
+          (sp.energy as unknown as Record<string, unknown>)[param] = value;
+        } else if (param in sp.lifecycle) {
+          (sp.lifecycle as unknown as Record<string, unknown>)[param] = value;
+        } else if (sp.stamina && param in sp.stamina) {
+          (sp.stamina as unknown as Record<string, unknown>)[param] = value;
+        } else if (!sp.stamina && (param === 'sprintDurationSec' || param === 'sprintCooldownSec' || param === 'sprintSpeedMultiplier' || param === 'tiredSpeedMultiplier')) {
+          sp.stamina = defaultStaminaConfig();
+          (sp.stamina as unknown as Record<string, unknown>)[param] = value;
+        }
       }
     },
 

@@ -117,6 +117,13 @@ export class World {
   // Per-type max speed lookup
   private readonly maxSpeeds: Float32Array;
 
+  /** Update max speed for a specific type (live, no rebuild). */
+  updateMaxSpeed(typeIdx: number, maxSpeed: number): void {
+    if (typeIdx >= 0 && typeIdx < this.maxSpeeds.length) {
+      this.maxSpeeds[typeIdx] = maxSpeed;
+    }
+  }
+
   constructor(config: SimulationConfig) {
     this.width = config.width;
     this.height = config.height;
