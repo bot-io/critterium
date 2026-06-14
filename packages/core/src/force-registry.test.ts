@@ -344,4 +344,15 @@ describe('ForceRegistry — descriptors', () => {
     expect(radiusSchema!.min).toBe(10);
     expect(radiusSchema!.max).toBe(300);
   });
+
+  it('boids descriptor has correct metadata', () => {
+    const d = getForceDescriptor('boids');
+    expect(d).toBeDefined();
+    expect(d!.displayName).toBe('Boids Flocking');
+    expect(d!.paramSchema.length).toBe(7); // 6 numeric + crossType
+    const sepRadiusSchema = d!.paramSchema.find((s) => s.key === 'separationRadius');
+    expect(sepRadiusSchema).toBeDefined();
+    expect(sepRadiusSchema!.min).toBe(5);
+    expect(sepRadiusSchema!.max).toBe(200);
+  });
 });
