@@ -1709,6 +1709,124 @@ const DEEP_SEA_VENT: EcosystemPreset = preset(
   },
 );
 
+// ─── 14. Symbiosis ──────────────────────────────────────────
+
+const SYMBIOSIS: EcosystemPreset = preset(
+  'Symbiosis',
+  'A peaceful reef of mutual benefit: Algae and Coral share a mutual attraction, while Cleaner Shrimp seek out Coral to tend. No predation — every interaction is positive or neutral.',
+  {
+    version: 1,
+    simulation: {
+      width: 800,
+      height: 600,
+      boundaryMode: 'wrap',
+      seed: 727,
+      populationCap: 400,
+    },
+    species: [
+      // ── Algae (tiny, slow, high reproduction) — photosynthetic producer ─
+      {
+        name: 'Algae',
+        count: 200,
+        color: '#55efc4',
+        radius: 1.5,
+        initialSpeed: 15,
+        maxSpeed: 30,
+        energy: {
+          maxEnergy: 60,
+          initialEnergy: 30,
+          movementCostPerSec: 0.15,
+          reproductionCost: 10,
+          idleDrainPerSec: 0.15,
+          energyGainPerPrey: [0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 60,
+          starvationDamagePerSec: 2,
+          reproductionCooldownSec: 3,
+        },
+        diet: {
+          canEat: [],
+        },
+      },
+      // ── Coral (stationary, medium, long-lived) — mutualistic host ────────
+      // maxSpeed=5 (not zero) to avoid div-by-zero in movement-cost calculation.
+      // initialSpeed=0 so coral starts at rest, following the Grasslands/Coral Reef convention.
+      {
+        name: 'Coral',
+        count: 40,
+        color: '#ff7675',
+        radius: 5,
+        initialSpeed: 0,
+        maxSpeed: 5,
+        energy: {
+          maxEnergy: 150,
+          initialEnergy: 80,
+          movementCostPerSec: 0.1,
+          reproductionCost: 40,
+          idleDrainPerSec: 0.1,
+          energyGainPerPrey: [0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 200,
+          starvationDamagePerSec: 1,
+          reproductionCooldownSec: 20,
+        },
+        diet: {
+          canEat: [],
+        },
+      },
+      // ── Cleaner Shrimp (small, fast, mobile) — seeks coral to clean ─────
+      {
+        name: 'Cleaner Shrimp',
+        count: 60,
+        color: '#fdcb6e',
+        radius: 2.5,
+        initialSpeed: 50,
+        maxSpeed: 90,
+        energy: {
+          maxEnergy: 100,
+          initialEnergy: 50,
+          movementCostPerSec: 0.8,
+          reproductionCost: 20,
+          idleDrainPerSec: 0.5,
+          energyGainPerPrey: [0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 90,
+          starvationDamagePerSec: 3,
+          reproductionCooldownSec: 8,
+        },
+        diet: {
+          canEat: [],
+        },
+      },
+    ],
+    // src=row (how this species reacts to target col)
+    // All entries are positive (attract) or null (neutral).
+    // Universal short-range repulsion (prevents collapse) is applied by the engine,
+    // not the interaction matrix.
+    //          Algae    Coral    Shrimp
+    interactionMatrix: [
+      /* Algae   */ [
+        { strength: 12, radius: 50, falloff: 'linear' },
+        { strength: 30, radius: 90, falloff: 'linear' },
+        null,
+      ],
+      /* Coral   */ [{ strength: 30, radius: 90, falloff: 'linear' }, null, null],
+      /* Shrimp  */ [
+        null,
+        { strength: 40, radius: 100, falloff: 'linear' },
+        { strength: 18, radius: 60, falloff: 'linear' },
+      ],
+    ],
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.7 } },
+      { type: 'wander', enabled: true, params: { strength: 20, rate: 1.5 } },
+    ],
+  },
+);
+
 // ─── Export all presets ───────────────────────────────────────
 
 export const BUILTIN_PRESETS: EcosystemPreset[] = [
@@ -1725,6 +1843,7 @@ export const BUILTIN_PRESETS: EcosystemPreset[] = [
   CORAL_REEF,
   TORNADO_ALLEY,
   DEEP_SEA_VENT,
+  SYMBIOSIS,
 ];
 
 export const BUILTIN_PRESET_NAMES: string[] = BUILTIN_PRESETS.map((p) => p.name);

@@ -409,9 +409,7 @@ function migrateOldForces(old: Record<string, unknown>): JsonForcesConfig {
     if (val !== undefined && val !== null) {
       const type = OLD_SLOT_TO_TYPE[slot] ?? slot;
       const params =
-        typeof val === 'object' && val !== null
-          ? (val as Record<string, unknown>)
-          : {};
+        typeof val === 'object' && val !== null ? (val as Record<string, unknown>) : {};
       result.push({ type, enabled: true, params });
     }
   }

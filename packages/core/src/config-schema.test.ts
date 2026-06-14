@@ -385,9 +385,21 @@ describe('round-trip serialization', () => {
     ];
     const restored = deserializeConfig(JSON.parse(JSON.stringify(config)));
     expect(restored.forces).toHaveLength(3);
-    expect(restored.forces[0]).toEqual({ type: 'drag', enabled: true, params: { coefficient: 0.7 } });
-    expect(restored.forces[1]).toEqual({ type: 'wander', enabled: true, params: { strength: 30, rate: 2 } });
-    expect(restored.forces[2]).toEqual({ type: 'gravity', enabled: false, params: { acceleration: 150 } });
+    expect(restored.forces[0]).toEqual({
+      type: 'drag',
+      enabled: true,
+      params: { coefficient: 0.7 },
+    });
+    expect(restored.forces[1]).toEqual({
+      type: 'wander',
+      enabled: true,
+      params: { strength: 30, rate: 2 },
+    });
+    expect(restored.forces[2]).toEqual({
+      type: 'gravity',
+      enabled: false,
+      params: { acceleration: 150 },
+    });
   });
 
   it('migrates old object-slot format forces to array', () => {
@@ -400,8 +412,16 @@ describe('round-trip serialization', () => {
     const restored = deserializeConfig(JSON.parse(JSON.stringify(config)));
     expect(Array.isArray(restored.forces)).toBe(true);
     expect(restored.forces).toHaveLength(2);
-    expect(restored.forces[0]).toEqual({ type: 'drag', enabled: true, params: { coefficient: 0.9 } });
-    expect(restored.forces[1]).toEqual({ type: 'wander', enabled: true, params: { strength: 40, rate: 3 } });
+    expect(restored.forces[0]).toEqual({
+      type: 'drag',
+      enabled: true,
+      params: { coefficient: 0.9 },
+    });
+    expect(restored.forces[1]).toEqual({
+      type: 'wander',
+      enabled: true,
+      params: { strength: 40, rate: 3 },
+    });
   });
 
   it('migrates old flowField/vortex slot names to canonical type IDs', () => {

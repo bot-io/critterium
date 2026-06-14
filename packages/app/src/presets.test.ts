@@ -16,11 +16,12 @@ const EXPECTED_PRESET_NAMES = [
   'Coral Reef',
   'Tornado Alley',
   'Deep Sea Vent',
+  'Symbiosis',
 ];
 
 describe('presets', () => {
-  it('exports exactly 13 built-in presets', () => {
-    expect(BUILTIN_PRESETS).toHaveLength(13);
+  it('exports exactly 14 built-in presets', () => {
+    expect(BUILTIN_PRESETS).toHaveLength(14);
   });
 
   it('BUILTIN_PRESET_NAMES matches expected list', () => {
@@ -1136,5 +1137,197 @@ describe('presets', () => {
     const colors = dsv!.config.species.map((s) => s.color);
     const unique = new Set(colors);
     expect(unique.size).toBe(4);
+  });
+
+  // ── Symbiosis — mutual-benefit ecosystem tests ──────────────
+
+  it('Symbiosis has exactly 3 species', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    expect(sym).toBeDefined();
+    expect(sym!.config.species).toHaveLength(3);
+  });
+
+  it('Symbiosis species names are Algae, Coral, Cleaner Shrimp', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    const names = sym!.config.species.map((s) => s.name);
+    expect(names).toEqual(['Algae', 'Coral', 'Cleaner Shrimp']);
+  });
+
+  it('Symbiosis: populationCap is 400', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    expect(sym!.config.simulation.populationCap).toBe(400);
+  });
+
+  it('Symbiosis: total initial population is within populationCap', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    const total = sym!.config.species.reduce((sum, s) => sum + s.count, 0);
+    expect(total).toBeLessThanOrEqual(sym!.config.simulation.populationCap!);
+  });
+
+  it('Symbiosis: interaction matrix is 3×3', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    const m = sym!.config.interactionMatrix;
+    expect(m).toHaveLength(3);
+    for (const row of m) {
+      expect(row).toHaveLength(3);
+    }
+  });
+
+  // ── No predation tests ──────────────────────────────────────
+
+  it('Symbiosis: no species can eat (all canEat empty)', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    for (const sp of sym!.config.species) {
+      expect(sp.diet.canEat).toEqual([]);
+    }
+  });
+
+  it('Symbiosis: all energyGainPerPrey values are zero (no eating)', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    for (const sp of sym!.config.species) {
+      expect(sp.energy.energyGainPerPrey.every((v) => v === 0)).toBe(true);
+    }
+  });
+
+  it('Symbiosis: energyGainPerPrey arrays have length 3', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    for (const sp of sym!.config.species) {
+      expect(sp.energy.energyGainPerPrey).toHaveLength(3);
+    }
+  });
+
+  // ── Interaction direction tests ─────────────────────────────
+
+  it('Symbiosis: Algae ↔ Coral mutual attraction is symmetric and positive', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    const m = sym!.config.interactionMatrix;
+    // Algae (row 0) attracted to Coral (col 1)
+    expect(m[0][1]).not.toBeNull();
+    expect(m[0][1]!.strength).toBeGreaterThan(0);
+    // Coral (row 1) attracted to Algae (col 0) — symmetric
+    expect(m[1][0]).not.toBeNull();
+    expect(m[1][0]!.strength).toBeGreaterThan(0);
+    // Symmetric: same strength
+    expect(m[0][1]!.strength).toBe(m[1][0]!.strength);
+    expect(m[0][1]!.radius).toBe(m[1][0]!.radius);
+    expect(m[0][1]!.falloff).toBe(m[1][0]!.falloff);
+  });
+
+  it('Symbiosis: Cleaner Shrimp is attracted to Coral (positive)', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    const m = sym!.config.interactionMatrix;
+    // Shrimp (row 2) attracted to Coral (col 1)
+    expect(m[2][1]).not.toBeNull();
+    expect(m[2][1]!.strength).toBeGreaterThan(0);
+  });
+
+  it('Symbiosis: all matrix entries are positive or null (no repel)', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    const m = sym!.config.interactionMatrix;
+    for (let i = 0; i < m.length; i++) {
+      for (let j = 0; j < m[i].length; j++) {
+        if (m[i][j] !== null) {
+          expect(m[i][j]!.strength).toBeGreaterThanOrEqual(0);
+        }
+      }
+    }
+  });
+
+  it('Symbiosis: Algae has positive self-cohesion (bloom clustering)', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    const m = sym!.config.interactionMatrix;
+    expect(m[0][0]).not.toBeNull();
+    expect(m[0][0]!.strength).toBeGreaterThan(0);
+  });
+
+  it('Symbiosis: Shrimp has positive self-cohesion (small groups)', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    const m = sym!.config.interactionMatrix;
+    expect(m[2][2]).not.toBeNull();
+    expect(m[2][2]!.strength).toBeGreaterThan(0);
+  });
+
+  it('Symbiosis: Coral has no self-interaction (stationary, no clustering)', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    const m = sym!.config.interactionMatrix;
+    expect(m[1][1]).toBeNull();
+  });
+
+  // ── Size / speed / lifecycle hierarchy tests ────────────────
+
+  it('Symbiosis: Algae is the smallest species (radius)', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    const radii = sym!.config.species.map((s) => s.radius);
+    expect(radii[0]).toBeLessThan(radii[1]);
+    expect(radii[0]).toBeLessThan(radii[2]);
+  });
+
+  it('Symbiosis: Coral is the largest species (radius)', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    const radii = sym!.config.species.map((s) => s.radius);
+    expect(radii[1]).toBeGreaterThan(radii[0]);
+    expect(radii[1]).toBeGreaterThan(radii[2]);
+  });
+
+  it('Symbiosis: Cleaner Shrimp is the fastest species (maxSpeed)', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    const speeds = sym!.config.species.map((s) => s.maxSpeed);
+    expect(speeds[2]).toBeGreaterThan(speeds[0]);
+    expect(speeds[2]).toBeGreaterThan(speeds[1]);
+  });
+
+  it('Symbiosis: Algae reproduces fastest (lowest cooldown)', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    const cooldowns = sym!.config.species.map((s) => s.lifecycle.reproductionCooldownSec);
+    // Algae (idx 0) has the shortest reproduction cooldown
+    expect(cooldowns[0]).toBeLessThan(cooldowns[1]);
+    expect(cooldowns[0]).toBeLessThan(cooldowns[2]);
+  });
+
+  it('Symbiosis: Coral is the longest-lived species (maxAge)', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    const ages = sym!.config.species.map((s) => s.lifecycle.maxAgeSec);
+    // Coral (idx 1) has the longest maxAge
+    expect(ages[1]).toBeGreaterThan(ages[0]);
+    expect(ages[1]).toBeGreaterThan(ages[2]);
+  });
+
+  it('Symbiosis: Coral starts at rest (initialSpeed 0)', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    expect(sym!.config.species[1].initialSpeed).toBe(0);
+  });
+
+  it('Symbiosis: Coral has low maxSpeed (stationary-leaning)', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    expect(sym!.config.species[1].maxSpeed).toBeLessThanOrEqual(10);
+  });
+
+  // ── Visual distinction tests ────────────────────────────────
+
+  it('Symbiosis: all three species have distinct colors', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    const colors = sym!.config.species.map((s) => s.color);
+    const unique = new Set(colors);
+    expect(unique.size).toBe(3);
+  });
+
+  // ── Force tests ─────────────────────────────────────────────
+
+  it('Symbiosis: drag and wander forces present', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    const drag = sym!.config.forces.find((f) => f.type === 'drag');
+    const wander = sym!.config.forces.find((f) => f.type === 'wander');
+    expect(drag).toBeDefined();
+    expect(drag!.enabled).toBe(true);
+    expect(wander).toBeDefined();
+    expect(wander!.enabled).toBe(true);
+  });
+
+  it('Symbiosis: no aggressive forces (gravity, vortex absent)', () => {
+    const sym = getBuiltinPreset('Symbiosis');
+    const gravity = sym!.config.forces.find((f) => f.type === 'gravity');
+    const vortex = sym!.config.forces.find((f) => f.type === 'vortex');
+    expect(gravity).toBeUndefined();
+    expect(vortex).toBeUndefined();
   });
 });
