@@ -1288,6 +1288,225 @@ export class AlignmentForce implements Force {
   }
 }
 
+// ─── Boids Flocking Force ───────────────────────────────────────
+
+/** Boids force parameters (Reynolds flocking). */
+export interface BoidsParams {
+  [key: string]: unknown;
+  /**
+   * Separation radius. Particles closer than this are pushed apart.
+   * Typically the smallest of the three radii.
+   * Range: 5–100.
+   */
+  separationRadius: number;
+  /**
+   * Separation strength. How strongly close particles are pushed apart.
+   * Range: 0–500.
+   */
+  separationStrength: number;
+  /**
+   * Alignment radius. Particles within this distance contribute their
+   * heading to the average.
+   * Range: 10–300.
+   */
+  alignmentRadius: number;
+  /**
+   * Alignment strength. How strongly each particle steers toward the
+   * average heading of neighbors.
+   * Range: 0–500.
+   */
+  alignmentStrength: number;
+  /**
+   * Cohesion radius. Particles within this distance contribute their
+   * position to the group centroid.
+   * Range: 10–300.
+   */
+  cohesionRadius: number;
+  /**
+   * Cohesion strength. How strongly each particle steers toward the
+   * group centroid.
+   * Range: 0–500.
+   */
+  cohesionStrength: number;
+  /**
+   * When false (default), particles only flock with neighbors of the
+   * SAME type. When true, all three behaviors consider all species.
+   */
+  crossType: boolean;
+}
+
+/**
+ * BoidsForce: classic Reynolds flocking with three sub-behaviors.
+ *
+ * Combines separation (short-range repulsion), alignment (match neighbor
+ * heading), and cohesion (steer toward group center) into a single force.
+ * Each sub-behavior has independent radius and strength parameters.
+ *
+ * Uses the spatial hash grid for O(n) neighbor queries. For each particle,
+ * a single queryRadius call with the maximum of the three radii is issued,
+ * and neighbors are dispatched to the appropriate sub-behavior based on
+ * distance.
+ *
+ * Uses a velocity-delta buffer (like PairwiseForce) to ensure all three
+ * behaviors see the same state snapshot — velocity changes from one particle
+ * don't affect another's alignment calculation within the same step.
+ *
+ * By default only same-type neighbors contribute (`crossType: false`).
+ *
+ * Zero allocations per step.
+ */
+export class BoidsForce implements Force {
+  readonly id = 'boids';
+  readonly params: BoidsParams;
+
+  // Pre-allocated velocity delta buffers — grow on demand, never per-step
+  private dvx: Float32Array = new Float32Array(0);
+  private dvy: Float32Array = new Float32Array(0);
+
+  constructor(
+    separationRadius: number = 25,
+    separationStrength: number = 50,
+    alignmentRadius: number = 60,
+    alignmentStrength: number = 30,
+    cohesionRadius: number = 60,
+    cohesionStrength: number = 20,
+    crossType: boolean = false,
+  ) {
+    this.params = {
+      separationRadius,
+      separationStrength,
+      alignmentRadius,
+      alignmentStrength,
+      cohesionRadius,
+      cohesionStrength,
+      crossType,
+    };
+  }
+
+  apply(world: World, grid: SpatialHashGrid, dt: number): void {
+    const { x, y, vx, vy, type, count } = world;
+    const {
+      separationRadius,
+      separationStrength,
+      alignmentRadius,
+      alignmentStrength,
+      cohesionRadius,
+      cohesionStrength,
+      crossType,
+    } = this.params;
+
+    if (count === 0) return;
+
+    // Ensure velocity delta buffers are large enough (grow only)
+    if (this.dvx.length < count) {
+      this.dvx = new Float32Array(count);
+      this.dvy = new Float32Array(count);
+    } else {
+      this.dvx.fill(0, 0, count);
+      this.dvy.fill(0, 0, count);
+    }
+    const dvx = this.dvx;
+    const dvy = this.dvy;
+
+    // Single query radius = max of all three
+    const maxRadius = Math.max(separationRadius, alignmentRadius, cohesionRadius);
+    const sepRSq = separationRadius * separationRadius;
+    const alignRSq = alignmentRadius * alignmentRadius;
+    const cohRSq = cohesionRadius * cohesionRadius;
+
+    for (let i = 0; i < count; i++) {
+      const xi = x[i];
+      const yi = y[i];
+      const typeI = type[i];
+
+      // Accumulators for each sub-behavior
+      let sepVx = 0;
+      let sepVy = 0;
+      let alignSumVx = 0;
+      let alignSumVy = 0;
+      let alignCount = 0;
+      let cohSumX = 0;
+      let cohSumY = 0;
+      let cohCount = 0;
+
+      // selfIdx = i so co-located particles can still be neighbors
+      grid.queryRadius(
+        xi,
+        yi,
+        maxRadius,
+        x,
+        y,
+        count,
+        (j, dx, dy, distSq) => {
+          if (!crossType && type[j] !== typeI) return;
+
+          // Separation: accumulate away-vectors weighted by closeness
+          if (distSq < sepRSq && distSq > 0) {
+            const dist = Math.sqrt(distSq);
+            // Linear falloff: weight = 1 at dist=0, 0 at separationRadius
+            const weight = 1 - dist / separationRadius;
+            // Direction away from neighbor (-dx, -dy normalized)
+            sepVx -= (dx / dist) * weight;
+            sepVy -= (dy / dist) * weight;
+          }
+
+          // Alignment: accumulate neighbor velocities
+          if (distSq <= alignRSq) {
+            alignSumVx += vx[j];
+            alignSumVy += vy[j];
+            alignCount++;
+          }
+
+          // Cohesion: accumulate neighbor positions
+          if (distSq <= cohRSq) {
+            cohSumX += x[j];
+            cohSumY += y[j];
+            cohCount++;
+          }
+        },
+        i,
+      );
+
+      // ── Apply separation steering ──
+      const sepMag = Math.sqrt(sepVx * sepVx + sepVy * sepVy);
+      if (sepMag > 0.001) {
+        dvx[i] += (sepVx / sepMag) * separationStrength * dt;
+        dvy[i] += (sepVy / sepMag) * separationStrength * dt;
+      }
+
+      // ── Apply alignment steering ──
+      if (alignCount > 0) {
+        const avgVx = alignSumVx / alignCount;
+        const avgVy = alignSumVy / alignCount;
+        const mag = Math.sqrt(avgVx * avgVx + avgVy * avgVy);
+        if (mag > 0.001) {
+          dvx[i] += (avgVx / mag) * alignmentStrength * dt;
+          dvy[i] += (avgVy / mag) * alignmentStrength * dt;
+        }
+      }
+
+      // ── Apply cohesion steering ──
+      if (cohCount > 0) {
+        const avgX = cohSumX / cohCount;
+        const avgY = cohSumY / cohCount;
+        const toCx = avgX - xi;
+        const toCy = avgY - yi;
+        const dist = Math.sqrt(toCx * toCx + toCy * toCy);
+        if (dist > 0.001) {
+          dvx[i] += (toCx / dist) * cohesionStrength * dt;
+          dvy[i] += (toCy / dist) * cohesionStrength * dt;
+        }
+      }
+    }
+
+    // Apply accumulated velocity changes
+    for (let i = 0; i < count; i++) {
+      vx[i] += dvx[i];
+      vy[i] += dvy[i];
+    }
+  }
+}
+
 // ─── Re-exports for barrel import ────────────────────────────────
 export type {
   EcosystemConfig,

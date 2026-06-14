@@ -17,6 +17,7 @@ import {
   FlowFieldForce,
   VortexForce,
   AlignmentForce,
+  BoidsForce,
   type FalloffType,
   type Force,
 } from './index.js';
@@ -363,6 +364,98 @@ function registerBuiltins(): void {
       new AlignmentForce(
         p.radius as number,
         p.strength as number,
+        p.crossType === true || p.crossType === 'true',
+      ),
+  );
+
+  // Boids (combined flocking: separation + alignment + cohesion)
+  registerForceType(
+    {
+      type: 'boids',
+      displayName: 'Boids Flocking',
+      description:
+        'Reynolds flocking: separation (avoid crowding) + alignment (match heading) + cohesion (steer to center).',
+      defaultParams: {
+        separationRadius: 25,
+        separationStrength: 50,
+        alignmentRadius: 60,
+        alignmentStrength: 30,
+        cohesionRadius: 60,
+        cohesionStrength: 20,
+        crossType: false,
+      },
+      paramSchema: [
+        {
+          key: 'separationRadius',
+          label: 'Sep Radius',
+          type: 'number',
+          min: 5,
+          max: 200,
+          step: 1,
+          default: 25,
+        },
+        {
+          key: 'separationStrength',
+          label: 'Sep Strength',
+          type: 'number',
+          min: 0,
+          max: 500,
+          step: 1,
+          default: 50,
+        },
+        {
+          key: 'alignmentRadius',
+          label: 'Align Radius',
+          type: 'number',
+          min: 10,
+          max: 300,
+          step: 1,
+          default: 60,
+        },
+        {
+          key: 'alignmentStrength',
+          label: 'Align Strength',
+          type: 'number',
+          min: 0,
+          max: 500,
+          step: 1,
+          default: 30,
+        },
+        {
+          key: 'cohesionRadius',
+          label: 'Cohesion Radius',
+          type: 'number',
+          min: 10,
+          max: 300,
+          step: 1,
+          default: 60,
+        },
+        {
+          key: 'cohesionStrength',
+          label: 'Cohesion Strength',
+          type: 'number',
+          min: 0,
+          max: 500,
+          step: 1,
+          default: 20,
+        },
+        {
+          key: 'crossType',
+          label: 'Cross-Type',
+          type: 'select',
+          default: 'false',
+          options: ['false', 'true'],
+        },
+      ],
+    },
+    (p) =>
+      new BoidsForce(
+        p.separationRadius as number,
+        p.separationStrength as number,
+        p.alignmentRadius as number,
+        p.alignmentStrength as number,
+        p.cohesionRadius as number,
+        p.cohesionStrength as number,
         p.crossType === true || p.crossType === 'true',
       ),
   );

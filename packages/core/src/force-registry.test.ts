@@ -29,7 +29,7 @@ const grid = new SpatialHashGrid(800, 600, 150, 10);
 grid.rebuild(makeWorld(1));
 
 describe('ForceRegistry — Built-in types', () => {
-  it('registers all 7 built-in force types', () => {
+  it('registers all 8 built-in force types', () => {
     const types = getRegisteredTypes();
     expect(types).toContain('drag');
     expect(types).toContain('wander');
@@ -38,12 +38,13 @@ describe('ForceRegistry — Built-in types', () => {
     expect(types).toContain('vortex');
     expect(types).toContain('pointer');
     expect(types).toContain('alignment');
-    expect(types.length).toBe(7);
+    expect(types).toContain('boids');
+    expect(types.length).toBe(8);
   });
 
   it('listForceTypes returns descriptors with display names', () => {
     const descs = listForceTypes();
-    expect(descs.length).toBe(7);
+    expect(descs.length).toBe(8);
     for (const d of descs) {
       expect(d.type).toBeTruthy();
       expect(d.displayName).toBeTruthy();
@@ -122,6 +123,35 @@ describe('ForceRegistry — createForce', () => {
     const f = createForce('alignment', { radius: 100, strength: 80, crossType: true });
     expect(f.params.radius).toBe(100);
     expect(f.params.strength).toBe(80);
+    expect(f.params.crossType).toBe(true);
+  });
+
+  it('creates BoidsForce with default params', () => {
+    const f = createForce('boids');
+    expect(f.id).toBe('boids');
+    expect(f.params.separationRadius).toBe(25);
+    expect(f.params.separationStrength).toBe(50);
+    expect(f.params.alignmentRadius).toBe(60);
+    expect(f.params.alignmentStrength).toBe(30);
+    expect(f.params.cohesionRadius).toBe(60);
+    expect(f.params.cohesionStrength).toBe(20);
+    expect(f.params.crossType).toBe(false);
+  });
+
+  it('creates BoidsForce with custom params', () => {
+    const f = createForce('boids', {
+      separationRadius: 40,
+      separationStrength: 100,
+      alignmentRadius: 80,
+      alignmentStrength: 60,
+      cohesionRadius: 100,
+      cohesionStrength: 40,
+      crossType: true,
+    });
+    expect(f.params.separationRadius).toBe(40);
+    expect(f.params.separationStrength).toBe(100);
+    expect(f.params.alignmentRadius).toBe(80);
+    expect(f.params.cohesionStrength).toBe(40);
     expect(f.params.crossType).toBe(true);
   });
 
