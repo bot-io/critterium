@@ -745,9 +745,14 @@ async function main(): Promise<void> {
         // Step physics
         eco.world.step(dt);
 
-        // Process ecosystem systems
-        eco.processLifecycle(dt);
+        // Process ecosystem systems (order matters!):
+        // 0. Rebuild grid at post-step positions for eating detection
+        // 1. processEating — predators gain energy from prey at new positions
+        // 2. processLifecycle — energy drain, starvation, old age, cooldown tick
+        // 3. processReproduction — eligible particles reproduce
+        grid.rebuild(eco.world, eco.eco.alive, eco.highWaterMark);
         processEating(eco, grid);
+        eco.processLifecycle(dt);
         processReproduction(eco, dt);
 
         // Population overflow protection: force-kill excess particles

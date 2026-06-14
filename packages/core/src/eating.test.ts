@@ -123,7 +123,7 @@ describe('processEating', () => {
     expect(eco.eco.energy[0]).toBe(energyBefore + 30);
   });
 
-  it('predator skips eating when energy would exceed maxEnergy', () => {
+  it('predator eats and caps energy at maxEnergy when gain would overflow', () => {
     const cfg = predatorPreyConfig(1, 1, 100);
     const eco = new EcosystemWorld(cfg);
     eco.world.x[0] = 100;
@@ -135,13 +135,13 @@ describe('processEating', () => {
     eco.world.vx[1] = 0;
     eco.world.vy[1] = 0;
     // Set predator energy near max
-    eco.eco.energy[0] = 195; // max is 200, gain is 30 → 225 > max → should NOT eat
+    eco.eco.energy[0] = 195; // max is 200, gain is 30 → would be 225, capped at 200
 
     const grid = makeGrid(eco);
     const result = processEating(eco, grid);
-    expect(eco.eco.energy[0]).toBe(195); // energy unchanged
-    expect(result.killed).toBe(0); // prey not killed
-    expect(eco.eco.alive[1]).toBe(ALIVE); // prey still alive
+    expect(result.killed).toBe(1); // prey killed
+    expect(eco.eco.energy[0]).toBe(200); // energy capped at max
+    expect(eco.eco.alive[1]).toBe(DEAD); // prey eaten
   });
 
   it('predator can eat multiple prey in one step', () => {

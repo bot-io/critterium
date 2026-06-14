@@ -200,7 +200,10 @@ export class EcosystemWorld {
 
       // Energy drain: idle + movement cost
       const speed = Math.sqrt(this.world.vx[i] ** 2 + this.world.vy[i] ** 2);
-      const movementCost = species.energy.movementCostPerSec * (speed / species.maxSpeed) * dt;
+      // Clamp speed ratio to [0, 1] — sprint/forces can push beyond maxSpeed,
+      // but movement cost shouldn't exceed the nominal rate
+      const speedRatio = Math.min(1, speed / species.maxSpeed);
+      const movementCost = species.energy.movementCostPerSec * speedRatio * dt;
       const idleCost = species.energy.idleDrainPerSec * dt;
       this.eco.energy[i] -= movementCost + idleCost;
 

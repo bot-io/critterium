@@ -186,7 +186,7 @@ function createSimContext(config?: EcosystemConfig): SimContext {
 
 /**
  * Execute one full simulation step (mirrors main.ts's loop body):
- *   applyForces → processStamina → world.step → processLifecycle → processEating → processReproduction
+ *   applyForces → processStamina → world.step → rebuild grid → processEating → processLifecycle → processReproduction
  */
 function simStep(ctx: SimContext, dt: number): void {
   // Rebuild spatial hash (skip dead particles)
@@ -206,10 +206,12 @@ function simStep(ctx: SimContext, dt: number): void {
   // Step physics
   ctx.eco.world.step(dt);
 
-  // Process ecosystem systems
-  ctx.eco.processLifecycle(dt);
+  // Process ecosystem systems (order matters!):
+  // Rebuild grid at post-step positions for eating detection
+  ctx.grid.rebuild(ctx.eco.world, ctx.eco.eco.alive, ctx.eco.highWaterMark);
   processEating(ctx.eco, ctx.grid);
-  processReproduction(ctx.eco);
+  ctx.eco.processLifecycle(dt);
+  processReproduction(ctx.eco, dt);
 
   ctx.totalSimTime += dt;
 }
@@ -455,9 +457,10 @@ describe('CRT-39: main.ts integration — preset loading lifecycle', () => {
       pf.apply(applied.eco.world, grid, dt);
       applied.eco.processStamina(dt);
       applied.eco.world.step(dt);
-      applied.eco.processLifecycle(dt);
+      grid.rebuild(applied.eco.world, applied.eco.eco.alive, applied.eco.highWaterMark);
       processEating(applied.eco, grid);
-      processReproduction(applied.eco);
+      applied.eco.processLifecycle(dt);
+      processReproduction(applied.eco, dt);
     }
     expect(applied.eco.aliveCount).toBeGreaterThan(0);
   });

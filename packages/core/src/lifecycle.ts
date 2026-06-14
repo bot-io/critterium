@@ -33,9 +33,15 @@ export function processReproduction(eco: EcosystemWorld, dt: number): number {
   let born = 0;
   const hwm = eco.highWaterMark;
 
-  // Snapshot the current alive set to avoid processing newborns this frame
+  // Snapshot alive particles at start — newborns must not reproduce this frame.
+  // We copy the alive flags into a temporary buffer to capture the pre-reproduction state.
+  const aliveSnapshot = new Uint8Array(hwm);
   for (let i = 0; i < hwm; i++) {
-    if (eco.eco.alive[i] === DEAD) continue;
+    aliveSnapshot[i] = eco.eco.alive[i];
+  }
+
+  for (let i = 0; i < hwm; i++) {
+    if (aliveSnapshot[i] === DEAD) continue;
 
     const childIdx = eco.tryReproduce(i, dt);
     if (childIdx >= 0) {

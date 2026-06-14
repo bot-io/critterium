@@ -99,18 +99,18 @@ export function processEating(eco: EcosystemWorld, grid: SpatialHashGrid): Eatin
         // Energy gain from energyGainPerPrey array
         const energyGain = species[speciesIdx].energy.energyGainPerPrey[preySpeciesIdx] ?? 0;
 
-        // Don't eat if it would exceed max energy — predator is "full"
-        const maxE = species[speciesIdx].energy.maxEnergy;
-        if (state.energy[i] + energyGain > maxE) return;
-
-        // Eat! Instant kill + energy gain
+        // Eat! Instant kill + energy gain (capped at maxEnergy)
         eaten[j] = 1;
         eco.kill(j);
         result.killed++;
 
         if (energyGain > 0) {
-          state.energy[i] += energyGain;
-          result.energyGained += energyGain;
+          const maxE = species[speciesIdx].energy.maxEnergy;
+          const actualGain = Math.min(energyGain, maxE - state.energy[i]);
+          if (actualGain > 0) {
+            state.energy[i] += actualGain;
+            result.energyGained += actualGain;
+          }
         }
       },
       i,
