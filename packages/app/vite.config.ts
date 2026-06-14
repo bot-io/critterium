@@ -22,6 +22,19 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
   },
+  // Pixi.js v8 + @capacitor/core use destructuring patterns that esbuild cannot
+  // down-level to the default optimizeDeps target (es2020/chrome87). Without
+  // this override, the dev server crashes during dependency pre-bundling with
+  // "Transforming destructuring to the configured target environment is not
+  // supported yet" → ERR_CONNECTION_REFUSED → all e2e tests fail.
+  optimizeDeps: {
+    esbuildOptions: {
+      target: 'es2022',
+    },
+  },
+  esbuild: {
+    target: 'es2022',
+  },
   server: {
     port: 3000,
   },
