@@ -141,13 +141,16 @@ describe('presets', () => {
     }
   });
 
-  it('forces object has drag and wander', () => {
+  it('forces array has drag and wander entries', () => {
     for (const p of BUILTIN_PRESETS) {
-      expect(p.config.forces.drag).toBeDefined();
-      expect(p.config.forces.drag.coefficient).toBeGreaterThan(0);
-      expect(p.config.forces.wander).toBeDefined();
-      expect(p.config.forces.wander.strength).toBeGreaterThanOrEqual(0);
-      expect(p.config.forces.wander.rate).toBeGreaterThan(0);
+      expect(Array.isArray(p.config.forces)).toBe(true);
+      const drag = p.config.forces.find((f) => f.type === 'drag');
+      expect(drag).toBeDefined();
+      expect(drag!.params.coefficient).toBeGreaterThan(0);
+      const wander = p.config.forces.find((f) => f.type === 'wander');
+      expect(wander).toBeDefined();
+      expect(wander!.params.strength).toBeGreaterThanOrEqual(0);
+      expect(wander!.params.rate).toBeGreaterThan(0);
     }
   });
 

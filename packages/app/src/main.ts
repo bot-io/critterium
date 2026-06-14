@@ -1308,12 +1308,14 @@ async function main(): Promise<void> {
         // Update liveConfig to match
         liveConfig = deepCloneConfig(eco.config);
         // Also update drag and wander forces from preset
-        if (cfg.forces?.drag) {
-          (dragForce.params as Record<string, unknown>).coefficient = cfg.forces.drag.coefficient;
+        const dragForceCfg = validated.forces.find((f) => f.type === 'drag');
+        if (dragForceCfg) {
+          (dragForce.params as Record<string, unknown>).coefficient = dragForceCfg.params.coefficient;
         }
-        if (cfg.forces?.wander) {
-          (wanderForce.params as Record<string, unknown>).strength = cfg.forces.wander.strength;
-          (wanderForce.params as Record<string, unknown>).rate = cfg.forces.wander.rate;
+        const wanderForceCfg = validated.forces.find((f) => f.type === 'wander');
+        if (wanderForceCfg) {
+          (wanderForce.params as Record<string, unknown>).strength = wanderForceCfg.params.strength;
+          (wanderForce.params as Record<string, unknown>).rate = wanderForceCfg.params.rate;
         }
         accumulator = 0;
         lastTime = performance.now();

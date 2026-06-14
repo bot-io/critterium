@@ -73,22 +73,22 @@ export interface JsonInteractionEntry {
   falloff: FalloffType;
 }
 
-/** JSON-serializable force configuration. */
-export interface JsonForcesConfig {
-  drag?: { coefficient: number } | null;
-  wander?: { strength: number; rate: number } | null;
-  gravity?: { acceleration: number } | null;
-  flowField?: { strength: number; mode: string; angle: number; turbulenceScale: number } | null;
-  vortex?: {
-    cx: number;
-    cy: number;
-    strength: number;
-    radialStrength: number;
-    radius: number;
-    falloff: FalloffType;
-  } | null;
-  pointer?: { strength: number; radius: number; falloff: FalloffType } | null;
+/** A single force entry in the dynamic forces configuration. */
+export interface JsonForceEntry {
+  type: string;
+  enabled: boolean;
+  params: Record<string, unknown>;
 }
+
+/**
+ * JSON-serializable force configuration — dynamic array of force entries.
+ *
+ * Each entry is `{ type, enabled, params }`. The array order is the force
+ * pipeline order. This replaces the old named-slot format (`drag?`, `wander?`,
+ * etc.) and makes the schema extensible: new force types can be added without
+ * schema changes.
+ */
+export type JsonForcesConfig = JsonForceEntry[];
 
 /** JSON-serializable particle snapshot (all typed arrays → number[]). */
 export interface JsonSnapshot {
@@ -300,51 +300,13 @@ function serializeInteractionMatrix(matrix: InteractionMatrix): (JsonInteraction
   return result;
 }
 
-/** Serialize force instances to JSON config. */
+/** Serialize force instances to JSON config (dynamic array format). */
 function serializeForces(forces: SerializeableForce[]): JsonForcesConfig {
-  const result: JsonForcesConfig = {};
-  for (const force of forces) {
-    switch (force.id) {
-      case 'drag':
-        result.drag = { coefficient: force.params.coefficient as number };
-        break;
-      case 'wander':
-        result.wander = {
-          strength: force.params.strength as number,
-          rate: force.params.rate as number,
-        };
-        break;
-      case 'gravity':
-        result.gravity = { acceleration: force.params.acceleration as number };
-        break;
-      case 'flow-field':
-        result.flowField = {
-          strength: force.params.strength as number,
-          mode: force.params.mode as string,
-          angle: force.params.angle as number,
-          turbulenceScale: force.params.turbulenceScale as number,
-        };
-        break;
-      case 'vortex':
-        result.vortex = {
-          cx: force.params.cx as number,
-          cy: force.params.cy as number,
-          strength: force.params.strength as number,
-          radialStrength: force.params.radialStrength as number,
-          radius: force.params.radius as number,
-          falloff: force.params.falloff as FalloffType,
-        };
-        break;
-      case 'pointer':
-        result.pointer = {
-          strength: force.params.strength as number,
-          radius: force.params.radius as number,
-          falloff: force.params.falloff as FalloffType,
-        };
-        break;
-    }
-  }
-  return result;
+  return forces.map((f) => ({
+    type: f.id,
+    enabled: true, // all forces passed to serializeConfig are active
+    params: { ...f.params },
+  }));
 }
 
 /** Serialize ecosystem world snapshot to JSON-compatible format. */
@@ -382,6 +344,78 @@ function serializeSnapshot(eco: EcosystemWorld): JsonSnapshot {
     energy: energyArr,
     alive: aliveArr,
   };
+}
+
+// ─── Force normalization (old → new format migration) ─────────
+
+/** Old-format force slot names mapped to canonical type IDs. */
+const OLD_SLOT_TO_TYPE: Record<string, string> = {
+  drag: 'drag',
+  wander: 'wander',
+  gravity: 'gravity',
+  flowField: 'flow-field',
+  vortex: 'vortex',
+  pointer: 'pointer',
+};
+
+/** Canonical order for migrating old-format forces to array. */
+const OLD_SLOT_ORDER = ['drag', 'wander', 'gravity', 'flowField', 'vortex', 'pointer'];
+
+/**
+ * Normalize force configuration from unknown input.
+ *
+ * Accepts three forms:
+ * - **New array format**: `[{ type, enabled, params }, ...]`
+ * - **Old object-slot format**: `{ drag?: {...}, wander?: {...}, ... }`
+ * - **undefined / null**: empty array
+ *
+ * Always returns a validated `JsonForceEntry[]` (new format).
+ */
+function normalizeForces(raw: unknown): JsonForcesConfig {
+  if (raw === undefined || raw === null) return [];
+
+  // New format: array of force entries
+  if (Array.isArray(raw)) {
+    return raw
+      .filter((e): e is Record<string, unknown> => typeof e === 'object' && e !== null)
+      .map((e) => normalizeForceEntry(e))
+      .filter((e): e is JsonForceEntry => e !== null);
+  }
+
+  // Old format: object with named slots (drag?, wander?, etc.)
+  if (typeof raw === 'object') {
+    return migrateOldForces(raw as Record<string, unknown>);
+  }
+
+  return [];
+}
+
+/** Normalize a single force entry from raw input. */
+function normalizeForceEntry(raw: Record<string, unknown>): JsonForceEntry | null {
+  if (typeof raw.type !== 'string') return null;
+  const enabled = raw.enabled !== false; // default true unless explicitly false
+  const params =
+    typeof raw.params === 'object' && raw.params !== null
+      ? (raw.params as Record<string, unknown>)
+      : {};
+  return { type: raw.type, enabled, params };
+}
+
+/** Migrate old object-slot format to new array format. */
+function migrateOldForces(old: Record<string, unknown>): JsonForcesConfig {
+  const result: JsonForceEntry[] = [];
+  for (const slot of OLD_SLOT_ORDER) {
+    const val = old[slot];
+    if (val !== undefined && val !== null) {
+      const type = OLD_SLOT_TO_TYPE[slot] ?? slot;
+      const params =
+        typeof val === 'object' && val !== null
+          ? (val as Record<string, unknown>)
+          : {};
+      result.push({ type, enabled: true, params });
+    }
+  }
+  return result;
 }
 
 // ─── Deserialize ───────────────────────────────────────────────
@@ -445,10 +479,8 @@ export function deserializeConfig(json: unknown): CritteriumConfig {
     throw new Error('interactionMatrix must be a 2D array');
   }
 
-  // Validate forces (optional fields)
-  if (obj.forces !== undefined && (typeof obj.forces !== 'object' || obj.forces === null)) {
-    throw new Error('forces must be an object if provided');
-  }
+  // Normalize forces: accept old object-slot format AND new array format
+  const normalizedForces = normalizeForces(obj.forces);
 
   // Validate snapshot (optional)
   if (obj.snapshot !== undefined) {
@@ -467,7 +499,7 @@ export function deserializeConfig(json: unknown): CritteriumConfig {
     },
     species: obj.species as JsonSpeciesConfig[],
     interactionMatrix: obj.interactionMatrix as (JsonInteractionEntry | null)[][],
-    forces: (obj.forces ?? {}) as JsonForcesConfig,
+    forces: normalizedForces,
     snapshot: obj.snapshot as JsonSnapshot | undefined,
   };
 }

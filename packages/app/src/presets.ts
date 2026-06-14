@@ -112,10 +112,10 @@ const CLASSIC: EcosystemPreset = preset(
         { strength: -20, radius: 50, falloff: 'linear' },
       ],
     ],
-    forces: {
-      drag: { coefficient: 0.8 },
-      wander: { strength: 40, rate: 2.5 },
-    },
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.8 } },
+      { type: 'wander', enabled: true, params: { strength: 40, rate: 2.5 } },
+    ],
   },
 );
 
@@ -281,10 +281,10 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
       ],
       /* Whale   */ [null, null, null, { strength: 40, radius: 200, falloff: 'linear' }, null],
     ],
-    forces: {
-      drag: { coefficient: 0.6 },
-      wander: { strength: 30, rate: 2 },
-    },
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.6 } },
+      { type: 'wander', enabled: true, params: { strength: 30, rate: 2 } },
+    ],
   },
 );
 
@@ -357,10 +357,10 @@ const SWARM_INTELLIGENCE: EcosystemPreset = preset(
       /* Birds   */ [{ strength: 50, radius: 80, falloff: 'linear' }, null],
       /* Locusts */ [null, { strength: 60, radius: 50, falloff: 'linear' }],
     ],
-    forces: {
-      drag: { coefficient: 1.2 },
-      wander: { strength: 20, rate: 3 },
-    },
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 1.2 } },
+      { type: 'wander', enabled: true, params: { strength: 20, rate: 3 } },
+    ],
   },
 );
 
@@ -527,10 +527,10 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
         { strength: 20, radius: 40, falloff: 'linear' },
       ],
     ],
-    forces: {
-      drag: { coefficient: 0.7 },
-      wander: { strength: 45, rate: 2 },
-    },
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.7 } },
+      { type: 'wander', enabled: true, params: { strength: 45, rate: 2 } },
+    ],
   },
 );
 
@@ -609,10 +609,10 @@ const TINY_POND: EcosystemPreset = preset(
         { strength: -30, radius: 60, falloff: 'linear' },
       ],
     ],
-    forces: {
-      drag: { coefficient: 0.7 },
-      wander: { strength: 25, rate: 2 },
-    },
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.7 } },
+      { type: 'wander', enabled: true, params: { strength: 25, rate: 2 } },
+    ],
   },
 );
 
@@ -710,10 +710,10 @@ const ZEN_GARDEN: EcosystemPreset = preset(
       /* Koi      */ [null, null, null],
       /* Leaves   */ [null, null, null],
     ],
-    forces: {
-      drag: { coefficient: 2.5 },
-      wander: { strength: 8, rate: 0.5 },
-    },
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 2.5 } },
+      { type: 'wander', enabled: true, params: { strength: 8, rate: 0.5 } },
+    ],
   },
 );
 
@@ -842,10 +842,10 @@ const ROCK_PAPER_SCISSORS: EcosystemPreset = preset(
         { strength: -20, radius: 40, falloff: 'linear' },
       ],
     ],
-    forces: {
-      drag: { coefficient: 0.8 },
-      wander: { strength: 40, rate: 2.5 },
-    },
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.8 } },
+      { type: 'wander', enabled: true, params: { strength: 40, rate: 2.5 } },
+    ],
   },
 );
 
@@ -967,10 +967,10 @@ const GRASSLANDS: EcosystemPreset = preset(
         { strength: -30, radius: 60, falloff: 'linear' },
       ],
     ],
-    forces: {
-      drag: { coefficient: 0.8 },
-      wander: { strength: 35, rate: 2.5 },
-    },
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.8 } },
+      { type: 'wander', enabled: true, params: { strength: 35, rate: 2.5 } },
+    ],
   },
 );
 
@@ -1064,10 +1064,10 @@ const BIRDS: EcosystemPreset = preset(
         { strength: -35, radius: 90, falloff: 'linear' },
       ],
     ],
-    forces: {
-      drag: { coefficient: 0.7 },
-      wander: { strength: 25, rate: 2.5 },
-    },
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.7 } },
+      { type: 'wander', enabled: true, params: { strength: 25, rate: 2.5 } },
+    ],
   },
 );
 
@@ -1189,10 +1189,10 @@ const FISHES: EcosystemPreset = preset(
         { strength: -25, radius: 70, falloff: 'linear' },
       ],
     ],
-    forces: {
-      drag: { coefficient: 0.7 },
-      wander: { strength: 30, rate: 2.5 },
-    },
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.7 } },
+      { type: 'wander', enabled: true, params: { strength: 30, rate: 2.5 } },
+    ],
   },
 );
 

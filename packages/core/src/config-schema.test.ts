@@ -129,7 +129,7 @@ describe('serializeConfig', () => {
     expect(config.interactionMatrix[1][1]).toBeNull();
   });
 
-  it('serializes forces', () => {
+  it('serializes forces in dynamic array format', () => {
     const eco = new EcosystemWorld(makeTestEcoConfig());
     const matrix = makeTestMatrix();
     const forces = [
@@ -142,22 +142,41 @@ describe('serializeConfig', () => {
 
     const config = serializeConfig(eco, matrix, forces);
 
-    expect(config.forces.drag).toEqual({ coefficient: 1.5 });
-    expect(config.forces.wander).toEqual({ strength: 60, rate: 4 });
-    expect(config.forces.gravity).toEqual({ acceleration: 200 });
-    expect(config.forces.flowField).toEqual({
-      strength: 50,
-      mode: 'turbulence',
-      angle: 0,
-      turbulenceScale: 0.02,
+    expect(Array.isArray(config.forces)).toBe(true);
+    expect(config.forces).toHaveLength(5);
+
+    // Each entry has type, enabled, params
+    expect(config.forces[0]).toEqual({
+      type: 'drag',
+      enabled: true,
+      params: { coefficient: 1.5 },
     });
-    expect(config.forces.vortex).toEqual({
-      cx: 200,
-      cy: 150,
-      strength: 100,
-      radialStrength: -30,
-      radius: 250,
-      falloff: 'linear',
+    expect(config.forces[1]).toEqual({
+      type: 'wander',
+      enabled: true,
+      params: { strength: 60, rate: 4 },
+    });
+    expect(config.forces[2]).toEqual({
+      type: 'gravity',
+      enabled: true,
+      params: { acceleration: 200 },
+    });
+    expect(config.forces[3]).toEqual({
+      type: 'flow-field',
+      enabled: true,
+      params: { strength: 50, mode: 'turbulence', angle: 0, turbulenceScale: 0.02 },
+    });
+    expect(config.forces[4]).toEqual({
+      type: 'vortex',
+      enabled: true,
+      params: {
+        cx: 200,
+        cy: 150,
+        strength: 100,
+        radialStrength: -30,
+        radius: 250,
+        falloff: 'linear',
+      },
     });
   });
 
@@ -183,7 +202,7 @@ describe('serializeConfig', () => {
     const matrix = makeTestMatrix();
     const config = serializeConfig(eco, matrix, []);
 
-    expect(config.forces).toEqual({});
+    expect(config.forces).toEqual([]);
   });
 });
 
@@ -235,7 +254,7 @@ describe('deserializeConfig', () => {
       version: 1,
       simulation: { width: 100, height: 100, boundaryMode: 'bounce', seed: 1, populationCap: 100 },
       interactionMatrix: [],
-      forces: {},
+      forces: [],
     };
     expect(() => deserializeConfig(config)).toThrow('species must be an array');
   });
@@ -246,7 +265,7 @@ describe('deserializeConfig', () => {
       simulation: { width: 100, height: 100, boundaryMode: 'bounce', seed: 1, populationCap: 100 },
       species: [{ name: 'Test' }], // missing many fields
       interactionMatrix: [],
-      forces: {},
+      forces: [],
     };
     expect(() => deserializeConfig(config)).toThrow('species[0].count');
   });
@@ -350,9 +369,75 @@ describe('round-trip serialization', () => {
     const json = JSON.parse(JSON.stringify(config));
     const restored = deserializeConfig(json);
 
-    expect(restored.forces.drag?.coefficient).toBe(1.2);
-    expect(restored.forces.wander?.strength).toBe(55);
-    expect(restored.forces.wander?.rate).toBe(3.5);
+    const dragEntry = restored.forces.find((f) => f.type === 'drag');
+    const wanderEntry = restored.forces.find((f) => f.type === 'wander');
+    expect(dragEntry?.params.coefficient).toBe(1.2);
+    expect(wanderEntry?.params.strength).toBe(55);
+    expect(wanderEntry?.params.rate).toBe(3.5);
+  });
+
+  it('deserializes new array format forces', () => {
+    const config = makeMinimalConfig();
+    config.forces = [
+      { type: 'drag', enabled: true, params: { coefficient: 0.7 } },
+      { type: 'wander', enabled: true, params: { strength: 30, rate: 2 } },
+      { type: 'gravity', enabled: false, params: { acceleration: 150 } },
+    ];
+    const restored = deserializeConfig(JSON.parse(JSON.stringify(config)));
+    expect(restored.forces).toHaveLength(3);
+    expect(restored.forces[0]).toEqual({ type: 'drag', enabled: true, params: { coefficient: 0.7 } });
+    expect(restored.forces[1]).toEqual({ type: 'wander', enabled: true, params: { strength: 30, rate: 2 } });
+    expect(restored.forces[2]).toEqual({ type: 'gravity', enabled: false, params: { acceleration: 150 } });
+  });
+
+  it('migrates old object-slot format forces to array', () => {
+    const config = makeMinimalConfig();
+    // Old format: named slots
+    config.forces = {
+      drag: { coefficient: 0.9 },
+      wander: { strength: 40, rate: 3 },
+    } as unknown as typeof config.forces;
+    const restored = deserializeConfig(JSON.parse(JSON.stringify(config)));
+    expect(Array.isArray(restored.forces)).toBe(true);
+    expect(restored.forces).toHaveLength(2);
+    expect(restored.forces[0]).toEqual({ type: 'drag', enabled: true, params: { coefficient: 0.9 } });
+    expect(restored.forces[1]).toEqual({ type: 'wander', enabled: true, params: { strength: 40, rate: 3 } });
+  });
+
+  it('migrates old flowField/vortex slot names to canonical type IDs', () => {
+    const config = makeMinimalConfig();
+    config.forces = {
+      flowField: { strength: 50, mode: 'turbulence' },
+      vortex: { cx: 100, cy: 200, strength: 80 },
+    } as unknown as typeof config.forces;
+    const restored = deserializeConfig(JSON.parse(JSON.stringify(config)));
+    expect(restored.forces).toHaveLength(2);
+    expect(restored.forces[0].type).toBe('flow-field');
+    expect(restored.forces[1].type).toBe('vortex');
+  });
+
+  it('defaults undefined/null forces to empty array', () => {
+    const config1 = makeMinimalConfig();
+    config1.forces = undefined as unknown as typeof config1.forces;
+    expect(deserializeConfig(JSON.parse(JSON.stringify(config1))).forces).toEqual([]);
+
+    const config2 = makeMinimalConfig();
+    config2.forces = null as unknown as typeof config2.forces;
+    expect(deserializeConfig(JSON.parse(JSON.stringify(config2))).forces).toEqual([]);
+  });
+
+  it('filters out invalid force entries', () => {
+    const config = makeMinimalConfig();
+    config.forces = [
+      { type: 'drag', enabled: true, params: { coefficient: 1 } },
+      { enabled: true, params: {} } as any, // missing type
+      { type: 'wander', params: { strength: 10 } } as any, // missing enabled (defaults to true)
+    ];
+    const restored = deserializeConfig(JSON.parse(JSON.stringify(config)));
+    expect(restored.forces).toHaveLength(2);
+    expect(restored.forces[0].type).toBe('drag');
+    expect(restored.forces[1].type).toBe('wander');
+    expect(restored.forces[1].enabled).toBe(true);
   });
 
   it('preserves snapshot data through round-trip', () => {
@@ -520,6 +605,6 @@ function makeMinimalConfig(): CritteriumConfig {
       },
     ],
     interactionMatrix: [[null]],
-    forces: {},
+    forces: [],
   };
 }
