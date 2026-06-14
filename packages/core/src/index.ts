@@ -1288,7 +1288,330 @@ export class AlignmentForce implements Force {
   }
 }
 
-// ─── Re-exports for barrel import ────────────────────────────────
+// ─── Boids Flocking Force ───────────────────────────────────────
+
+/** Boids force parameters (Reynolds flocking). */
+export interface BoidsParams {
+  [key: string]: unknown;
+  /**
+   * Separation radius. Particles closer than this are pushed apart.
+   * Typically the smallest of the three radii.
+   * Range: 5–100.
+   */
+  separationRadius: number;
+  /**
+   * Separation strength. How strongly close particles are pushed apart.
+   * Range: 0–500.
+   */
+  separationStrength: number;
+  /**
+   * Alignment radius. Particles within this distance contribute their
+   * heading to the average.
+   * Range: 10–300.
+   */
+  alignmentRadius: number;
+  /**
+   * Alignment strength. How strongly each particle steers toward the
+   * average heading of neighbors.
+   * Range: 0–500.
+   */
+  alignmentStrength: number;
+  /**
+   * Cohesion radius. Particles within this distance contribute their
+   * position to the group centroid.
+   * Range: 10–300.
+   */
+  cohesionRadius: number;
+  /**
+   * Cohesion strength. How strongly each particle steers toward the
+   * group centroid.
+   * Range: 0–500.
+   */
+  cohesionStrength: number;
+  /**
+   * When false (default), particles only flock with neighbors of the
+   * SAME type. When true, all three behaviors consider all species.
+   */
+  crossType: boolean;
+}
+
+/**
+ * BoidsForce: classic Reynolds flocking with three sub-behaviors.
+ *
+ * Combines separation (short-range repulsion), alignment (match neighbor
+ * heading), and cohesion (steer toward group center) into a single force.
+ * Each sub-behavior has independent radius and strength parameters.
+ *
+ * Uses the spatial hash grid for O(n) neighbor queries. For each particle,
+ * a single queryRadius call with the maximum of the three radii is issued,
+ * and neighbors are dispatched to the appropriate sub-behavior based on
+ * distance.
+ *
+ * Uses a velocity-delta buffer (like PairwiseForce) to ensure all three
+ * behaviors see the same state snapshot — velocity changes from one particle
+ * don't affect another's alignment calculation within the same step.
+ *
+ * By default only same-type neighbors contribute (`crossType: false`).
+ *
+ * Zero allocations per step.
+ */
+export class BoidsForce implements Force {
+  readonly id = 'boids';
+  readonly params: BoidsParams;
+
+  // Pre-allocated velocity delta buffers — grow on demand, never per-step
+  private dvx: Float32Array = new Float32Array(0);
+  private dvy: Float32Array = new Float32Array(0);
+
+  constructor(
+    separationRadius: number = 25,
+    separationStrength: number = 50,
+    alignmentRadius: number = 60,
+    alignmentStrength: number = 30,
+    cohesionRadius: number = 60,
+    cohesionStrength: number = 20,
+    crossType: boolean = false,
+  ) {
+    this.params = {
+      separationRadius,
+      separationStrength,
+      alignmentRadius,
+      alignmentStrength,
+      cohesionRadius,
+      cohesionStrength,
+      crossType,
+    };
+  }
+
+  apply(world: World, grid: SpatialHashGrid, dt: number): void {
+    const { x, y, vx, vy, type, count } = world;
+    const {
+      separationRadius,
+      separationStrength,
+      alignmentRadius,
+      alignmentStrength,
+      cohesionRadius,
+      cohesionStrength,
+      crossType,
+    } = this.params;
+
+    if (count === 0) return;
+
+    // Ensure velocity delta buffers are large enough (grow only)
+    if (this.dvx.length < count) {
+      this.dvx = new Float32Array(count);
+      this.dvy = new Float32Array(count);
+    } else {
+      this.dvx.fill(0, 0, count);
+      this.dvy.fill(0, 0, count);
+    }
+    const dvx = this.dvx;
+    const dvy = this.dvy;
+
+    // Single query radius = max of all three
+    const maxRadius = Math.max(separationRadius, alignmentRadius, cohesionRadius);
+    const sepRSq = separationRadius * separationRadius;
+    const alignRSq = alignmentRadius * alignmentRadius;
+    const cohRSq = cohesionRadius * cohesionRadius;
+
+    for (let i = 0; i < count; i++) {
+      const xi = x[i];
+      const yi = y[i];
+      const typeI = type[i];
+
+      // Accumulators for each sub-behavior
+      let sepVx = 0;
+      let sepVy = 0;
+      let alignSumVx = 0;
+      let alignSumVy = 0;
+      let alignCount = 0;
+      let cohSumX = 0;
+      let cohSumY = 0;
+      let cohCount = 0;
+
+      // selfIdx = i so co-located particles can still be neighbors
+      grid.queryRadius(
+        xi,
+        yi,
+        maxRadius,
+        x,
+        y,
+        count,
+        (j, dx, dy, distSq) => {
+          if (!crossType && type[j] !== typeI) return;
+
+          // Separation: accumulate away-vectors weighted by closeness
+          if (distSq < sepRSq && distSq > 0) {
+            const dist = Math.sqrt(distSq);
+            // Linear falloff: weight = 1 at dist=0, 0 at separationRadius
+            const weight = 1 - dist / separationRadius;
+            // Direction away from neighbor (-dx, -dy normalized)
+            sepVx -= (dx / dist) * weight;
+            sepVy -= (dy / dist) * weight;
+          }
+
+          // Alignment: accumulate neighbor velocities
+          if (distSq <= alignRSq) {
+            alignSumVx += vx[j];
+            alignSumVy += vy[j];
+            alignCount++;
+          }
+
+          // Cohesion: accumulate neighbor positions
+          if (distSq <= cohRSq) {
+            cohSumX += x[j];
+            cohSumY += y[j];
+            cohCount++;
+          }
+        },
+        i,
+      );
+
+      // ── Apply separation steering ──
+      const sepMag = Math.sqrt(sepVx * sepVx + sepVy * sepVy);
+      if (sepMag > 0.001) {
+        dvx[i] += (sepVx / sepMag) * separationStrength * dt;
+        dvy[i] += (sepVy / sepMag) * separationStrength * dt;
+      }
+
+      // ── Apply alignment steering ──
+      if (alignCount > 0) {
+        const avgVx = alignSumVx / alignCount;
+        const avgVy = alignSumVy / alignCount;
+        const mag = Math.sqrt(avgVx * avgVx + avgVy * avgVy);
+        if (mag > 0.001) {
+          dvx[i] += (avgVx / mag) * alignmentStrength * dt;
+          dvy[i] += (avgVy / mag) * alignmentStrength * dt;
+        }
+      }
+
+      // ── Apply cohesion steering ──
+      if (cohCount > 0) {
+        const avgX = cohSumX / cohCount;
+        const avgY = cohSumY / cohCount;
+        const toCx = avgX - xi;
+        const toCy = avgY - yi;
+        const dist = Math.sqrt(toCx * toCx + toCy * toCy);
+        if (dist > 0.001) {
+          dvx[i] += (toCx / dist) * cohesionStrength * dt;
+          dvy[i] += (toCy / dist) * cohesionStrength * dt;
+        }
+      }
+    }
+
+    // Apply accumulated velocity changes
+    for (let i = 0; i < count; i++) {
+      vx[i] += dvx[i];
+      vy[i] += dvy[i];
+    }
+  }
+}
+
+// ─── Attractor Point Force ─────────────────────────────────────
+
+/** Attractor force parameters. */
+export interface AttractorParams {
+  [key: string]: unknown;
+  /** X position of the attractor / repeller point. */
+  x: number;
+  /** Y position of the attractor / repeller point. */
+  y: number;
+  /**
+   * Force strength. Positive = attract particles toward the point (gravity well),
+   * negative = repel particles away from the point (like charges).
+   * Typical range: −500 to 500.
+   */
+  strength: number;
+  /**
+   * Maximum radius of influence. Particles farther than this from the point
+   * receive zero force.
+   */
+  radius: number;
+  /**
+   * Falloff curve:
+   * - 'linear': strongest near the point, zero at radius (`1 − dist/radius`)
+   * - 'inverse': strong near the point, gradual decay (`1 / (dist/radius + 0.1)`)
+   * - 'constant': uniform strength within radius
+   */
+  falloff: FalloffType;
+}
+
+/**
+ * AttractorForce: point-based attraction or repulsion (a "gravity well").
+ *
+ * Unlike VortexForce, this force is **purely radial** — it has no tangential /
+ * swirl component. Positive `strength` pulls particles toward `(x, y)`; negative
+ * `strength` pushes them away.
+ *
+ * Falloff behaviour (matching VortexForce conventions):
+ * - 'linear': force ∝ (1 − dist/radius) — strongest at the point, zero at edge
+ * - 'inverse': force ∝ 1 / (dist/radius + 0.1) — strong near point, gradual decay
+ * - 'constant': uniform strength within radius
+ *
+ * Particles at the exact point (dist ≈ 0) are skipped to avoid division by zero.
+ *
+ * Zero allocations per step.
+ */
+export class AttractorForce implements Force {
+  readonly id = 'attractor';
+  readonly params: AttractorParams;
+
+  constructor(
+    x: number = 400,
+    y: number = 300,
+    strength: number = 200,
+    radius: number = 250,
+    falloff: FalloffType = 'linear',
+  ) {
+    this.params = { x, y, strength, radius, falloff };
+  }
+
+  apply(world: World, _grid: SpatialHashGrid, dt: number): void {
+    const { x: posX, y: posY, vx, vy, count } = world;
+    const { x: px, y: py, strength, radius, falloff } = this.params;
+
+    const radiusSq = radius * radius;
+
+    for (let i = 0; i < count; i++) {
+      // Direction TO the point (particle → attractor)
+      const dx = px - posX[i];
+      const dy = py - posY[i];
+      const distSq = dx * dx + dy * dy;
+
+      // Beyond radius: no force. At exact center: skip (direction undefined).
+      if (distSq >= radiusSq || distSq < 0.0001) continue;
+
+      const dist = Math.sqrt(distSq);
+
+      // Normalized direction TO the point
+      const nx = dx / dist;
+      const ny = dy / dist;
+
+      // Falloff multiplier
+      const t = dist / radius;
+      let falloffMultiplier: number;
+      switch (falloff) {
+        case 'linear':
+          falloffMultiplier = 1 - t;
+          break;
+        case 'inverse':
+          falloffMultiplier = 1 / (t + 0.1);
+          break;
+        case 'constant':
+          falloffMultiplier = 1;
+          break;
+      }
+
+      // Purely radial force — positive strength pulls toward point,
+      // negative strength pushes away.
+      const force = strength * falloffMultiplier;
+      vx[i] += nx * force * dt;
+      vy[i] += ny * force * dt;
+    }
+  }
+}
+
+// ─── Re-exports for barrel import ────────────────────────────────────
 export type {
   EcosystemConfig,
   SpeciesConfig,

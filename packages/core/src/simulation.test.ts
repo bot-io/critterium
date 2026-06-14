@@ -456,7 +456,7 @@ describe('sim: reproduction', () => {
         }),
       ]),
     );
-    expect(processReproduction(eco)).toBe(1);
+    expect(processReproduction(eco, 100)).toBe(1);
     expect(eco.aliveCount).toBe(2);
   });
 
@@ -478,7 +478,7 @@ describe('sim: reproduction', () => {
       ]),
     );
     const e0 = eco.eco.energy[0];
-    processReproduction(eco);
+    processReproduction(eco, 100);
     expect(eco.eco.energy[0]).toBe(e0 - 30);
   });
 
@@ -499,7 +499,7 @@ describe('sim: reproduction', () => {
         }),
       ]),
     );
-    expect(processReproduction(eco)).toBe(0);
+    expect(processReproduction(eco, 100)).toBe(0);
   });
 
   it('respects population cap', () => {
@@ -522,7 +522,7 @@ describe('sim: reproduction', () => {
         { populationCap: 1 },
       ),
     );
-    expect(processReproduction(eco)).toBe(0);
+    expect(processReproduction(eco, 100)).toBe(0);
   });
 });
 

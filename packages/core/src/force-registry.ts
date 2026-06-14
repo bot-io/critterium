@@ -17,6 +17,8 @@ import {
   FlowFieldForce,
   VortexForce,
   AlignmentForce,
+  BoidsForce,
+  AttractorForce,
   type FalloffType,
   type Force,
 } from './index.js';
@@ -364,6 +366,145 @@ function registerBuiltins(): void {
         p.radius as number,
         p.strength as number,
         p.crossType === true || p.crossType === 'true',
+      ),
+  );
+
+  // Boids (combined flocking: separation + alignment + cohesion)
+  registerForceType(
+    {
+      type: 'boids',
+      displayName: 'Boids Flocking',
+      description:
+        'Reynolds flocking: separation (avoid crowding) + alignment (match heading) + cohesion (steer to center).',
+      defaultParams: {
+        separationRadius: 25,
+        separationStrength: 50,
+        alignmentRadius: 60,
+        alignmentStrength: 30,
+        cohesionRadius: 60,
+        cohesionStrength: 20,
+        crossType: false,
+      },
+      paramSchema: [
+        {
+          key: 'separationRadius',
+          label: 'Sep Radius',
+          type: 'number',
+          min: 5,
+          max: 200,
+          step: 1,
+          default: 25,
+        },
+        {
+          key: 'separationStrength',
+          label: 'Sep Strength',
+          type: 'number',
+          min: 0,
+          max: 500,
+          step: 1,
+          default: 50,
+        },
+        {
+          key: 'alignmentRadius',
+          label: 'Align Radius',
+          type: 'number',
+          min: 10,
+          max: 300,
+          step: 1,
+          default: 60,
+        },
+        {
+          key: 'alignmentStrength',
+          label: 'Align Strength',
+          type: 'number',
+          min: 0,
+          max: 500,
+          step: 1,
+          default: 30,
+        },
+        {
+          key: 'cohesionRadius',
+          label: 'Cohesion Radius',
+          type: 'number',
+          min: 10,
+          max: 300,
+          step: 1,
+          default: 60,
+        },
+        {
+          key: 'cohesionStrength',
+          label: 'Cohesion Strength',
+          type: 'number',
+          min: 0,
+          max: 500,
+          step: 1,
+          default: 20,
+        },
+        {
+          key: 'crossType',
+          label: 'Cross-Type',
+          type: 'select',
+          default: 'false',
+          options: ['false', 'true'],
+        },
+      ],
+    },
+    (p) =>
+      new BoidsForce(
+        p.separationRadius as number,
+        p.separationStrength as number,
+        p.alignmentRadius as number,
+        p.alignmentStrength as number,
+        p.cohesionRadius as number,
+        p.cohesionStrength as number,
+        p.crossType === true || p.crossType === 'true',
+      ),
+  );
+
+  // Attractor (point-based attraction/repulsion — gravity well)
+  registerForceType(
+    {
+      type: 'attractor',
+      displayName: 'Attractor',
+      description: 'Point-based attraction (gravity well) or repulsion. Purely radial — no swirl.',
+      defaultParams: { x: 400, y: 300, strength: 200, radius: 250, falloff: 'linear' },
+      paramSchema: [
+        { key: 'x', label: 'Point X', type: 'number', min: 0, max: 2000, step: 1, default: 400 },
+        { key: 'y', label: 'Point Y', type: 'number', min: 0, max: 2000, step: 1, default: 300 },
+        {
+          key: 'strength',
+          label: 'Strength',
+          type: 'number',
+          min: -1000,
+          max: 1000,
+          step: 1,
+          default: 200,
+        },
+        {
+          key: 'radius',
+          label: 'Radius',
+          type: 'number',
+          min: 10,
+          max: 2000,
+          step: 1,
+          default: 250,
+        },
+        {
+          key: 'falloff',
+          label: 'Falloff',
+          type: 'select',
+          default: 'linear',
+          options: ['linear', 'inverse', 'constant'],
+        },
+      ],
+    },
+    (p) =>
+      new AttractorForce(
+        p.x as number,
+        p.y as number,
+        p.strength as number,
+        p.radius as number,
+        p.falloff as FalloffType,
       ),
   );
 }

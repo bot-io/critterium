@@ -29,7 +29,7 @@ const grid = new SpatialHashGrid(800, 600, 150, 10);
 grid.rebuild(makeWorld(1));
 
 describe('ForceRegistry — Built-in types', () => {
-  it('registers all 7 built-in force types', () => {
+  it('registers all 9 built-in force types', () => {
     const types = getRegisteredTypes();
     expect(types).toContain('drag');
     expect(types).toContain('wander');
@@ -38,12 +38,14 @@ describe('ForceRegistry — Built-in types', () => {
     expect(types).toContain('vortex');
     expect(types).toContain('pointer');
     expect(types).toContain('alignment');
-    expect(types.length).toBe(7);
+    expect(types).toContain('boids');
+    expect(types).toContain('attractor');
+    expect(types.length).toBe(9);
   });
 
   it('listForceTypes returns descriptors with display names', () => {
     const descs = listForceTypes();
-    expect(descs.length).toBe(7);
+    expect(descs.length).toBe(9);
     for (const d of descs) {
       expect(d.type).toBeTruthy();
       expect(d.displayName).toBeTruthy();
@@ -123,6 +125,60 @@ describe('ForceRegistry — createForce', () => {
     expect(f.params.radius).toBe(100);
     expect(f.params.strength).toBe(80);
     expect(f.params.crossType).toBe(true);
+  });
+
+  it('creates BoidsForce with default params', () => {
+    const f = createForce('boids');
+    expect(f.id).toBe('boids');
+    expect(f.params.separationRadius).toBe(25);
+    expect(f.params.separationStrength).toBe(50);
+    expect(f.params.alignmentRadius).toBe(60);
+    expect(f.params.alignmentStrength).toBe(30);
+    expect(f.params.cohesionRadius).toBe(60);
+    expect(f.params.cohesionStrength).toBe(20);
+    expect(f.params.crossType).toBe(false);
+  });
+
+  it('creates BoidsForce with custom params', () => {
+    const f = createForce('boids', {
+      separationRadius: 40,
+      separationStrength: 100,
+      alignmentRadius: 80,
+      alignmentStrength: 60,
+      cohesionRadius: 100,
+      cohesionStrength: 40,
+      crossType: true,
+    });
+    expect(f.params.separationRadius).toBe(40);
+    expect(f.params.separationStrength).toBe(100);
+    expect(f.params.alignmentRadius).toBe(80);
+    expect(f.params.cohesionStrength).toBe(40);
+    expect(f.params.crossType).toBe(true);
+  });
+
+  it('creates AttractorForce with default params', () => {
+    const f = createForce('attractor');
+    expect(f.id).toBe('attractor');
+    expect(f.params.x).toBe(400);
+    expect(f.params.y).toBe(300);
+    expect(f.params.strength).toBe(200);
+    expect(f.params.radius).toBe(250);
+    expect(f.params.falloff).toBe('linear');
+  });
+
+  it('creates AttractorForce with custom params', () => {
+    const f = createForce('attractor', {
+      x: 100,
+      y: 200,
+      strength: -50,
+      radius: 400,
+      falloff: 'inverse',
+    });
+    expect(f.params.x).toBe(100);
+    expect(f.params.y).toBe(200);
+    expect(f.params.strength).toBe(-50);
+    expect(f.params.radius).toBe(400);
+    expect(f.params.falloff).toBe('inverse');
   });
 
   it('ignores extra/unknown params gracefully (forward-compatible)', () => {
@@ -313,5 +369,16 @@ describe('ForceRegistry — descriptors', () => {
     expect(radiusSchema).toBeDefined();
     expect(radiusSchema!.min).toBe(10);
     expect(radiusSchema!.max).toBe(300);
+  });
+
+  it('boids descriptor has correct metadata', () => {
+    const d = getForceDescriptor('boids');
+    expect(d).toBeDefined();
+    expect(d!.displayName).toBe('Boids Flocking');
+    expect(d!.paramSchema.length).toBe(7); // 6 numeric + crossType
+    const sepRadiusSchema = d!.paramSchema.find((s) => s.key === 'separationRadius');
+    expect(sepRadiusSchema).toBeDefined();
+    expect(sepRadiusSchema!.min).toBe(5);
+    expect(sepRadiusSchema!.max).toBe(200);
   });
 });

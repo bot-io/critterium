@@ -553,7 +553,7 @@ function validateSpecies(sp: Record<string, unknown>, index: number): void {
       index,
       'energy.movementCostPerSec',
     );
-    e.idleDrainPerSec = clampNum(e.idleDrainPerSec, 0, 1000, 1, index, 'energy.idleDrainPerSec');
+    e.idleDrainPerSec = clampNum(e.idleDrainPerSec, -1000, 1000, 1, index, 'energy.idleDrainPerSec');
   }
 
   // Validate nested lifecycle config

@@ -227,7 +227,7 @@ describe('EcosystemWorld.tryReproduce', () => {
     cfg.species[0].lifecycle.reproductionCooldownSec = 0;
     const eco = new EcosystemWorld(cfg);
     // Parent should have enough energy and no cooldown
-    const childIdx = eco.tryReproduce(0);
+    const childIdx = eco.tryReproduce(0, 100);
     expect(childIdx).toBeGreaterThanOrEqual(0);
     expect(eco.aliveCount).toBe(2);
     // Child should be near parent
@@ -241,7 +241,7 @@ describe('EcosystemWorld.tryReproduce', () => {
     cfg.species[0].lifecycle.reproductionCooldownSec = 0;
     const eco = new EcosystemWorld(cfg);
     const energyBefore = eco.eco.energy[0];
-    eco.tryReproduce(0);
+    eco.tryReproduce(0, 100);
     expect(eco.eco.energy[0]).toBe(energyBefore - 30);
   });
 
@@ -253,7 +253,7 @@ describe('EcosystemWorld.tryReproduce', () => {
     const eco = new EcosystemWorld(cfg);
     // Need to clear initial cooldown first
     eco.eco.reproductionCooldown[0] = 0;
-    eco.tryReproduce(0);
+    eco.tryReproduce(0, 100);
     expect(eco.eco.reproductionCooldown[0]).toBe(5);
   });
 
@@ -263,7 +263,7 @@ describe('EcosystemWorld.tryReproduce', () => {
     cfg.species[0].energy.reproductionCost = 30;
     cfg.species[0].lifecycle.reproductionCooldownSec = 0;
     const eco = new EcosystemWorld(cfg);
-    const result = eco.tryReproduce(0);
+    const result = eco.tryReproduce(0, 100);
     expect(result).toBe(-1);
     expect(eco.aliveCount).toBe(1);
   });
@@ -275,7 +275,7 @@ describe('EcosystemWorld.tryReproduce', () => {
     cfg.species[0].lifecycle.reproductionCooldownSec = 10;
     const eco = new EcosystemWorld(cfg);
     // Initial cooldown is set to 10
-    const result = eco.tryReproduce(0);
+    const result = eco.tryReproduce(0, 100);
     expect(result).toBe(-1);
   });
 
@@ -286,7 +286,7 @@ describe('EcosystemWorld.tryReproduce', () => {
     cfg.species[0].lifecycle.reproductionCooldownSec = 0;
     const eco = new EcosystemWorld(cfg);
     expect(eco.isAtCap).toBe(true);
-    const result = eco.tryReproduce(0);
+    const result = eco.tryReproduce(0, 100);
     expect(result).toBe(-1);
   });
 
@@ -297,7 +297,7 @@ describe('EcosystemWorld.tryReproduce', () => {
     cfg.species[0].lifecycle.reproductionCooldownSec = 0;
     const eco = new EcosystemWorld(cfg);
     eco.kill(0);
-    const result = eco.tryReproduce(0);
+    const result = eco.tryReproduce(0, 100);
     expect(result).toBe(-1);
   });
 });
@@ -427,7 +427,7 @@ describe('Hard population cap enforcement', () => {
     // All particles have energy and no cooldown — reproduction should work
     let totalBorn = 0;
     for (let frame = 0; frame < 5; frame++) {
-      const born = processReproduction(eco);
+      const born = processReproduction(eco, 100);
       totalBorn += born;
       eco.processLifecycle(1 / 60);
     }
