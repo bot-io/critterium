@@ -7,15 +7,12 @@
  *
  * Visual effects:
  * - Energy-based opacity
- * - Sickness rings (pulsing red)
  * - Death expanding rings (object pool)
  * - Birth flash (object pool)
- * - Infection aura
  *
  * Performance controls:
  * - renderSkip: only render every Nth particle
  * - effectsEnabled: toggle death/birth effects
- * - sicknessRingsEnabled: toggle sickness ring rendering
  * - energyOpacityEnabled: toggle energy-based alpha
  */
 
@@ -88,9 +85,6 @@ export class CritteriumRenderer {
 
   /** Skip birth/death detection for one frame after reset or fresh init. */
   private skipEffectsFrame = true;
-
-  /** Pulsing phase for sickness rings. */
-  private pulsePhase = 0;
 
   /** Render skip: only render every Nth particle (1 = all, 2 = every 2nd). */
   renderSkip: number = 1;
@@ -248,9 +242,6 @@ export class CritteriumRenderer {
    */
   update(world: World, eco: EcosystemState, dt: number): void {
     const hwm = world.x.length;
-
-    // Advance pulse phase
-    this.pulsePhase += dt * 4;
 
     // Reset pre-allocated species counts (no allocation)
     const speciesCounts = this.speciesCounts;

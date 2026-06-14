@@ -106,3 +106,28 @@ describe('Species visuals', () => {
     expect(visuals[2].color).toBe(0x0000ff);
   });
 });
+
+describe('No dead sickness/infection code', () => {
+  // Regression guard: infection/sickness rendering was removed but
+  // vestigial fields and per-frame computations lingered. These tests
+  // ensure the dead code does not silently return.
+  it('CritteriumRenderer does not expose sicknessRingsEnabled property', () => {
+    const proto = CritteriumRenderer.prototype as unknown as Record<string, unknown>;
+    expect(proto.sicknessRingsEnabled).toBeUndefined();
+  });
+
+  it('CritteriumRenderer does not expose sicknessContainer property', () => {
+    const proto = CritteriumRenderer.prototype as unknown as Record<string, unknown>;
+    expect(proto.sicknessContainer).toBeUndefined();
+  });
+
+  it('CritteriumRenderer does not expose pulsePhase property', () => {
+    const proto = CritteriumRenderer.prototype as unknown as Record<string, unknown>;
+    expect(proto.pulsePhase).toBeUndefined();
+  });
+
+  it('CritteriumRenderer does not expose sicknessGfx property', () => {
+    const proto = CritteriumRenderer.prototype as unknown as Record<string, unknown>;
+    expect(proto.sicknessGfx).toBeUndefined();
+  });
+});
