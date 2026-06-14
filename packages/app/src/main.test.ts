@@ -57,9 +57,9 @@ describe('app sanity', () => {
 // ─── Force Pipeline Integration (CRT-38) ────────────────────────
 
 describe('force pipeline integration (CRT-38)', () => {
-  it('listForceTypes returns all 8 registered force types', () => {
+  it('listForceTypes returns all 9 registered force types', () => {
     const types = listForceTypes();
-    expect(types.length).toBe(8);
+    expect(types.length).toBe(9);
     const typeIds = types.map((t) => t.type);
     expect(typeIds).toContain('drag');
     expect(typeIds).toContain('wander');
@@ -69,6 +69,7 @@ describe('force pipeline integration (CRT-38)', () => {
     expect(typeIds).toContain('pointer');
     expect(typeIds).toContain('alignment');
     expect(typeIds).toContain('boids');
+    expect(typeIds).toContain('attractor');
   });
 
   it('every force type has displayName, description, paramSchema', () => {

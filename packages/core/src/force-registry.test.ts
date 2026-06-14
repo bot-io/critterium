@@ -29,7 +29,7 @@ const grid = new SpatialHashGrid(800, 600, 150, 10);
 grid.rebuild(makeWorld(1));
 
 describe('ForceRegistry — Built-in types', () => {
-  it('registers all 8 built-in force types', () => {
+  it('registers all 9 built-in force types', () => {
     const types = getRegisteredTypes();
     expect(types).toContain('drag');
     expect(types).toContain('wander');
@@ -39,12 +39,13 @@ describe('ForceRegistry — Built-in types', () => {
     expect(types).toContain('pointer');
     expect(types).toContain('alignment');
     expect(types).toContain('boids');
-    expect(types.length).toBe(8);
+    expect(types).toContain('attractor');
+    expect(types.length).toBe(9);
   });
 
   it('listForceTypes returns descriptors with display names', () => {
     const descs = listForceTypes();
-    expect(descs.length).toBe(8);
+    expect(descs.length).toBe(9);
     for (const d of descs) {
       expect(d.type).toBeTruthy();
       expect(d.displayName).toBeTruthy();
@@ -153,6 +154,31 @@ describe('ForceRegistry — createForce', () => {
     expect(f.params.alignmentRadius).toBe(80);
     expect(f.params.cohesionStrength).toBe(40);
     expect(f.params.crossType).toBe(true);
+  });
+
+  it('creates AttractorForce with default params', () => {
+    const f = createForce('attractor');
+    expect(f.id).toBe('attractor');
+    expect(f.params.x).toBe(400);
+    expect(f.params.y).toBe(300);
+    expect(f.params.strength).toBe(200);
+    expect(f.params.radius).toBe(250);
+    expect(f.params.falloff).toBe('linear');
+  });
+
+  it('creates AttractorForce with custom params', () => {
+    const f = createForce('attractor', {
+      x: 100,
+      y: 200,
+      strength: -50,
+      radius: 400,
+      falloff: 'inverse',
+    });
+    expect(f.params.x).toBe(100);
+    expect(f.params.y).toBe(200);
+    expect(f.params.strength).toBe(-50);
+    expect(f.params.radius).toBe(400);
+    expect(f.params.falloff).toBe('inverse');
   });
 
   it('ignores extra/unknown params gracefully (forward-compatible)', () => {

@@ -1507,7 +1507,111 @@ export class BoidsForce implements Force {
   }
 }
 
-// ─── Re-exports for barrel import ────────────────────────────────
+// ─── Attractor Point Force ─────────────────────────────────────
+
+/** Attractor force parameters. */
+export interface AttractorParams {
+  [key: string]: unknown;
+  /** X position of the attractor / repeller point. */
+  x: number;
+  /** Y position of the attractor / repeller point. */
+  y: number;
+  /**
+   * Force strength. Positive = attract particles toward the point (gravity well),
+   * negative = repel particles away from the point (like charges).
+   * Typical range: −500 to 500.
+   */
+  strength: number;
+  /**
+   * Maximum radius of influence. Particles farther than this from the point
+   * receive zero force.
+   */
+  radius: number;
+  /**
+   * Falloff curve:
+   * - 'linear': strongest near the point, zero at radius (`1 − dist/radius`)
+   * - 'inverse': strong near the point, gradual decay (`1 / (dist/radius + 0.1)`)
+   * - 'constant': uniform strength within radius
+   */
+  falloff: FalloffType;
+}
+
+/**
+ * AttractorForce: point-based attraction or repulsion (a "gravity well").
+ *
+ * Unlike VortexForce, this force is **purely radial** — it has no tangential /
+ * swirl component. Positive `strength` pulls particles toward `(x, y)`; negative
+ * `strength` pushes them away.
+ *
+ * Falloff behaviour (matching VortexForce conventions):
+ * - 'linear': force ∝ (1 − dist/radius) — strongest at the point, zero at edge
+ * - 'inverse': force ∝ 1 / (dist/radius + 0.1) — strong near point, gradual decay
+ * - 'constant': uniform strength within radius
+ *
+ * Particles at the exact point (dist ≈ 0) are skipped to avoid division by zero.
+ *
+ * Zero allocations per step.
+ */
+export class AttractorForce implements Force {
+  readonly id = 'attractor';
+  readonly params: AttractorParams;
+
+  constructor(
+    x: number = 400,
+    y: number = 300,
+    strength: number = 200,
+    radius: number = 250,
+    falloff: FalloffType = 'linear',
+  ) {
+    this.params = { x, y, strength, radius, falloff };
+  }
+
+  apply(world: World, _grid: SpatialHashGrid, dt: number): void {
+    const { x: posX, y: posY, vx, vy, count } = world;
+    const { x: px, y: py, strength, radius, falloff } = this.params;
+
+    const radiusSq = radius * radius;
+
+    for (let i = 0; i < count; i++) {
+      // Direction TO the point (particle → attractor)
+      const dx = px - posX[i];
+      const dy = py - posY[i];
+      const distSq = dx * dx + dy * dy;
+
+      // Beyond radius: no force. At exact center: skip (direction undefined).
+      if (distSq >= radiusSq || distSq < 0.0001) continue;
+
+      const dist = Math.sqrt(distSq);
+
+      // Normalized direction TO the point
+      const nx = dx / dist;
+      const ny = dy / dist;
+
+      // Falloff multiplier
+      const t = dist / radius;
+      let falloffMultiplier: number;
+      switch (falloff) {
+        case 'linear':
+          falloffMultiplier = 1 - t;
+          break;
+        case 'inverse':
+          falloffMultiplier = 1 / (t + 0.1);
+          break;
+        case 'constant':
+          falloffMultiplier = 1;
+          break;
+      }
+
+      // Purely radial force — positive strength pulls toward point,
+      // negative strength pushes away.
+      const force = strength * falloffMultiplier;
+      vx[i] += nx * force * dt;
+      vy[i] += ny * force * dt;
+    }
+  }
+}
+
+// ─── Re-exports for barrel import ────────────────────────────────────
 export type {
   EcosystemConfig,
   SpeciesConfig,

@@ -18,6 +18,7 @@ import {
   VortexForce,
   AlignmentForce,
   BoidsForce,
+  AttractorForce,
   type FalloffType,
   type Force,
 } from './index.js';
@@ -457,6 +458,53 @@ function registerBuiltins(): void {
         p.cohesionRadius as number,
         p.cohesionStrength as number,
         p.crossType === true || p.crossType === 'true',
+      ),
+  );
+
+  // Attractor (point-based attraction/repulsion — gravity well)
+  registerForceType(
+    {
+      type: 'attractor',
+      displayName: 'Attractor',
+      description: 'Point-based attraction (gravity well) or repulsion. Purely radial — no swirl.',
+      defaultParams: { x: 400, y: 300, strength: 200, radius: 250, falloff: 'linear' },
+      paramSchema: [
+        { key: 'x', label: 'Point X', type: 'number', min: 0, max: 2000, step: 1, default: 400 },
+        { key: 'y', label: 'Point Y', type: 'number', min: 0, max: 2000, step: 1, default: 300 },
+        {
+          key: 'strength',
+          label: 'Strength',
+          type: 'number',
+          min: -1000,
+          max: 1000,
+          step: 1,
+          default: 200,
+        },
+        {
+          key: 'radius',
+          label: 'Radius',
+          type: 'number',
+          min: 10,
+          max: 2000,
+          step: 1,
+          default: 250,
+        },
+        {
+          key: 'falloff',
+          label: 'Falloff',
+          type: 'select',
+          default: 'linear',
+          options: ['linear', 'inverse', 'constant'],
+        },
+      ],
+    },
+    (p) =>
+      new AttractorForce(
+        p.x as number,
+        p.y as number,
+        p.strength as number,
+        p.radius as number,
+        p.falloff as FalloffType,
       ),
   );
 }
