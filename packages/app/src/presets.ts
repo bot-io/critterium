@@ -112,10 +112,10 @@ const CLASSIC: EcosystemPreset = preset(
         { strength: -20, radius: 50, falloff: 'linear' },
       ],
     ],
-    forces: {
-      drag: { coefficient: 0.8 },
-      wander: { strength: 40, rate: 2.5 },
-    },
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.8 } },
+      { type: 'wander', enabled: true, params: { strength: 40, rate: 2.5 } },
+    ],
   },
 );
 
@@ -281,10 +281,10 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
       ],
       /* Whale   */ [null, null, null, { strength: 40, radius: 200, falloff: 'linear' }, null],
     ],
-    forces: {
-      drag: { coefficient: 0.6 },
-      wander: { strength: 30, rate: 2 },
-    },
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.6 } },
+      { type: 'wander', enabled: true, params: { strength: 30, rate: 2 } },
+    ],
   },
 );
 
@@ -357,10 +357,10 @@ const SWARM_INTELLIGENCE: EcosystemPreset = preset(
       /* Birds   */ [{ strength: 50, radius: 80, falloff: 'linear' }, null],
       /* Locusts */ [null, { strength: 60, radius: 50, falloff: 'linear' }],
     ],
-    forces: {
-      drag: { coefficient: 1.2 },
-      wander: { strength: 20, rate: 3 },
-    },
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 1.2 } },
+      { type: 'wander', enabled: true, params: { strength: 20, rate: 3 } },
+    ],
   },
 );
 
@@ -527,10 +527,10 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
         { strength: 20, radius: 40, falloff: 'linear' },
       ],
     ],
-    forces: {
-      drag: { coefficient: 0.7 },
-      wander: { strength: 45, rate: 2 },
-    },
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.7 } },
+      { type: 'wander', enabled: true, params: { strength: 45, rate: 2 } },
+    ],
   },
 );
 
@@ -609,10 +609,10 @@ const TINY_POND: EcosystemPreset = preset(
         { strength: -30, radius: 60, falloff: 'linear' },
       ],
     ],
-    forces: {
-      drag: { coefficient: 0.7 },
-      wander: { strength: 25, rate: 2 },
-    },
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.7 } },
+      { type: 'wander', enabled: true, params: { strength: 25, rate: 2 } },
+    ],
   },
 );
 
@@ -710,10 +710,10 @@ const ZEN_GARDEN: EcosystemPreset = preset(
       /* Koi      */ [null, null, null],
       /* Leaves   */ [null, null, null],
     ],
-    forces: {
-      drag: { coefficient: 2.5 },
-      wander: { strength: 8, rate: 0.5 },
-    },
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 2.5 } },
+      { type: 'wander', enabled: true, params: { strength: 8, rate: 0.5 } },
+    ],
   },
 );
 
@@ -842,10 +842,10 @@ const ROCK_PAPER_SCISSORS: EcosystemPreset = preset(
         { strength: -20, radius: 40, falloff: 'linear' },
       ],
     ],
-    forces: {
-      drag: { coefficient: 0.8 },
-      wander: { strength: 40, rate: 2.5 },
-    },
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.8 } },
+      { type: 'wander', enabled: true, params: { strength: 40, rate: 2.5 } },
+    ],
   },
 );
 
@@ -967,10 +967,10 @@ const GRASSLANDS: EcosystemPreset = preset(
         { strength: -30, radius: 60, falloff: 'linear' },
       ],
     ],
-    forces: {
-      drag: { coefficient: 0.8 },
-      wander: { strength: 35, rate: 2.5 },
-    },
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.8 } },
+      { type: 'wander', enabled: true, params: { strength: 35, rate: 2.5 } },
+    ],
   },
 );
 
@@ -1064,10 +1064,10 @@ const BIRDS: EcosystemPreset = preset(
         { strength: -35, radius: 90, falloff: 'linear' },
       ],
     ],
-    forces: {
-      drag: { coefficient: 0.7 },
-      wander: { strength: 25, rate: 2.5 },
-    },
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.7 } },
+      { type: 'wander', enabled: true, params: { strength: 25, rate: 2.5 } },
+    ],
   },
 );
 
@@ -1189,10 +1189,641 @@ const FISHES: EcosystemPreset = preset(
         { strength: -25, radius: 70, falloff: 'linear' },
       ],
     ],
-    forces: {
-      drag: { coefficient: 0.7 },
-      wander: { strength: 30, rate: 2.5 },
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.7 } },
+      { type: 'wander', enabled: true, params: { strength: 30, rate: 2.5 } },
+    ],
+  },
+);
+
+// ─── 11. Coral Reef ──────────────────────────────────────────
+
+const CORAL_REEF: EcosystemPreset = preset(
+  'Coral Reef',
+  'A vibrant reef food chain: stationary Coral feeds Zooplankton, which nourish schooling Clownfish, hunted by Moray Eels, themselves preyed upon by solitary Reef Sharks. A gentle turbulence current sweeps through.',
+  {
+    version: 1,
+    simulation: {
+      width: 800,
+      height: 600,
+      boundaryMode: 'wrap',
+      seed: 314,
+      populationCap: 500,
     },
+    species: [
+      // ── Producer: Coral (effectively stationary) ───────────────
+      // NOTE: The backlog spec requested maxSpeed = 0 (truly stationary),
+      // but ecosystem-world.ts divides by maxSpeed when computing movement
+      // cost (speed / maxSpeed), so maxSpeed = 0 causes division by zero.
+      // We follow the established Grasslands convention (Grass = maxSpeed 5)
+      // and use the lowest safe value. Coral also starts at rest (initialSpeed 0).
+      {
+        name: 'Coral',
+        count: 150,
+        color: '#ff6b6b',
+        radius: 4,
+        initialSpeed: 0,
+        maxSpeed: 5,
+        energy: {
+          maxEnergy: 40,
+          initialEnergy: 25,
+          movementCostPerSec: 0.1,
+          reproductionCost: 10,
+          idleDrainPerSec: 0.1,
+          energyGainPerPrey: [0, 0, 0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 200,
+          starvationDamagePerSec: 1,
+          reproductionCooldownSec: 3,
+        },
+        diet: {
+          canEat: [],
+        },
+      },
+      // ── Primary consumer: Zooplankton (tiny, slow) ────────────
+      {
+        name: 'Zooplankton',
+        count: 120,
+        color: '#74b9ff',
+        radius: 2,
+        initialSpeed: 15,
+        maxSpeed: 35,
+        energy: {
+          maxEnergy: 40,
+          initialEnergy: 20,
+          movementCostPerSec: 0.5,
+          reproductionCost: 10,
+          idleDrainPerSec: 0.4,
+          energyGainPerPrey: [12, 0, 0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 25,
+          starvationDamagePerSec: 5,
+          reproductionCooldownSec: 3,
+        },
+        diet: {
+          canEat: [0],
+        },
+      },
+      // ── Secondary consumer: Clownfish (schooling) ─────────────
+      {
+        name: 'Clownfish',
+        count: 90,
+        color: '#ffa502',
+        radius: 3,
+        initialSpeed: 35,
+        maxSpeed: 75,
+        energy: {
+          maxEnergy: 90,
+          initialEnergy: 45,
+          movementCostPerSec: 1.2,
+          reproductionCost: 20,
+          idleDrainPerSec: 0.8,
+          energyGainPerPrey: [0, 25, 0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 50,
+          starvationDamagePerSec: 4,
+          reproductionCooldownSec: 6,
+        },
+        diet: {
+          canEat: [1],
+        },
+        stamina: {
+          sprintDurationSec: 5,
+          sprintCooldownSec: 3,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.5,
+        },
+      },
+      // ── Tertiary consumer: Moray Eel (fast predator) ──────────
+      {
+        name: 'Moray Eel',
+        count: 25,
+        color: '#2d3436',
+        radius: 5,
+        initialSpeed: 45,
+        maxSpeed: 100,
+        energy: {
+          maxEnergy: 160,
+          initialEnergy: 90,
+          movementCostPerSec: 2,
+          reproductionCost: 50,
+          idleDrainPerSec: 1.5,
+          energyGainPerPrey: [0, 0, 40, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 80,
+          starvationDamagePerSec: 3,
+          reproductionCooldownSec: 12,
+        },
+        diet: {
+          canEat: [2],
+        },
+        stamina: {
+          sprintDurationSec: 3,
+          sprintCooldownSec: 5,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.4,
+        },
+      },
+      // ── Apex predator: Reef Shark (solitary) ──────────────────
+      {
+        name: 'Reef Shark',
+        count: 8,
+        color: '#636e72',
+        radius: 7,
+        initialSpeed: 50,
+        maxSpeed: 115,
+        energy: {
+          maxEnergy: 220,
+          initialEnergy: 130,
+          movementCostPerSec: 2.5,
+          reproductionCost: 80,
+          idleDrainPerSec: 2,
+          energyGainPerPrey: [0, 0, 0, 55, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 120,
+          starvationDamagePerSec: 2.5,
+          reproductionCooldownSec: 20,
+        },
+        diet: {
+          canEat: [3],
+        },
+        stamina: {
+          sprintDurationSec: 3,
+          sprintCooldownSec: 6,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.4,
+        },
+      },
+    ],
+    // src=row (how this species reacts to target col)
+    //          Coral    Zoopl.   Clown    Eel      Shark
+    interactionMatrix: [
+      /* Coral   */ [null, null, null, null, null],
+      /* Zoopl.  */ [
+        { strength: 35, radius: 90, falloff: 'linear' },
+        null,
+        { strength: -50, radius: 110, falloff: 'linear' },
+        null,
+        null,
+      ],
+      /* Clown   */ [
+        null,
+        { strength: 50, radius: 100, falloff: 'linear' },
+        { strength: 30, radius: 70, falloff: 'linear' },
+        { strength: -70, radius: 130, falloff: 'linear' },
+        null,
+      ],
+      /* Eel     */ [
+        null,
+        null,
+        { strength: 55, radius: 140, falloff: 'linear' },
+        { strength: -20, radius: 60, falloff: 'linear' },
+        { strength: -40, radius: 100, falloff: 'linear' },
+      ],
+      /* Shark   */ [
+        null,
+        null,
+        null,
+        { strength: 45, radius: 170, falloff: 'linear' },
+        { strength: -35, radius: 80, falloff: 'linear' },
+      ],
+    ],
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.6 } },
+      { type: 'wander', enabled: true, params: { strength: 20, rate: 2 } },
+      {
+        type: 'flow-field',
+        enabled: true,
+        params: { strength: 15, mode: 'turbulence', angle: 0, turbulenceScale: 0.02 },
+      },
+    ],
+  },
+);
+
+// ─── 12. Tornado Alley ──────────────────────────────────────
+
+const TORNADO_ALLEY: EcosystemPreset = preset(
+  'Tornado Alley',
+  'A chaotic vortex sweeps Dust Motes, Debris, and Birds around a swirling core. Heavy turbulence, strong inward radial pull, and turbulent flow fields create unpredictable, lifelike storm motion.',
+  {
+    version: 1,
+    simulation: {
+      width: 800,
+      height: 600,
+      boundaryMode: 'wrap',
+      seed: 531,
+      populationCap: 400,
+    },
+    species: [
+      // ── Dust Motes (light, fast, small) — swirl in wisps ───────
+      {
+        name: 'Dust Motes',
+        count: 180,
+        color: '#dfe6e9',
+        radius: 1.5,
+        initialSpeed: 90,
+        maxSpeed: 140,
+        energy: {
+          maxEnergy: 60,
+          initialEnergy: 40,
+          movementCostPerSec: 0.3,
+          reproductionCost: 15,
+          idleDrainPerSec: 0.2,
+          energyGainPerPrey: [0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 120,
+          starvationDamagePerSec: 2,
+          reproductionCooldownSec: 8,
+        },
+        diet: {
+          canEat: [],
+        },
+      },
+      // ── Debris (heavy, medium, large) — collides with everything ─
+      {
+        name: 'Debris',
+        count: 60,
+        color: '#a4b0be',
+        radius: 6,
+        initialSpeed: 50,
+        maxSpeed: 85,
+        energy: {
+          maxEnergy: 120,
+          initialEnergy: 80,
+          movementCostPerSec: 1.5,
+          reproductionCost: 40,
+          idleDrainPerSec: 0.6,
+          energyGainPerPrey: [0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 180,
+          starvationDamagePerSec: 1.5,
+          reproductionCooldownSec: 15,
+        },
+        diet: {
+          canEat: [],
+        },
+      },
+      // ── Birds (medium, fast, flocking) — flock through the storm ─
+      {
+        name: 'Birds',
+        count: 40,
+        color: '#2f3542',
+        radius: 3,
+        initialSpeed: 80,
+        maxSpeed: 120,
+        energy: {
+          maxEnergy: 80,
+          initialEnergy: 50,
+          movementCostPerSec: 0.8,
+          reproductionCost: 20,
+          idleDrainPerSec: 0.4,
+          energyGainPerPrey: [0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 100,
+          starvationDamagePerSec: 3,
+          reproductionCooldownSec: 10,
+        },
+        diet: {
+          canEat: [],
+        },
+      },
+    ],
+    // src=row (how this species reacts to target col)
+    //          Dust     Debris   Birds
+    interactionMatrix: [
+      /* Dust   */ [
+        { strength: 20, radius: 50, falloff: 'linear' },
+        { strength: -40, radius: 70, falloff: 'linear' },
+        null,
+      ],
+      /* Debris */ [
+        { strength: -40, radius: 70, falloff: 'linear' },
+        { strength: -50, radius: 60, falloff: 'linear' },
+        { strength: -45, radius: 80, falloff: 'linear' },
+      ],
+      /* Birds  */ [
+        null,
+        { strength: -45, radius: 80, falloff: 'linear' },
+        { strength: 30, radius: 90, falloff: 'linear' },
+      ],
+    ],
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.5 } },
+      { type: 'wander', enabled: true, params: { strength: 60, rate: 5 } },
+      {
+        type: 'flow-field',
+        enabled: true,
+        params: { strength: 30, mode: 'turbulence', angle: 0, turbulenceScale: 0.04 },
+      },
+      {
+        // Strong swirl (300) at canvas center, with inward radial pull (negative).
+        // VortexForce radialStrength: positive = outward, negative = inward.
+        type: 'vortex',
+        enabled: true,
+        params: {
+          cx: 400,
+          cy: 300,
+          strength: 300,
+          radialStrength: -80,
+          radius: 320,
+          falloff: 'linear',
+        },
+      },
+    ],
+  },
+);
+
+// ─── 13. Deep Sea Vent ──────────────────────────────────────
+
+const DEEP_SEA_VENT: EcosystemPreset = preset(
+  'Deep Sea Vent',
+  'A hydrothermal vent on the ocean floor: Chemosynthetic Bacteria bloom, Tube Worms filter-feed, Crabs scavenge, and an Octopus hunts — all drifting in the slow upwelling of the vent plume.',
+  {
+    version: 1,
+    simulation: {
+      width: 800,
+      height: 600,
+      boundaryMode: 'wrap',
+      seed: 80085,
+      populationCap: 600,
+    },
+    species: [
+      // ── Producer: Chemosynthetic Bacteria (tiny, slow, fast reproduction) ─
+      {
+        name: 'Bacteria',
+        count: 250,
+        color: '#ff7675',
+        radius: 1.5,
+        initialSpeed: 5,
+        maxSpeed: 15,
+        energy: {
+          maxEnergy: 35,
+          initialEnergy: 22,
+          movementCostPerSec: 0.1,
+          reproductionCost: 6,
+          idleDrainPerSec: 0.1,
+          energyGainPerPrey: [0, 0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 50,
+          starvationDamagePerSec: 1,
+          reproductionCooldownSec: 2,
+        },
+        diet: {
+          canEat: [],
+        },
+      },
+      // ── Primary consumer: Tube Worms (medium, very slow, sessile filter-feeder)
+      {
+        name: 'Tube Worms',
+        count: 80,
+        color: '#a29bfe',
+        radius: 3,
+        initialSpeed: 3,
+        maxSpeed: 10,
+        energy: {
+          maxEnergy: 70,
+          initialEnergy: 40,
+          movementCostPerSec: 0.2,
+          reproductionCost: 18,
+          idleDrainPerSec: 0.5,
+          energyGainPerPrey: [12, 0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 80,
+          starvationDamagePerSec: 3,
+          reproductionCooldownSec: 6,
+        },
+        diet: {
+          canEat: [0],
+        },
+      },
+      // ── Secondary consumer: Crabs (medium, bottom-dwelling scavenger) ────
+      {
+        name: 'Crabs',
+        count: 40,
+        color: '#fdcb6e',
+        radius: 4,
+        initialSpeed: 30,
+        maxSpeed: 65,
+        energy: {
+          maxEnergy: 110,
+          initialEnergy: 60,
+          movementCostPerSec: 1.2,
+          reproductionCost: 30,
+          idleDrainPerSec: 1,
+          energyGainPerPrey: [0, 28, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 60,
+          starvationDamagePerSec: 4,
+          reproductionCooldownSec: 8,
+        },
+        diet: {
+          canEat: [1],
+        },
+        stamina: {
+          sprintDurationSec: 4,
+          sprintCooldownSec: 4,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.5,
+        },
+      },
+      // ── Apex predator: Octopus (fast, mobile, solitary hunter) ──────────
+      {
+        name: 'Octopus',
+        count: 8,
+        color: '#2d3436',
+        radius: 6,
+        initialSpeed: 50,
+        maxSpeed: 100,
+        energy: {
+          maxEnergy: 180,
+          initialEnergy: 100,
+          movementCostPerSec: 2,
+          reproductionCost: 60,
+          idleDrainPerSec: 1.5,
+          energyGainPerPrey: [0, 0, 48, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 90,
+          starvationDamagePerSec: 3,
+          reproductionCooldownSec: 15,
+        },
+        diet: {
+          canEat: [2],
+        },
+        stamina: {
+          sprintDurationSec: 3,
+          sprintCooldownSec: 6,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.4,
+        },
+      },
+    ],
+    // src=row (how this species reacts to target col)
+    //          Bacteria  Worms     Crabs     Octopus
+    interactionMatrix: [
+      /* Bacteria */ [{ strength: -10, radius: 35, falloff: 'linear' }, null, null, null],
+      /* Worms    */ [
+        { strength: 35, radius: 85, falloff: 'linear' },
+        { strength: -15, radius: 45, falloff: 'linear' },
+        null,
+        null,
+      ],
+      /* Crabs    */ [
+        null,
+        { strength: 45, radius: 110, falloff: 'linear' },
+        { strength: -12, radius: 40, falloff: 'linear' },
+        { strength: -55, radius: 120, falloff: 'linear' },
+      ],
+      /* Octopus  */ [
+        null,
+        null,
+        { strength: 55, radius: 140, falloff: 'linear' },
+        { strength: -25, radius: 70, falloff: 'linear' },
+      ],
+    ],
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.6 } },
+      { type: 'wander', enabled: true, params: { strength: 25, rate: 1.5 } },
+      // Gentle downward sinking (low-strength gravity).
+      { type: 'gravity', enabled: true, params: { acceleration: 30 } },
+      // Vent plume: upward flow current counteracting gravity.
+      // FlowFieldForce uniform mode: direction = [cos(angle), sin(angle)].
+      // angle = -π/2 → [0, -1] → pure upward force (negative y = up on screen).
+      {
+        type: 'flow-field',
+        enabled: true,
+        params: { strength: 25, mode: 'uniform', angle: -Math.PI / 2, turbulenceScale: 0.01 },
+      },
+    ],
+  },
+);
+
+// ─── 14. Symbiosis ──────────────────────────────────────────
+
+const SYMBIOSIS: EcosystemPreset = preset(
+  'Symbiosis',
+  'A peaceful reef of mutual benefit: Algae and Coral share a mutual attraction, while Cleaner Shrimp seek out Coral to tend. No predation — every interaction is positive or neutral.',
+  {
+    version: 1,
+    simulation: {
+      width: 800,
+      height: 600,
+      boundaryMode: 'wrap',
+      seed: 727,
+      populationCap: 400,
+    },
+    species: [
+      // ── Algae (tiny, slow, high reproduction) — photosynthetic producer ─
+      {
+        name: 'Algae',
+        count: 200,
+        color: '#55efc4',
+        radius: 1.5,
+        initialSpeed: 15,
+        maxSpeed: 30,
+        energy: {
+          maxEnergy: 60,
+          initialEnergy: 30,
+          movementCostPerSec: 0.15,
+          reproductionCost: 10,
+          idleDrainPerSec: 0.15,
+          energyGainPerPrey: [0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 60,
+          starvationDamagePerSec: 2,
+          reproductionCooldownSec: 3,
+        },
+        diet: {
+          canEat: [],
+        },
+      },
+      // ── Coral (stationary, medium, long-lived) — mutualistic host ────────
+      // maxSpeed=5 (not zero) to avoid div-by-zero in movement-cost calculation.
+      // initialSpeed=0 so coral starts at rest, following the Grasslands/Coral Reef convention.
+      {
+        name: 'Coral',
+        count: 40,
+        color: '#ff7675',
+        radius: 5,
+        initialSpeed: 0,
+        maxSpeed: 5,
+        energy: {
+          maxEnergy: 150,
+          initialEnergy: 80,
+          movementCostPerSec: 0.1,
+          reproductionCost: 40,
+          idleDrainPerSec: 0.1,
+          energyGainPerPrey: [0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 200,
+          starvationDamagePerSec: 1,
+          reproductionCooldownSec: 20,
+        },
+        diet: {
+          canEat: [],
+        },
+      },
+      // ── Cleaner Shrimp (small, fast, mobile) — seeks coral to clean ─────
+      {
+        name: 'Cleaner Shrimp',
+        count: 60,
+        color: '#fdcb6e',
+        radius: 2.5,
+        initialSpeed: 50,
+        maxSpeed: 90,
+        energy: {
+          maxEnergy: 100,
+          initialEnergy: 50,
+          movementCostPerSec: 0.8,
+          reproductionCost: 20,
+          idleDrainPerSec: 0.5,
+          energyGainPerPrey: [0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 90,
+          starvationDamagePerSec: 3,
+          reproductionCooldownSec: 8,
+        },
+        diet: {
+          canEat: [],
+        },
+      },
+    ],
+    // src=row (how this species reacts to target col)
+    // All entries are positive (attract) or null (neutral).
+    // Universal short-range repulsion (prevents collapse) is applied by the engine,
+    // not the interaction matrix.
+    //          Algae    Coral    Shrimp
+    interactionMatrix: [
+      /* Algae   */ [
+        { strength: 12, radius: 50, falloff: 'linear' },
+        { strength: 30, radius: 90, falloff: 'linear' },
+        null,
+      ],
+      /* Coral   */ [{ strength: 30, radius: 90, falloff: 'linear' }, null, null],
+      /* Shrimp  */ [
+        null,
+        { strength: 40, radius: 100, falloff: 'linear' },
+        { strength: 18, radius: 60, falloff: 'linear' },
+      ],
+    ],
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.7 } },
+      { type: 'wander', enabled: true, params: { strength: 20, rate: 1.5 } },
+    ],
   },
 );
 
@@ -1209,6 +1840,10 @@ export const BUILTIN_PRESETS: EcosystemPreset[] = [
   GRASSLANDS,
   BIRDS,
   FISHES,
+  CORAL_REEF,
+  TORNADO_ALLEY,
+  DEEP_SEA_VENT,
+  SYMBIOSIS,
 ];
 
 export const BUILTIN_PRESET_NAMES: string[] = BUILTIN_PRESETS.map((p) => p.name);

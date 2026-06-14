@@ -14,11 +14,13 @@ import {
   SpatialHashGrid,
   InteractionMatrix,
   PairwiseForce,
-  DragForce,
-  WanderForce,
   PointerForce,
+  createForce,
+  listForceTypes,
   type InteractionEntry,
   type FalloffType,
+  type Force,
+  type JsonForcesConfig,
   // Ecosystem barrel re-exports
   type EcosystemConfig,
   type SpeciesConfig,
@@ -375,15 +377,112 @@ async function main(): Promise<void> {
   }
 
   // 2. Build physics forces
+  //
+  // CRT-37: Forces are managed via a registry-driven pipeline.
+  // `pairwiseForce` is the interaction-matrix adapter (always applied first,
+  // tied to the matrix — conceptually distinct from global/registry forces).
+  // `forcePipeline` holds all registry forces (drag, wander, pointer, …)
+  // which can be added/removed/toggled at runtime.
   const pairwiseForce = new PairwiseForce(interactionMatrix);
-  const dragForce = new DragForce(0.8);
-  const wanderForce = new WanderForce(40, 2.5);
-  const pointerForce = new PointerForce(200, 150, 'linear');
 
-  // Active force tracking
-  let dragEnabled = true;
-  let wanderEnabled = true;
-  let pointerEnabled = false;
+  interface PipelineEntry {
+    force: Force;
+    enabled: boolean;
+  }
+
+  let forcePipeline: PipelineEntry[] = [
+    { force: createForce('drag', { coefficient: 0.8 }), enabled: true },
+    { force: createForce('wander', { strength: 40, rate: 2.5 }), enabled: true },
+    {
+      force: createForce('pointer', { strength: 200, radius: 150, falloff: 'linear' }),
+      enabled: false,
+    },
+  ];
+
+  // ─── Force pipeline helpers (CRT-37) ──────────────────────────
+
+  /** Find a pipeline entry by force id. Returns undefined if not found. */
+  function findForceEntry(id: string): PipelineEntry | undefined {
+    return forcePipeline.find((e) => e.force.id === id);
+  }
+
+  /**
+   * Append a registry-created force to the pipeline.
+   * @returns the index of the new entry, or -1 if the type is unknown.
+   */
+  function addForce(typeId: string, params?: Record<string, unknown>): number {
+    try {
+      const force = createForce(typeId, params);
+      forcePipeline.push({ force, enabled: true });
+      return forcePipeline.length - 1;
+    } catch (err) {
+      console.warn(`[Critterium] addForce("${typeId}") failed:`, err);
+      return -1;
+    }
+  }
+
+  /**
+   * Remove a force from the pipeline by index.
+   * @returns true if removed.
+   */
+  function removeForce(index: number): boolean {
+    if (index < 0 || index >= forcePipeline.length) return false;
+    forcePipeline.splice(index, 1);
+    return true;
+  }
+
+  /** Toggle a force's enabled flag without removing the instance. */
+  function setForceEnabled(index: number, enabled: boolean): boolean {
+    const entry = forcePipeline[index];
+    if (!entry) return false;
+    entry.enabled = enabled;
+    return true;
+  }
+
+  /** Live-update a single parameter on a pipeline force by id. */
+  function setForceParam(id: string, param: string, value: unknown): boolean {
+    const entry = findForceEntry(id);
+    if (!entry) return false;
+    (entry.force.params as Record<string, unknown>)[param] = value;
+    return true;
+  }
+
+  /** Read a numeric parameter from a pipeline force by id. Returns NaN if missing. */
+  function getForceParam(id: string, param: string): number {
+    const entry = findForceEntry(id);
+    const val = (entry?.force.params as Record<string, unknown> | undefined)?.[param];
+    return typeof val === 'number' ? val : NaN;
+  }
+
+  /**
+   * Serialize the registry pipeline to JSON force entries (for config).
+   * PairwiseForce is excluded — it is serialized via the interaction matrix.
+   */
+  function getPipelineForceEntries(): JsonForcesConfig {
+    return forcePipeline.map((e) => ({
+      type: e.force.id,
+      enabled: e.enabled,
+      params: { ...e.force.params },
+    }));
+  }
+
+  /**
+   * Rebuild the registry pipeline from deserialized force entries.
+   * Unknown types are skipped (forward-compatible). PairwiseForce is
+   * untouched (managed separately via the interaction matrix).
+   */
+  function rebuildPipelineFromConfig(forces: JsonForcesConfig): void {
+    const rebuilt: PipelineEntry[] = [];
+    for (const entry of forces) {
+      try {
+        const force = createForce(entry.type, entry.params);
+        rebuilt.push({ force, enabled: entry.enabled });
+      } catch {
+        // Skip unknown force types gracefully
+      }
+    }
+    forcePipeline = rebuilt;
+  }
 
   // 3. Spatial hash grid (mutable — recreated when cap or world size changes)
   let grid = new SpatialHashGrid(
@@ -563,12 +662,14 @@ async function main(): Promise<void> {
   }
 
   function getCurrentConfig(): CritteriumConfig {
-    const activeForces: Array<{ readonly id: string; readonly params: Record<string, unknown> }> = [
-      dragForce,
-      wanderForce,
-    ];
-    if (pointerEnabled) activeForces.push(pointerForce);
-    return serializeConfig(eco, interactionMatrix, activeForces);
+    const config = serializeConfig(
+      eco,
+      interactionMatrix,
+      forcePipeline.map((e) => e.force),
+    );
+    // Override forces with pipeline entries (preserves enabled/disabled state)
+    config.forces = getPipelineForceEntries();
+    return config;
   }
 
   function doAutosave(): void {
@@ -588,11 +689,13 @@ async function main(): Promise<void> {
     // Rebuild spatial hash (skip dead particles, only up to highWaterMark)
     grid.rebuild(eco.world, eco.eco.alive, eco.highWaterMark);
 
-    // Apply active forces
+    // Pairwise interaction-matrix force (always applied first)
     pairwiseForce.apply(eco.world, grid, dt);
-    if (dragEnabled) dragForce.apply(eco.world, grid, dt);
-    if (wanderEnabled) wanderForce.apply(eco.world, grid, dt);
-    if (pointerEnabled) pointerForce.apply(eco.world, grid, dt);
+
+    // Registry-driven force pipeline
+    for (const entry of forcePipeline) {
+      if (entry.enabled) entry.force.apply(eco.world, grid, dt);
+    }
   }
 
   function loop(now: number): void {
@@ -732,30 +835,42 @@ async function main(): Promise<void> {
   const canvas = renderer.app.canvas as HTMLCanvasElement;
   let pointerDown = false;
 
+  /** Get the PointerForce instance from the pipeline (if present). */
+  function getPointerForce(): PointerForce | undefined {
+    return findForceEntry('pointer')?.force as PointerForce | undefined;
+  }
+
+  /** Whether the pointer force is currently enabled in the pipeline. */
+  function isPointerEnabled(): boolean {
+    return findForceEntry('pointer')?.enabled ?? false;
+  }
+
   function updatePointerFromEvent(e: MouseEvent | Touch): void {
+    const pf = getPointerForce();
+    if (!pf) return;
     const rect = canvas.getBoundingClientRect();
     const x = (e.clientX - rect.left) * (canvas.width / rect.width);
     const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-    pointerForce.setPosition(x, y, true);
+    pf.setPosition(x, y, true);
   }
 
   canvas.addEventListener('mousedown', (e) => {
-    if (!pointerEnabled) return;
+    if (!isPointerEnabled()) return;
     pointerDown = true;
     updatePointerFromEvent(e);
   });
   canvas.addEventListener('mousemove', (e) => {
-    if (!pointerDown || !pointerEnabled) return;
+    if (!pointerDown || !isPointerEnabled()) return;
     updatePointerFromEvent(e);
   });
   window.addEventListener('mouseup', () => {
     pointerDown = false;
-    pointerForce.setPosition(0, 0, false);
+    getPointerForce()?.setPosition(0, 0, false);
   });
   canvas.addEventListener(
     'touchstart',
     (e) => {
-      if (!pointerEnabled) return;
+      if (!isPointerEnabled()) return;
       e.preventDefault();
       pointerDown = true;
       if (e.touches[0]) updatePointerFromEvent(e.touches[0]);
@@ -765,7 +880,7 @@ async function main(): Promise<void> {
   canvas.addEventListener(
     'touchmove',
     (e) => {
-      if (!pointerEnabled) return;
+      if (!isPointerEnabled()) return;
       e.preventDefault();
       if (e.touches[0]) updatePointerFromEvent(e.touches[0]);
     },
@@ -773,7 +888,7 @@ async function main(): Promise<void> {
   );
   canvas.addEventListener('touchend', () => {
     pointerDown = false;
-    pointerForce.setPosition(0, 0, false);
+    getPointerForce()?.setPosition(0, 0, false);
   });
 
   // 7. Build initial values for controls
@@ -794,6 +909,9 @@ async function main(): Promise<void> {
       pointer: { strength: 200, radius: 150, falloff: 0, _enabled: 0 },
       _popCap: liveConfig.populationCap as unknown as Record<string, number>,
     },
+    // CRT-38: Dynamic force pipeline data + descriptors
+    pipelineForces: getPipelineForceEntries(),
+    forceTypeDescriptors: listForceTypes(),
 
     onTogglePause: (p: boolean) => {
       paused = p;
@@ -805,21 +923,21 @@ async function main(): Promise<void> {
       // keeping the current config (species, matrix, forces).
       liveConfig.seed = Math.floor(Math.random() * 2147483647);
       rebuildSimulation();
-      // Sync all UI sliders to current values
+      // Sync all UI sliders to current values (read from pipeline)
       resetAllSliders({
         speciesValues: buildSpeciesValues(liveConfig.species),
         simValues: { speed: speedMultiplier, popCap: liveConfig.populationCap },
         forceValues: {
           drag: {
-            coefficient: (dragForce.params as Record<string, unknown>).coefficient as number,
+            coefficient: getForceParam('drag', 'coefficient'),
           },
           wander: {
-            strength: (wanderForce.params as Record<string, unknown>).strength as number,
-            rate: (wanderForce.params as Record<string, unknown>).rate as number,
+            strength: getForceParam('wander', 'strength'),
+            rate: getForceParam('wander', 'rate'),
           },
           pointer: {
-            strength: (pointerForce.params as Record<string, unknown>).strength as number,
-            radius: (pointerForce.params as Record<string, unknown>).radius as number,
+            strength: getForceParam('pointer', 'strength'),
+            radius: getForceParam('pointer', 'radius'),
           },
         },
       });
@@ -848,25 +966,49 @@ async function main(): Promise<void> {
     },
 
     onForceToggle: (forceId: string, enabled: boolean) => {
-      if (forceId === 'drag') dragEnabled = enabled;
-      else if (forceId === 'wander') wanderEnabled = enabled;
-      else if (forceId === 'pointer') pointerEnabled = enabled;
+      const idx = forcePipeline.findIndex((e) => e.force.id === forceId);
+      if (idx >= 0) setForceEnabled(idx, enabled);
     },
 
     onForceChange: (forceId: string, param: string, value: number) => {
-      if (forceId === 'drag' && param === 'coefficient') {
-        (dragForce.params as Record<string, unknown>).coefficient = value;
-      } else if (forceId === 'wander' && param === 'strength') {
-        (wanderForce.params as Record<string, unknown>).strength = value;
-      } else if (forceId === 'wander' && param === 'rate') {
-        (wanderForce.params as Record<string, unknown>).rate = value;
-      } else if (forceId === 'pointer' && param === 'strength') {
-        (pointerForce.params as Record<string, unknown>).strength = value;
-      } else if (forceId === 'pointer' && param === 'radius') {
-        (pointerForce.params as Record<string, unknown>).radius = value;
-      } else if (forceId === 'pointer' && param.startsWith('falloff_')) {
-        const falloff = param.replace('falloff_', '');
-        (pointerForce.params as Record<string, unknown>).falloff = falloff;
+      // Pointer falloff dropdown encodes the value in the param name
+      if (forceId === 'pointer' && param.startsWith('falloff_')) {
+        setForceParam('pointer', 'falloff', param.replace('falloff_', ''));
+      } else {
+        setForceParam(forceId, param, value);
+      }
+    },
+
+    // CRT-38: Dynamic force pipeline callbacks
+    onAddForce: (typeId: string) => {
+      const idx = addForce(typeId);
+      if (idx >= 0) {
+        // Rebuild the controls panel forces section to include the new force
+        // (the new force row appears with default params from the registry)
+      }
+    },
+
+    onRemoveForce: (index: number) => {
+      removeForce(index);
+    },
+
+    onSetForceEnabled: (index: number, enabled: boolean) => {
+      setForceEnabled(index, enabled);
+    },
+
+    onSetForceParam: (index: number, param: string, value: number) => {
+      // For select-type params, the value is an index into the options array
+      const entry = forcePipeline[index];
+      if (!entry) return;
+      const descriptor = listForceTypes().find((d) => d.type === entry.force.id);
+      const paramSchema = descriptor?.paramSchema.find((p) => p.key === param);
+      if (paramSchema?.type === 'select' && paramSchema.options) {
+        const optValue = paramSchema.options[value];
+        if (optValue !== undefined) {
+          setForceParam(entry.force.id, param, optValue);
+        }
+      } else {
+        setForceParam(entry.force.id, param, value);
       }
     },
 
@@ -1075,10 +1217,7 @@ async function main(): Promise<void> {
             cell ? { strength: cell.strength, radius: cell.radius, falloff: cell.falloff } : null,
           ),
         ),
-        forces: {
-          drag: { id: 'drag', params: { strength: dragForce.params.strength } },
-          wander: { id: 'wander', params: { strength: wanderForce.params.strength } },
-        },
+        forces: getPipelineForceEntries(),
       };
       localStorage.setItem('critterium-pending-preset', JSON.stringify(pendingConfig));
       window.location.reload();
@@ -1144,10 +1283,7 @@ async function main(): Promise<void> {
             cell ? { strength: cell.strength, radius: cell.radius, falloff: cell.falloff } : null,
           ),
         ),
-        forces: {
-          drag: { id: 'drag', params: { strength: dragForce.params.strength } },
-          wander: { id: 'wander', params: { strength: wanderForce.params.strength } },
-        },
+        forces: getPipelineForceEntries(),
       };
       localStorage.setItem('critterium-pending-preset', JSON.stringify(pendingConfig));
       window.location.reload();
@@ -1307,14 +1443,8 @@ async function main(): Promise<void> {
         grid.rebuild(eco.world);
         // Update liveConfig to match
         liveConfig = deepCloneConfig(eco.config);
-        // Also update drag and wander forces from preset
-        if (cfg.forces?.drag) {
-          (dragForce.params as Record<string, unknown>).coefficient = cfg.forces.drag.coefficient;
-        }
-        if (cfg.forces?.wander) {
-          (wanderForce.params as Record<string, unknown>).strength = cfg.forces.wander.strength;
-          (wanderForce.params as Record<string, unknown>).rate = cfg.forces.wander.rate;
-        }
+        // Rebuild force pipeline from the preset config
+        rebuildPipelineFromConfig(validated.forces);
         accumulator = 0;
         lastTime = performance.now();
         clearAutosave();
@@ -1325,15 +1455,15 @@ async function main(): Promise<void> {
           simValues: { speed: speedMultiplier, popCap: liveConfig.populationCap },
           forceValues: {
             drag: {
-              coefficient: (dragForce.params as Record<string, unknown>).coefficient as number,
+              coefficient: getForceParam('drag', 'coefficient') ?? 0,
             },
             wander: {
-              strength: (wanderForce.params as Record<string, unknown>).strength as number,
-              rate: (wanderForce.params as Record<string, unknown>).rate as number,
+              strength: getForceParam('wander', 'strength') ?? 0,
+              rate: getForceParam('wander', 'rate') ?? 0,
             },
             pointer: {
-              strength: (pointerForce.params as Record<string, unknown>).strength as number,
-              radius: (pointerForce.params as Record<string, unknown>).radius as number,
+              strength: getForceParam('pointer', 'strength') ?? 0,
+              radius: getForceParam('pointer', 'radius') ?? 0,
             },
           },
         });
@@ -1400,6 +1530,16 @@ async function main(): Promise<void> {
   if (useAutosave) {
     console.log('[Critterium] Resumed from autosave');
   }
+
+  // Expose force pipeline management API for debugging / future UI (CRT-37)
+  (window as unknown as { __critterium: Record<string, unknown> }).__critterium = {
+    addForce,
+    removeForce,
+    setForceEnabled,
+    setForceParam,
+    getForceParam,
+    getPipelineForceEntries,
+  };
 
   requestAnimationFrame(loop);
 }
