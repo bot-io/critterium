@@ -416,6 +416,10 @@ export function deserializeConfig(json: unknown): CritteriumConfig {
   if (typeof simObj.seed !== 'number') {
     throw new Error('simulation.seed must be a number');
   }
+  // Clamp NaN/Infinity seed to 0 (deterministic default)
+  if (!Number.isFinite(simObj.seed)) {
+    simObj.seed = 0;
+  }
   if (typeof simObj.populationCap !== 'number') {
     throw new Error('simulation.populationCap must be a number');
   }
@@ -440,10 +444,8 @@ export function deserializeConfig(json: unknown): CritteriumConfig {
     validateSpecies(obj.species[i] as Record<string, unknown>, i);
   }
 
-  // Validate interaction matrix
-  if (!Array.isArray(obj.interactionMatrix)) {
-    throw new Error('interactionMatrix must be a 2D array');
-  }
+  // Validate interaction matrix — structure + entry clamping
+  validateInteractionMatrix(obj.interactionMatrix, obj.species.length);
 
   // Validate forces (optional fields)
   if (obj.forces !== undefined && (typeof obj.forces !== 'object' || obj.forces === null)) {
@@ -568,6 +570,70 @@ function clampNum(
   if (val < min) return min;
   if (val > max) return max;
   return val;
+}
+
+/**
+ * Validate the interaction matrix structure and clamp entry values.
+ * Ensures the matrix is a square 2D array with dimensions matching the
+ * species count. Each non-null entry's strength/radius are clamped against
+ * NaN/Infinity/negative values, and the falloff field is validated.
+ */
+function validateInteractionMatrix(raw: unknown, numSpecies: number): void {
+  if (!Array.isArray(raw)) {
+    throw new Error('interactionMatrix must be a 2D array');
+  }
+
+  const rows = raw.length;
+
+  // Empty matrix with empty species is valid
+  if (rows === 0) return;
+
+  // Dimension check: matrix must match species count (if species present)
+  if (numSpecies > 0 && rows !== numSpecies) {
+    throw new Error(
+      `interactionMatrix dimensions (${rows} rows) do not match species count (${numSpecies})`,
+    );
+  }
+
+  // Validate each row is an array and the matrix is square
+  for (let i = 0; i < rows; i++) {
+    const row = raw[i];
+    if (!Array.isArray(row)) {
+      throw new Error(`interactionMatrix[${i}] must be an array`);
+    }
+    if (row.length !== rows) {
+      throw new Error(
+        `interactionMatrix is not square: row ${i} has ${row.length} columns, expected ${rows}`,
+      );
+    }
+  }
+
+  // Clamp entry values: NaN/Infinity in strength → 0, radius → default 100
+  const VALID_FALLOFFS = new Set(['linear', 'inverse', 'constant']);
+  for (let i = 0; i < rows; i++) {
+    for (let j = 0; j < raw[i].length; j++) {
+      const entry = raw[i][j];
+      if (entry === null || entry === undefined) continue;
+      if (typeof entry !== 'object') {
+        throw new Error(`interactionMatrix[${i}][${j}] must be an object or null`);
+      }
+      const e = entry as Record<string, unknown>;
+      // Clamp strength: NaN/Infinity → 0
+      if (typeof e.strength !== 'number' || !Number.isFinite(e.strength)) {
+        e.strength = 0;
+      }
+      // Clamp radius: NaN/Infinity/negative → default 100; clamp upper bound
+      if (typeof e.radius !== 'number' || !Number.isFinite(e.radius) || e.radius < 0) {
+        e.radius = 100;
+      } else if (e.radius > 5000) {
+        e.radius = 5000;
+      }
+      // Validate falloff enum
+      if (typeof e.falloff !== 'string' || !VALID_FALLOFFS.has(e.falloff)) {
+        e.falloff = 'linear';
+      }
+    }
+  }
 }
 
 /** Validate a snapshot object. */

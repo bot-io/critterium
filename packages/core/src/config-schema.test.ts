@@ -481,6 +481,360 @@ describe('applyConfig', () => {
   });
 });
 
+// ─── CRT-47: Config Validation Hardening ─────────────────────
+
+describe('CRT-47: Config Validation Hardening', () => {
+  /** Deep-clone the minimal config for mutation in each test. */
+  function cloneConfig(): unknown {
+    return JSON.parse(JSON.stringify(makeMinimalConfig()));
+  }
+
+  // ── NaN clamping ──────────────────────────────────────────
+
+  describe('NaN clamping in species fields', () => {
+    it('clamps NaN maxSpeed to fallback 100', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].maxSpeed = NaN;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].maxSpeed).toBe(100);
+    });
+
+    it('clamps NaN radius to fallback 3', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].radius = NaN;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].radius).toBe(3);
+    });
+
+    it('clamps NaN count to fallback 1', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].count = NaN;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].count).toBe(1);
+    });
+
+    it('clamps NaN simulation.seed to 0', () => {
+      const cfg = cloneConfig() as any;
+      cfg.simulation.seed = NaN;
+      const result = deserializeConfig(cfg);
+      expect(result.simulation.seed).toBe(0);
+    });
+
+    it('clamps NaN initialSpeed to fallback 50', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].initialSpeed = NaN;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].initialSpeed).toBe(50);
+    });
+  });
+
+  // ── Infinity clamping ────────────────────────────────────
+
+  describe('Infinity clamping', () => {
+    it('clamps +Infinity initialSpeed to fallback 50', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].initialSpeed = Infinity;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].initialSpeed).toBe(50);
+    });
+
+    it('clamps -Infinity maxSpeed to fallback 100', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].maxSpeed = -Infinity;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].maxSpeed).toBe(100);
+    });
+
+    it('clamps +Infinity simulation.width to default 800', () => {
+      const cfg = cloneConfig() as any;
+      cfg.simulation.width = Infinity;
+      const result = deserializeConfig(cfg);
+      expect(result.simulation.width).toBe(800);
+    });
+
+    it('clamps +Infinity simulation.seed to 0', () => {
+      const cfg = cloneConfig() as any;
+      cfg.simulation.seed = Infinity;
+      const result = deserializeConfig(cfg);
+      expect(result.simulation.seed).toBe(0);
+    });
+  });
+
+  // ── Negative value clamping ──────────────────────────────
+
+  describe('negative value clamping', () => {
+    it('clamps negative count to 0', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].count = -5;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].count).toBe(0);
+    });
+
+    it('clamps negative radius to minimum 0.5', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].radius = -3;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].radius).toBe(0.5);
+    });
+  });
+
+  // ── Range clamping ───────────────────────────────────────
+
+  describe('range clamping', () => {
+    it('clamps maxSpeed 99999 to maximum 1000', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].maxSpeed = 99999;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].maxSpeed).toBe(1000);
+    });
+
+    it('clamps radius 999 to maximum 50', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].radius = 999;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].radius).toBe(50);
+    });
+
+    it('clamps populationCap 99999 to maximum 5000', () => {
+      const cfg = cloneConfig() as any;
+      cfg.simulation.populationCap = 99999;
+      const result = deserializeConfig(cfg);
+      expect(result.simulation.populationCap).toBe(5000);
+    });
+
+    it('clamps populationCap 0 to default 600', () => {
+      const cfg = cloneConfig() as any;
+      cfg.simulation.populationCap = 0;
+      const result = deserializeConfig(cfg);
+      expect(result.simulation.populationCap).toBe(600);
+    });
+
+    it('clamps maxSpeed below minimum to 1', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].maxSpeed = 0.001;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].maxSpeed).toBe(1);
+    });
+  });
+
+  // ── Wrong types ──────────────────────────────────────────
+
+  describe('wrong type handling', () => {
+    it('treats string count as invalid → fallback 1', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].count = 'twenty';
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].count).toBe(1);
+    });
+
+    it('treats boolean maxSpeed as invalid → fallback 100', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].maxSpeed = true;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].maxSpeed).toBe(100);
+    });
+
+    it('throws on string simulation.width', () => {
+      const cfg = cloneConfig() as any;
+      cfg.simulation.width = 'wide';
+      expect(() => deserializeConfig(cfg)).toThrow('must be numbers');
+    });
+
+    it('throws on string simulation.seed', () => {
+      const cfg = cloneConfig() as any;
+      cfg.simulation.seed = 'abc';
+      expect(() => deserializeConfig(cfg)).toThrow('simulation.seed must be a number');
+    });
+  });
+
+  // ── Missing required fields ──────────────────────────────
+
+  describe('missing required fields', () => {
+    it('throws when version is missing', () => {
+      const cfg = cloneConfig() as any;
+      delete cfg.version;
+      expect(() => deserializeConfig(cfg)).toThrow('Unsupported config version');
+    });
+
+    it('throws when interactionMatrix is missing', () => {
+      const cfg = cloneConfig() as any;
+      delete cfg.interactionMatrix;
+      expect(() => deserializeConfig(cfg)).toThrow('interactionMatrix must be a 2D array');
+    });
+
+    it('defaults forces to empty object when missing', () => {
+      const cfg = cloneConfig() as any;
+      delete cfg.forces;
+      const result = deserializeConfig(cfg);
+      expect(result.forces).toEqual({});
+    });
+
+    it('throws when simulation is missing', () => {
+      const cfg: unknown = { version: 1 };
+      expect(() => deserializeConfig(cfg)).toThrow('Missing or invalid simulation');
+    });
+  });
+
+  // ── Interaction matrix dimension validation ──────────────
+
+  describe('interaction matrix dimension validation', () => {
+    it('throws when matrix rows do not match species count (3 species, 2×2 matrix)', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species.push({
+        name: 'B',
+        count: 10,
+        color: '#00ff00',
+        radius: 3,
+        initialSpeed: 40,
+        maxSpeed: 80,
+        energy: {
+          maxEnergy: 100,
+          initialEnergy: 50,
+          movementCostPerSec: 2,
+          reproductionCost: 40,
+          idleDrainPerSec: 1,
+          energyGainPerPrey: [],
+        },
+        lifecycle: { maxAgeSec: 30, starvationDamagePerSec: 10, reproductionCooldownSec: 5 },
+        diet: { canEat: [] },
+      });
+      cfg.species.push({
+        name: 'C',
+        count: 10,
+        color: '#0000ff',
+        radius: 3,
+        initialSpeed: 40,
+        maxSpeed: 80,
+        energy: {
+          maxEnergy: 100,
+          initialEnergy: 50,
+          movementCostPerSec: 2,
+          reproductionCost: 40,
+          idleDrainPerSec: 1,
+          energyGainPerPrey: [],
+        },
+        lifecycle: { maxAgeSec: 30, starvationDamagePerSec: 10, reproductionCooldownSec: 5 },
+        diet: { canEat: [] },
+      });
+      // 3 species but only 2×2 matrix
+      expect(() => deserializeConfig(cfg)).toThrow('do not match species count');
+    });
+
+    it('throws on jagged matrix (row lengths differ)', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = [[null, null], [null]]; // 2 rows, jagged
+      // Also need 2 species for this to be dimensionally consistent in row count
+      cfg.species.push({
+        name: 'B',
+        count: 10,
+        color: '#00ff00',
+        radius: 3,
+        initialSpeed: 40,
+        maxSpeed: 80,
+        energy: {
+          maxEnergy: 100,
+          initialEnergy: 50,
+          movementCostPerSec: 2,
+          reproductionCost: 40,
+          idleDrainPerSec: 1,
+          energyGainPerPrey: [],
+        },
+        lifecycle: { maxAgeSec: 30, starvationDamagePerSec: 10, reproductionCooldownSec: 5 },
+        diet: { canEat: [] },
+      });
+      expect(() => deserializeConfig(cfg)).toThrow('not square');
+    });
+
+    it('throws when matrix row is not an array', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = ['not-array'];
+      expect(() => deserializeConfig(cfg)).toThrow('must be an array');
+    });
+
+    it('accepts empty matrix with empty species', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species = [];
+      cfg.interactionMatrix = [];
+      const result = deserializeConfig(cfg);
+      expect(result.species).toHaveLength(0);
+      expect(result.interactionMatrix).toHaveLength(0);
+    });
+  });
+
+  // ── Interaction matrix entry clamping ────────────────────
+
+  describe('interaction matrix entry clamping', () => {
+    it('clamps NaN strength in matrix entry to 0', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = [[{ strength: NaN, radius: 50, falloff: 'linear' }]];
+      const result = deserializeConfig(cfg);
+      expect(result.interactionMatrix[0][0]?.strength).toBe(0);
+    });
+
+    it('clamps Infinity radius in matrix entry to default 100', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = [[{ strength: 30, radius: Infinity, falloff: 'linear' }]];
+      const result = deserializeConfig(cfg);
+      expect(result.interactionMatrix[0][0]?.radius).toBe(100);
+    });
+
+    it('clamps negative radius in matrix entry to default 100', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = [[{ strength: 30, radius: -10, falloff: 'linear' }]];
+      const result = deserializeConfig(cfg);
+      expect(result.interactionMatrix[0][0]?.radius).toBe(100);
+    });
+
+    it('clamps oversized radius (>5000) to 5000', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = [[{ strength: 30, radius: 99999, falloff: 'linear' }]];
+      const result = deserializeConfig(cfg);
+      expect(result.interactionMatrix[0][0]?.radius).toBe(5000);
+    });
+
+    it('defaults invalid falloff to linear', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = [[{ strength: 30, radius: 50, falloff: 'invalid-mode' }]];
+      const result = deserializeConfig(cfg);
+      expect(result.interactionMatrix[0][0]?.falloff).toBe('linear');
+    });
+
+    it('defaults missing falloff to linear', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = [[{ strength: 30, radius: 50 }]]; // no falloff field
+      const result = deserializeConfig(cfg);
+      expect(result.interactionMatrix[0][0]?.falloff).toBe('linear');
+    });
+
+    it('clamps Infinity strength to 0', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = [[{ strength: Infinity, radius: 50, falloff: 'linear' }]];
+      const result = deserializeConfig(cfg);
+      expect(result.interactionMatrix[0][0]?.strength).toBe(0);
+    });
+
+    it('preserves valid negative strength (repel)', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = [[{ strength: -50, radius: 50, falloff: 'inverse' }]];
+      const result = deserializeConfig(cfg);
+      expect(result.interactionMatrix[0][0]?.strength).toBe(-50);
+    });
+
+    it('throws on non-object matrix entry', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = [[42]];
+      expect(() => deserializeConfig(cfg)).toThrow('must be an object or null');
+    });
+
+    it('allows null entries without modification', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = [[null]];
+      const result = deserializeConfig(cfg);
+      expect(result.interactionMatrix[0][0]).toBeNull();
+    });
+  });
+});
+
 // ─── Helpers for tests ───────────────────────────────────────
 
 function makeMinimalConfig(): CritteriumConfig {
