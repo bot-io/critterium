@@ -767,11 +767,11 @@ describe('CRT-47: Config Validation Hardening', () => {
       expect(() => deserializeConfig(cfg)).toThrow('interactionMatrix must be a 2D array');
     });
 
-    it('defaults forces to empty object when missing', () => {
+    it('defaults forces to empty array when missing', () => {
       const cfg = cloneConfig() as any;
       delete cfg.forces;
       const result = deserializeConfig(cfg);
-      expect(result.forces).toEqual({});
+      expect(result.forces).toEqual([]);
     });
 
     it('throws when simulation is missing', () => {

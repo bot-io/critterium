@@ -403,7 +403,7 @@ describe('lifecycle: reproduction deep tests', () => {
     });
     const eco = new EcosystemWorld(cfg);
     eco.eco.reproductionCooldown[0] = 0;
-    const childIdx = eco.tryReproduce(0);
+    const childIdx = eco.tryReproduce(0, 100);
     expect(childIdx).toBeGreaterThanOrEqual(0);
     expect(eco.eco.energy[childIdx]).toBe(75); // species initialEnergy
   });
@@ -420,7 +420,7 @@ describe('lifecycle: reproduction deep tests', () => {
     // Set parent at known position
     eco.world.x[0] = 400;
     eco.world.y[0] = 300;
-    const childIdx = eco.tryReproduce(0);
+    const childIdx = eco.tryReproduce(0, 100);
     expect(childIdx).toBeGreaterThanOrEqual(0);
     // Offset is ±10 in each axis
     expect(Math.abs(eco.world.x[childIdx] - 400)).toBeLessThanOrEqual(10);
@@ -438,7 +438,7 @@ describe('lifecycle: reproduction deep tests', () => {
     const eco = new EcosystemWorld(cfg);
     // reproductionCooldownSec=0 → initial cooldown is rng()*0 = 0
     expect(eco.eco.reproductionCooldown[0]).toBe(0);
-    eco.tryReproduce(0);
+    eco.tryReproduce(0, 100);
     // After reproduction, cooldown = max(1, 0) = 1
     expect(eco.eco.reproductionCooldown[0]).toBe(1);
   });
@@ -454,7 +454,7 @@ describe('lifecycle: reproduction deep tests', () => {
     const eco = new EcosystemWorld(cfg);
     // Clear all cooldowns
     for (let i = 0; i < 3; i++) eco.eco.reproductionCooldown[i] = 0;
-    const born = processReproduction(eco);
+    const born = processReproduction(eco, 100);
     expect(born).toBe(3);
     expect(eco.aliveCount).toBe(6);
   });
@@ -469,7 +469,7 @@ describe('lifecycle: reproduction deep tests', () => {
     });
     const eco = new EcosystemWorld(cfg);
     for (let i = 0; i < 2; i++) eco.eco.reproductionCooldown[i] = 0;
-    const born = processReproduction(eco);
+    const born = processReproduction(eco, 100);
     // Only 1 child possible (cap = 3, 2 alive)
     expect(born).toBe(1);
     expect(eco.aliveCount).toBe(3);
@@ -521,7 +521,7 @@ describe('lifecycle: reproduction deep tests', () => {
     // Particle 0 is species 0, particle 1 is species 1
     const parentType = eco.world.type[0];
     eco.eco.reproductionCooldown[0] = 0;
-    const childIdx = eco.tryReproduce(0);
+    const childIdx = eco.tryReproduce(0, 100);
     expect(childIdx).toBeGreaterThanOrEqual(0);
     expect(eco.world.type[childIdx]).toBe(parentType);
   });
@@ -727,7 +727,7 @@ describe('lifecycle: edge cases', () => {
     });
     const eco = new EcosystemWorld(cfg);
     eco.kill(0);
-    const result = eco.tryReproduce(0);
+    const result = eco.tryReproduce(0, 100);
     expect(result).toBe(-1);
     expect(eco.aliveCount).toBe(0);
   });

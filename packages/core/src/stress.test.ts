@@ -213,7 +213,7 @@ describe('CRT-45: max-capacity particle stress', () => {
       // Attempt reproduction for every alive particle
       for (let i = 0; i < eco.highWaterMark; i++) {
         if (eco.eco.alive[i] === ALIVE) {
-          eco.tryReproduce(i);
+          eco.tryReproduce(i, 100);
         }
       }
       eco.world.step(DT);

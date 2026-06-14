@@ -103,6 +103,13 @@ export class World {
   // Simulation time accumulator
   simTime: number = 0;
 
+  /**
+   * Effective particle count for iteration. Set by EcosystemWorld to
+   * highWaterMark so that dead slots beyond it are never processed.
+   * When 0 (default), falls back to `count`.
+   */
+  effectiveCount: number = 0;
+
   // Future: scalar channels (ecosystem mode)
   // Pattern reserved — forces can add channels without redesign
   readonly scalarChannels: ScalarChannel[] = [];
@@ -159,7 +166,8 @@ export class World {
 
   /** Clamp all particle velocities to their per-type maxSpeed. */
   clampVelocities(): void {
-    for (let i = 0; i < this.count; i++) {
+    const n = this.effectiveCount || this.count;
+    for (let i = 0; i < n; i++) {
       const maxSpd = this.maxSpeeds[this.type[i]];
       const vx = this.vx[i];
       const vy = this.vy[i];
@@ -190,8 +198,9 @@ export class World {
   applyBoundaries(): void {
     const margin = World.BOUNCE_MARGIN;
     const strength = World.BOUNCE_REPULSION;
+    const n = this.effectiveCount || this.count;
 
-    for (let i = 0; i < this.count; i++) {
+    for (let i = 0; i < n; i++) {
       if (this.boundaryMode === 'bounce') {
         // Hard bounce: reflect position and velocity at boundaries
         if (this.x[i] < 0) {
@@ -237,16 +246,19 @@ export class World {
           this.vy[i] -= t * t * strength;
         }
       } else {
-        // wrap
-        this.x[i] = ((this.x[i] % this.width) + this.width) % this.width;
-        this.y[i] = ((this.y[i] % this.height) + this.height) % this.height;
+        // wrap — branch is ~4× faster than modulo for single-width wrap
+        if (this.x[i] < 0) this.x[i] += this.width;
+        else if (this.x[i] >= this.width) this.x[i] -= this.width;
+        if (this.y[i] < 0) this.y[i] += this.height;
+        else if (this.y[i] >= this.height) this.y[i] -= this.height;
       }
     }
   }
 
   /** Integrate positions forward by dt (Euler). */
   integrate(dt: number): void {
-    for (let i = 0; i < this.count; i++) {
+    const n = this.effectiveCount || this.count;
+    for (let i = 0; i < n; i++) {
       this.x[i] += this.vx[i] * dt;
       this.y[i] += this.vy[i] * dt;
     }
@@ -357,6 +369,11 @@ export class SpatialHashGrid {
   // next[particleIndex] = next particle in the same cell's linked list, or -1
   private next: Int32Array;
 
+  /** Alive array from last rebuild (null if no alive filter was used). */
+  private _rebuildAlive: Uint8Array | null = null;
+  /** High-water mark from last rebuild (particles [0, hwm) are valid). */
+  private _rebuildHwm: number = 0;
+
   constructor(width: number, height: number, cellSize: number, maxParticles: number) {
     this.cellSize = cellSize;
     this.invCellSize = 1 / cellSize;
@@ -401,6 +418,8 @@ export class SpatialHashGrid {
   rebuild(world: World, alive?: Uint8Array, hwm?: number): void {
     this.clear();
     const limit = hwm ?? world.count;
+    this._rebuildAlive = alive ?? null;
+    this._rebuildHwm = limit;
     if (alive) {
       for (let i = 0; i < limit; i++) {
         if (alive[i] === 0) continue;
@@ -512,6 +531,16 @@ export class SpatialHashGrid {
     return this.cols * this.rows;
   }
 
+  /** Alive array from last rebuild (null if no alive filter was used). */
+  get rebuildAlive(): Uint8Array | null {
+    return this._rebuildAlive;
+  }
+
+  /** High-water mark from last rebuild — valid particle range is [0, hwm). */
+  get rebuildHwm(): number {
+    return this._rebuildHwm;
+  }
+
   /** Get cell index for a position. Returns -1 if out of bounds. */
   cellAt(px: number, py: number): number {
     const col = Math.floor(px * this.invCellSize);
@@ -583,6 +612,8 @@ export interface InteractionEntry {
 export class InteractionMatrix {
   readonly numTypes: number;
   private readonly entries: (InteractionEntry | null)[][];
+  /** Incremented on every mutation (set). Used for maxRadius caching. */
+  private _version: number = 0;
 
   constructor(numTypes: number) {
     this.numTypes = numTypes;
@@ -598,6 +629,12 @@ export class InteractionMatrix {
   /** Set the interaction for (typeA, typeB): how typeB affects typeA. */
   set(typeA: number, typeB: number, entry: InteractionEntry): void {
     this.entries[typeA][typeB] = entry;
+    this._version++;
+  }
+
+  /** Current version (incremented on every mutation). */
+  get version(): number {
+    return this._version;
   }
 
   /** Get the interaction entry for (typeA, typeB). Returns null if not set. */
@@ -655,6 +692,10 @@ export class PairwiseForce {
   private dvx: Float32Array = new Float32Array(0);
   private dvy: Float32Array = new Float32Array(0);
 
+  // Cached maxRadius — recomputed only when matrix version changes
+  private cachedMaxRadius: number = 0;
+  private cachedMatrixVersion: number = -1;
+
   constructor(matrix: InteractionMatrix, repulsion: RepulsionConfig = DEFAULT_REPULSION) {
     this.matrix = matrix;
     this.repulsion = repulsion;
@@ -672,16 +713,25 @@ export class PairwiseForce {
     const { x, y, vx, vy, type, count } = world;
     const { matrix, repulsion } = this;
 
-    // Pre-compute max interaction radius from matrix entries
-    let maxRadius = repulsion.radius;
-    for (let a = 0; a < matrix.numTypes; a++) {
-      for (let b = 0; b < matrix.numTypes; b++) {
-        const entry = matrix.get(a, b);
-        if (entry && entry.radius > maxRadius) {
-          maxRadius = entry.radius;
+    // Cache maxRadius — only recompute when matrix has changed
+    if (this.cachedMatrixVersion !== matrix.version) {
+      let maxR = repulsion.radius;
+      for (let a = 0; a < matrix.numTypes; a++) {
+        for (let b = 0; b < matrix.numTypes; b++) {
+          const entry = matrix.get(a, b);
+          if (entry && entry.radius > maxR) {
+            maxR = entry.radius;
+          }
         }
       }
+      this.cachedMaxRadius = maxR;
+      this.cachedMatrixVersion = matrix.version;
     }
+    const maxRadius = this.cachedMaxRadius;
+
+    // Determine iteration range — use grid's alive/hwm if available to skip dead particles
+    const alive = grid.rebuildAlive;
+    const hwm = grid.rebuildHwm || count;
 
     // Ensure velocity delta buffers are large enough (grow only, never shrink)
     if (this.dvx.length < count) {
@@ -689,48 +739,81 @@ export class PairwiseForce {
       this.dvy = new Float32Array(count);
     } else {
       // Zero-fill only the active range
-      this.dvx.fill(0, 0, count);
-      this.dvy.fill(0, 0, count);
+      this.dvx.fill(0, 0, hwm);
+      this.dvy.fill(0, 0, hwm);
     }
     const dvx = this.dvx;
     const dvy = this.dvy;
 
-    for (let i = 0; i < count; i++) {
-      const xi = x[i];
-      const yi = y[i];
-      const typeI = type[i];
+    if (alive) {
+      // Ecosystem mode: skip dead particles in outer loop
+      for (let i = 0; i < hwm; i++) {
+        if (alive[i] === 0) continue;
+        const xi = x[i];
+        const yi = y[i];
+        const typeI = type[i];
 
-      grid.queryRadius(xi, yi, maxRadius, x, y, count, (j, dx, dy, distSq) => {
-        const dist = Math.sqrt(distSq);
-        const typeJ = type[j];
-        const nx = dx / dist; // unit normal from i to j
-        const ny = dy / dist;
+        grid.queryRadius(xi, yi, maxRadius, x, y, count, (j, dx, dy, distSq) => {
+          const dist = Math.sqrt(distSq);
+          const typeJ = type[j];
+          const nx = dx / dist;
+          const ny = dy / dist;
 
-        // 1. Interaction matrix force: how typeJ affects typeI
-        const entry = matrix.get(typeI, typeJ);
-        if (entry && dist < entry.radius && dist >= (entry.minRadius ?? 0)) {
-          const force = InteractionMatrix.forceAtDistance(entry, dist);
-          // Positive strength = attract (toward j), negative = repel (away from j)
-          dvx[i] += nx * force * dt;
-          dvy[i] += ny * force * dt;
-        }
+          const entry = matrix.get(typeI, typeJ);
+          if (entry && dist < entry.radius && dist >= (entry.minRadius ?? 0)) {
+            const force = InteractionMatrix.forceAtDistance(entry, dist);
+            dvx[i] += nx * force * dt;
+            dvy[i] += ny * force * dt;
+          }
 
-        // 2. Universal short-range repulsion (always repulsive, symmetric)
-        if (dist < repulsion.radius) {
-          // Linear falloff: strongest at dist=0, zero at repulsion.radius
-          const t = dist / repulsion.radius;
-          const repForce = repulsion.strength * (1 - t);
-          // Repel: push i away from j (opposite direction of normal)
-          dvx[i] -= nx * repForce * dt;
-          dvy[i] -= ny * repForce * dt;
-        }
-      });
-    }
+          if (dist < repulsion.radius) {
+            const t = dist / repulsion.radius;
+            const repForce = repulsion.strength * (1 - t);
+            dvx[i] -= nx * repForce * dt;
+            dvy[i] -= ny * repForce * dt;
+          }
+        });
+      }
 
-    // Apply accumulated velocity changes
-    for (let i = 0; i < count; i++) {
-      vx[i] += dvx[i];
-      vy[i] += dvy[i];
+      // Apply accumulated velocity changes (only active range)
+      for (let i = 0; i < hwm; i++) {
+        if (alive[i] === 0) continue;
+        vx[i] += dvx[i];
+        vy[i] += dvy[i];
+      }
+    } else {
+      // Classic mode: no alive array, iterate all
+      for (let i = 0; i < count; i++) {
+        const xi = x[i];
+        const yi = y[i];
+        const typeI = type[i];
+
+        grid.queryRadius(xi, yi, maxRadius, x, y, count, (j, dx, dy, distSq) => {
+          const dist = Math.sqrt(distSq);
+          const typeJ = type[j];
+          const nx = dx / dist;
+          const ny = dy / dist;
+
+          const entry = matrix.get(typeI, typeJ);
+          if (entry && dist < entry.radius && dist >= (entry.minRadius ?? 0)) {
+            const force = InteractionMatrix.forceAtDistance(entry, dist);
+            dvx[i] += nx * force * dt;
+            dvy[i] += ny * force * dt;
+          }
+
+          if (dist < repulsion.radius) {
+            const t = dist / repulsion.radius;
+            const repForce = repulsion.strength * (1 - t);
+            dvx[i] -= nx * repForce * dt;
+            dvy[i] -= ny * repForce * dt;
+          }
+        });
+      }
+
+      for (let i = 0; i < count; i++) {
+        vx[i] += dvx[i];
+        vy[i] += dvy[i];
+      }
     }
   }
 }
@@ -822,14 +905,25 @@ export class DragForce implements Force {
     this.params = { coefficient };
   }
 
-  apply(world: World, _grid: SpatialHashGrid, dt: number): void {
+  apply(world: World, grid: SpatialHashGrid, dt: number): void {
     const factor = 1 - this.params.coefficient * dt;
     // Clamp to prevent velocity inversion (if dt is very large)
     const safeFactor = Math.max(0, factor);
     const { vx, vy, count } = world;
-    for (let i = 0; i < count; i++) {
-      vx[i] *= safeFactor;
-      vy[i] *= safeFactor;
+    // Skip dead particles when alive info is available
+    const alive = grid.rebuildAlive;
+    const hwm = grid.rebuildHwm || count;
+    if (alive) {
+      for (let i = 0; i < hwm; i++) {
+        if (alive[i] === 0) continue;
+        vx[i] *= safeFactor;
+        vy[i] *= safeFactor;
+      }
+    } else {
+      for (let i = 0; i < count; i++) {
+        vx[i] *= safeFactor;
+        vy[i] *= safeFactor;
+      }
     }
   }
 }
@@ -862,11 +956,21 @@ export class GravityForce implements Force {
     this.params = { acceleration };
   }
 
-  apply(world: World, _grid: SpatialHashGrid, dt: number): void {
+  apply(world: World, grid: SpatialHashGrid, dt: number): void {
     const { vy, count } = world;
     const dv = this.params.acceleration * dt;
-    for (let i = 0; i < count; i++) {
-      vy[i] += dv;
+    // Skip dead particles when alive info is available
+    const alive = grid.rebuildAlive;
+    const hwm = grid.rebuildHwm || count;
+    if (alive) {
+      for (let i = 0; i < hwm; i++) {
+        if (alive[i] === 0) continue;
+        vy[i] += dv;
+      }
+    } else {
+      for (let i = 0; i < count; i++) {
+        vy[i] += dv;
+      }
     }
   }
 }

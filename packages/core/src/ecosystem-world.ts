@@ -94,6 +94,9 @@ export class EcosystemWorld {
 
     this._aliveCount = totalCount;
     this._highWaterMark = totalCount;
+
+    // Limit World iteration to active range (avoids processing dead/unused slots)
+    this.world.effectiveCount = totalCount;
   }
 
   /** Current highest used particle index (may have gaps from kills). */
@@ -133,6 +136,7 @@ export class EcosystemWorld {
       if (this._highWaterMark >= this.config.populationCap) return -1;
       idx = this._highWaterMark;
       this._highWaterMark++;
+      this.world.effectiveCount = this._highWaterMark;
     }
 
     // Set position
