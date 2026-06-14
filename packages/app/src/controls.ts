@@ -895,7 +895,7 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
           sub.appendChild(
             makeSlider(
               'Idle Drain/s',
-              0,
+              -10,
               10,
               0.1,
               iv['idleDrainPerSec'] ?? 1,
@@ -949,7 +949,6 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
       panel.appendChild(
         buildSubSection('Diet', (sub) => {
           for (let j = 0; j < n; j++) {
-            if (j === si) continue;
             const canEatInitial = !!iv['canEat_' + j];
             const checkboxRow = el('div', 'crit-row');
             const checkbox = document.createElement('input');
@@ -962,7 +961,7 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
             });
             checkboxRow.appendChild(checkbox);
             const lbl = el('span', 'crit-label');
-            lbl.textContent = `Eat ${names[j]}`;
+            lbl.textContent = j === si ? `Eat ${names[j]} (cannibalism)` : `Eat ${names[j]}`;
             lbl.style.cursor = 'pointer';
             lbl.addEventListener('click', () => {
               checkbox.checked = !checkbox.checked;
