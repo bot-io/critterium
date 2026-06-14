@@ -1196,6 +1196,215 @@ const FISHES: EcosystemPreset = preset(
   },
 );
 
+// ─── 11. Coral Reef ──────────────────────────────────────────
+
+const CORAL_REEF: EcosystemPreset = preset(
+  'Coral Reef',
+  'A vibrant reef food chain: stationary Coral feeds Zooplankton, which nourish schooling Clownfish, hunted by Moray Eels, themselves preyed upon by solitary Reef Sharks. A gentle turbulence current sweeps through.',
+  {
+    version: 1,
+    simulation: {
+      width: 800,
+      height: 600,
+      boundaryMode: 'wrap',
+      seed: 314,
+      populationCap: 500,
+    },
+    species: [
+      // ── Producer: Coral (effectively stationary) ───────────────
+      // NOTE: The backlog spec requested maxSpeed = 0 (truly stationary),
+      // but ecosystem-world.ts divides by maxSpeed when computing movement
+      // cost (speed / maxSpeed), so maxSpeed = 0 causes division by zero.
+      // We follow the established Grasslands convention (Grass = maxSpeed 5)
+      // and use the lowest safe value. Coral also starts at rest (initialSpeed 0).
+      {
+        name: 'Coral',
+        count: 150,
+        color: '#ff6b6b',
+        radius: 4,
+        initialSpeed: 0,
+        maxSpeed: 5,
+        energy: {
+          maxEnergy: 40,
+          initialEnergy: 25,
+          movementCostPerSec: 0.1,
+          reproductionCost: 10,
+          idleDrainPerSec: 0.1,
+          energyGainPerPrey: [0, 0, 0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 200,
+          starvationDamagePerSec: 1,
+          reproductionCooldownSec: 3,
+        },
+        diet: {
+          canEat: [],
+        },
+      },
+      // ── Primary consumer: Zooplankton (tiny, slow) ────────────
+      {
+        name: 'Zooplankton',
+        count: 120,
+        color: '#74b9ff',
+        radius: 2,
+        initialSpeed: 15,
+        maxSpeed: 35,
+        energy: {
+          maxEnergy: 40,
+          initialEnergy: 20,
+          movementCostPerSec: 0.5,
+          reproductionCost: 10,
+          idleDrainPerSec: 0.4,
+          energyGainPerPrey: [12, 0, 0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 25,
+          starvationDamagePerSec: 5,
+          reproductionCooldownSec: 3,
+        },
+        diet: {
+          canEat: [0],
+        },
+      },
+      // ── Secondary consumer: Clownfish (schooling) ─────────────
+      {
+        name: 'Clownfish',
+        count: 90,
+        color: '#ffa502',
+        radius: 3,
+        initialSpeed: 35,
+        maxSpeed: 75,
+        energy: {
+          maxEnergy: 90,
+          initialEnergy: 45,
+          movementCostPerSec: 1.2,
+          reproductionCost: 20,
+          idleDrainPerSec: 0.8,
+          energyGainPerPrey: [0, 25, 0, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 50,
+          starvationDamagePerSec: 4,
+          reproductionCooldownSec: 6,
+        },
+        diet: {
+          canEat: [1],
+        },
+        stamina: {
+          sprintDurationSec: 5,
+          sprintCooldownSec: 3,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.5,
+        },
+      },
+      // ── Tertiary consumer: Moray Eel (fast predator) ──────────
+      {
+        name: 'Moray Eel',
+        count: 25,
+        color: '#2d3436',
+        radius: 5,
+        initialSpeed: 45,
+        maxSpeed: 100,
+        energy: {
+          maxEnergy: 160,
+          initialEnergy: 90,
+          movementCostPerSec: 2,
+          reproductionCost: 50,
+          idleDrainPerSec: 1.5,
+          energyGainPerPrey: [0, 0, 40, 0, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 80,
+          starvationDamagePerSec: 3,
+          reproductionCooldownSec: 12,
+        },
+        diet: {
+          canEat: [2],
+        },
+        stamina: {
+          sprintDurationSec: 3,
+          sprintCooldownSec: 5,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.4,
+        },
+      },
+      // ── Apex predator: Reef Shark (solitary) ──────────────────
+      {
+        name: 'Reef Shark',
+        count: 8,
+        color: '#636e72',
+        radius: 7,
+        initialSpeed: 50,
+        maxSpeed: 115,
+        energy: {
+          maxEnergy: 220,
+          initialEnergy: 130,
+          movementCostPerSec: 2.5,
+          reproductionCost: 80,
+          idleDrainPerSec: 2,
+          energyGainPerPrey: [0, 0, 0, 55, 0],
+        },
+        lifecycle: {
+          maxAgeSec: 120,
+          starvationDamagePerSec: 2.5,
+          reproductionCooldownSec: 20,
+        },
+        diet: {
+          canEat: [3],
+        },
+        stamina: {
+          sprintDurationSec: 3,
+          sprintCooldownSec: 6,
+          sprintSpeedMultiplier: 1.0,
+          tiredSpeedMultiplier: 0.4,
+        },
+      },
+    ],
+    // src=row (how this species reacts to target col)
+    //          Coral    Zoopl.   Clown    Eel      Shark
+    interactionMatrix: [
+      /* Coral   */ [null, null, null, null, null],
+      /* Zoopl.  */ [
+        { strength: 35, radius: 90, falloff: 'linear' },
+        null,
+        { strength: -50, radius: 110, falloff: 'linear' },
+        null,
+        null,
+      ],
+      /* Clown   */ [
+        null,
+        { strength: 50, radius: 100, falloff: 'linear' },
+        { strength: 30, radius: 70, falloff: 'linear' },
+        { strength: -70, radius: 130, falloff: 'linear' },
+        null,
+      ],
+      /* Eel     */ [
+        null,
+        null,
+        { strength: 55, radius: 140, falloff: 'linear' },
+        { strength: -20, radius: 60, falloff: 'linear' },
+        { strength: -40, radius: 100, falloff: 'linear' },
+      ],
+      /* Shark   */ [
+        null,
+        null,
+        null,
+        { strength: 45, radius: 170, falloff: 'linear' },
+        { strength: -35, radius: 80, falloff: 'linear' },
+      ],
+    ],
+    forces: [
+      { type: 'drag', enabled: true, params: { coefficient: 0.6 } },
+      { type: 'wander', enabled: true, params: { strength: 20, rate: 2 } },
+      {
+        type: 'flow-field',
+        enabled: true,
+        params: { strength: 15, mode: 'turbulence', angle: 0, turbulenceScale: 0.02 },
+      },
+    ],
+  },
+);
+
 // ─── Export all presets ───────────────────────────────────────
 
 export const BUILTIN_PRESETS: EcosystemPreset[] = [
@@ -1209,6 +1418,7 @@ export const BUILTIN_PRESETS: EcosystemPreset[] = [
   GRASSLANDS,
   BIRDS,
   FISHES,
+  CORAL_REEF,
 ];
 
 export const BUILTIN_PRESET_NAMES: string[] = BUILTIN_PRESETS.map((p) => p.name);

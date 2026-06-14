@@ -13,11 +13,12 @@ const EXPECTED_PRESET_NAMES = [
   'Grasslands',
   'Birds',
   'Fishes',
+  'Coral Reef',
 ];
 
 describe('presets', () => {
-  it('exports exactly 10 built-in presets', () => {
-    expect(BUILTIN_PRESETS).toHaveLength(10);
+  it('exports exactly 11 built-in presets', () => {
+    expect(BUILTIN_PRESETS).toHaveLength(11);
   });
 
   it('BUILTIN_PRESET_NAMES matches expected list', () => {
@@ -583,5 +584,207 @@ describe('presets', () => {
     const fishes = getBuiltinPreset('Fishes');
     const total = fishes!.config.species.reduce((sum, s) => sum + s.count, 0);
     expect(total).toBeLessThanOrEqual(fishes!.config.simulation.populationCap!);
+  });
+
+  // ── Coral Reef — five-tier food chain tests ───────────────
+
+  it('Coral Reef has exactly 5 species', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    expect(reef).toBeDefined();
+    expect(reef!.config.species).toHaveLength(5);
+  });
+
+  it('Coral Reef species names are Coral, Zooplankton, Clownfish, Moray Eel, Reef Shark', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    const names = reef!.config.species.map((s) => s.name);
+    expect(names).toEqual(['Coral', 'Zooplankton', 'Clownfish', 'Moray Eel', 'Reef Shark']);
+  });
+
+  it('Coral Reef: Coral is a producer (canEat is empty)', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    expect(reef!.config.species[0].diet.canEat).toEqual([]);
+  });
+
+  it('Coral Reef: Zooplankton eat Coral (canEat = [0])', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    expect(reef!.config.species[1].diet.canEat).toContain(0);
+  });
+
+  it('Coral Reef: Clownfish eat Zooplankton (canEat = [1])', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    expect(reef!.config.species[2].diet.canEat).toContain(1);
+  });
+
+  it('Coral Reef: Moray Eel eats Clownfish (canEat = [2])', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    expect(reef!.config.species[3].diet.canEat).toContain(2);
+  });
+
+  it('Coral Reef: Reef Shark eats Moray Eel (canEat = [3])', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    expect(reef!.config.species[4].diet.canEat).toContain(3);
+  });
+
+  it('Coral Reef: five-tier food chain Coral → Zooplankton → Clownfish → Eel → Shark', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    const species = reef!.config.species;
+    // Each predator gains energy only from its direct prey
+    expect(species[1].energy.energyGainPerPrey[0]).toBeGreaterThan(0); // Zooplankton from Coral
+    expect(species[2].energy.energyGainPerPrey[1]).toBeGreaterThan(0); // Clownfish from Zooplankton
+    expect(species[3].energy.energyGainPerPrey[2]).toBeGreaterThan(0); // Eel from Clownfish
+    expect(species[4].energy.energyGainPerPrey[3]).toBeGreaterThan(0); // Shark from Eel
+    // Coral (producer) gains from nothing
+    expect(species[0].energy.energyGainPerPrey.every((v) => v === 0)).toBe(true);
+  });
+
+  it('Coral Reef: Coral is effectively stationary (slowest species, low maxSpeed)', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    const speeds = reef!.config.species.map((s) => s.maxSpeed);
+    // Coral is the slowest of all 5 species
+    expect(speeds[0]).toBeLessThan(speeds[1]);
+    expect(speeds[0]).toBeLessThan(speeds[2]);
+    expect(speeds[0]).toBeLessThan(speeds[3]);
+    expect(speeds[0]).toBeLessThan(speeds[4]);
+    // Coral maxSpeed is very low (≤ 5, following the Grasslands "nearly stationary" convention;
+    // true 0 is infeasible because ecosystem-world.ts divides by maxSpeed)
+    expect(speeds[0]).toBeLessThanOrEqual(5);
+    // Coral starts at rest
+    expect(reef!.config.species[0].initialSpeed).toBe(0);
+  });
+
+  it('Coral Reef: Coral has the fastest reproduction (lowest cooldown among producers/base)', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    const cooldowns = reef!.config.species.map((s) => s.lifecycle.reproductionCooldownSec);
+    // Coral reproduces fastest (3s) to sustain the food chain base
+    expect(cooldowns[0]).toBeLessThanOrEqual(cooldowns[1]);
+  });
+
+  it('Coral Reef: Zooplankton are attracted to Coral (foraging)', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    const m = reef!.config.interactionMatrix;
+    // Zooplankton (row 1) attracted to Coral (col 0)
+    expect(m[1][0]!.strength).toBeGreaterThan(0);
+  });
+
+  it('Coral Reef: Zooplankton flee Clownfish (predator avoidance)', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    const m = reef!.config.interactionMatrix;
+    // Zooplankton (row 1) flee Clownfish (col 2)
+    expect(m[1][2]!.strength).toBeLessThan(0);
+  });
+
+  it('Coral Reef: Clownfish chase Zooplankton (hunting)', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    const m = reef!.config.interactionMatrix;
+    // Clownfish (row 2) chase Zooplankton (col 1)
+    expect(m[2][1]!.strength).toBeGreaterThan(0);
+  });
+
+  it('Coral Reef: Clownfish school together (positive self-cohesion)', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    const m = reef!.config.interactionMatrix;
+    // Clownfish (row 2) attract own kind (col 2)
+    expect(m[2][2]!.strength).toBeGreaterThan(0);
+  });
+
+  it('Coral Reef: Clownfish flee Moray Eel (predator avoidance)', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    const m = reef!.config.interactionMatrix;
+    // Clownfish (row 2) flee Eel (col 3)
+    expect(m[2][3]!.strength).toBeLessThan(0);
+  });
+
+  it('Coral Reef: Moray Eel chases Clownfish (hunting)', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    const m = reef!.config.interactionMatrix;
+    // Eel (row 3) chases Clownfish (col 2)
+    expect(m[3][2]!.strength).toBeGreaterThan(0);
+  });
+
+  it('Coral Reef: Moray Eel flees Reef Shark (apex predator avoidance)', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    const m = reef!.config.interactionMatrix;
+    // Eel (row 3) flees Shark (col 4)
+    expect(m[3][4]!.strength).toBeLessThan(0);
+  });
+
+  it('Coral Reef: Moray Eel is territorial (negative self-interaction)', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    const m = reef!.config.interactionMatrix;
+    // Eel (row 3) self-repel (col 3)
+    expect(m[3][3]!.strength).toBeLessThan(0);
+  });
+
+  it('Coral Reef: Reef Shark chases Moray Eel (hunting)', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    const m = reef!.config.interactionMatrix;
+    // Shark (row 4) chases Eel (col 3)
+    expect(m[4][3]!.strength).toBeGreaterThan(0);
+  });
+
+  it('Coral Reef: Reef Shark is solitary/territorial (negative self-interaction)', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    const m = reef!.config.interactionMatrix;
+    // Shark (row 4) self-repel (col 4)
+    expect(m[4][4]!.strength).toBeLessThan(0);
+  });
+
+  it('Coral Reef: Coral ignores all other species (null row entries)', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    const m = reef!.config.interactionMatrix;
+    // Coral (row 0) doesn't react to anything
+    for (let col = 0; col < 5; col++) {
+      expect(m[0][col]).toBeNull();
+    }
+  });
+
+  it('Coral Reef: Reef Shark is the largest species (apex predator)', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    const radii = reef!.config.species.map((s) => s.radius);
+    // Shark (idx 4) is the largest
+    expect(radii[4]).toBeGreaterThan(radii[0]);
+    expect(radii[4]).toBeGreaterThan(radii[1]);
+    expect(radii[4]).toBeGreaterThan(radii[2]);
+    expect(radii[4]).toBeGreaterThan(radii[3]);
+  });
+
+  it('Coral Reef: all five species have distinct colors', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    const colors = reef!.config.species.map((s) => s.color);
+    const unique = new Set(colors);
+    expect(unique.size).toBe(5);
+  });
+
+  it('Coral Reef: forces include a flow-field (underwater current)', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    const flowField = reef!.config.forces.find((f) => f.type === 'flow-field');
+    expect(flowField).toBeDefined();
+    expect(flowField!.enabled).toBe(true);
+    expect(flowField!.params.strength).toBeGreaterThan(0);
+  });
+
+  it('Coral Reef: flow-field uses gentle strength (mild current)', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    const flowField = reef!.config.forces.find((f) => f.type === 'flow-field');
+    // Gentle current — strength ≤ 25 for subtle drift, not overwhelming motion
+    expect(flowField!.params.strength).toBeLessThanOrEqual(25);
+  });
+
+  it('Coral Reef: drag coefficient is mild (underwater damping)', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    const drag = reef!.config.forces.find((f) => f.type === 'drag');
+    expect(drag!.params.coefficient).toBeGreaterThan(0);
+    expect(drag!.params.coefficient).toBeLessThanOrEqual(1);
+  });
+
+  it('Coral Reef: populationCap is 500', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    expect(reef!.config.simulation.populationCap).toBe(500);
+  });
+
+  it('Coral Reef: total initial population is within populationCap', () => {
+    const reef = getBuiltinPreset('Coral Reef');
+    const total = reef!.config.species.reduce((sum, s) => sum + s.count, 0);
+    expect(total).toBeLessThanOrEqual(reef!.config.simulation.populationCap!);
   });
 });
