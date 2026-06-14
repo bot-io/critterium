@@ -1404,7 +1404,12 @@ describe('All presets — structural validity', () => {
 });
 
 describe('Plant species — photosynthesis rules', () => {
-  const plantChecks: { presetName: string; speciesName: string; idleDrain: number; starveDmg: number }[] = [];
+  const plantChecks: {
+    presetName: string;
+    speciesName: string;
+    idleDrain: number;
+    starveDmg: number;
+  }[] = [];
 
   for (const preset of BUILTIN_PRESETS) {
     for (const s of preset.config.species) {

@@ -115,7 +115,7 @@ describe('Reproduction — probabilistic with realistic dt', () => {
   });
 
   it('reproduces roughly on schedule over many ticks', () => {
-    // With interval=5s and dt=1/60s, over 300 ticks (=5 sec), 
+    // With interval=5s and dt=1/60s, over 300 ticks (=5 sec),
     // expected ~1 reproduction per particle
     let totalBorn = 0;
     const trials = 100;

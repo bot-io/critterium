@@ -1117,7 +1117,13 @@ async function main(): Promise<void> {
           (sp.lifecycle as unknown as Record<string, unknown>)[param] = value;
         } else if (sp.stamina && param in sp.stamina) {
           (sp.stamina as unknown as Record<string, unknown>)[param] = value;
-        } else if (!sp.stamina && (param === 'sprintDurationSec' || param === 'sprintCooldownSec' || param === 'sprintSpeedMultiplier' || param === 'tiredSpeedMultiplier')) {
+        } else if (
+          !sp.stamina &&
+          (param === 'sprintDurationSec' ||
+            param === 'sprintCooldownSec' ||
+            param === 'sprintSpeedMultiplier' ||
+            param === 'tiredSpeedMultiplier')
+        ) {
           sp.stamina = defaultStaminaConfig();
           (sp.stamina as unknown as Record<string, unknown>)[param] = value;
         }
