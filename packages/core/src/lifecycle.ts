@@ -29,7 +29,7 @@ export interface EcosystemStepResult {
  *
  * Returns the number of new children spawned.
  */
-export function processReproduction(eco: EcosystemWorld): number {
+export function processReproduction(eco: EcosystemWorld, dt: number): number {
   let born = 0;
   const hwm = eco.highWaterMark;
 
@@ -37,7 +37,7 @@ export function processReproduction(eco: EcosystemWorld): number {
   for (let i = 0; i < hwm; i++) {
     if (eco.eco.alive[i] === DEAD) continue;
 
-    const childIdx = eco.tryReproduce(i);
+    const childIdx = eco.tryReproduce(i, dt);
     if (childIdx >= 0) {
       born++;
     }

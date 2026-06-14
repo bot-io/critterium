@@ -748,7 +748,7 @@ async function main(): Promise<void> {
         // Process ecosystem systems
         eco.processLifecycle(dt);
         processEating(eco, grid);
-        processReproduction(eco);
+        processReproduction(eco, dt);
 
         // Population overflow protection: force-kill excess particles
         if (eco.aliveCount > liveConfig.populationCap * 1.5) {

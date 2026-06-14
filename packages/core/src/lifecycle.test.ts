@@ -49,7 +49,7 @@ describe('processReproduction', () => {
     const eco = new EcosystemWorld(cfg);
     eco.eco.reproductionCooldown[0] = 0;
 
-    const born = processReproduction(eco);
+    const born = processReproduction(eco, 100);
     expect(born).toBeGreaterThanOrEqual(1);
     expect(eco.aliveCount).toBeGreaterThan(3);
   });
@@ -59,7 +59,7 @@ describe('processReproduction', () => {
     const eco = new EcosystemWorld(cfg);
     eco.eco.reproductionCooldown[0] = 0;
 
-    const born = processReproduction(eco);
+    const born = processReproduction(eco, 100);
     expect(born).toBe(0);
     expect(eco.aliveCount).toBe(3);
   });
@@ -70,7 +70,7 @@ describe('processReproduction', () => {
     eco.eco.energy[0] = 5; // below reproductionCost of 30
     eco.eco.reproductionCooldown[0] = 0;
 
-    const born = processReproduction(eco);
+    const born = processReproduction(eco, 100);
     expect(born).toBe(0);
   });
 
@@ -80,7 +80,7 @@ describe('processReproduction', () => {
     eco.eco.reproductionCooldown[0] = 0;
     const energyBefore = eco.eco.energy[0];
 
-    processReproduction(eco);
+    processReproduction(eco, 100);
     expect(eco.eco.energy[0]).toBe(energyBefore - 30);
   });
 
@@ -91,7 +91,7 @@ describe('processReproduction', () => {
     eco.eco.reproductionCooldown[0] = 0;
     eco.eco.reproductionCooldown[1] = 0;
 
-    const born = processReproduction(eco);
+    const born = processReproduction(eco, 100);
     // Each original can reproduce once, but newborns won't be processed
     // (they start with cooldown > 0)
     expect(born).toBeLessThanOrEqual(2);

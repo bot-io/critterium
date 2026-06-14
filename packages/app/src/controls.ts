@@ -933,7 +933,7 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
           );
           sub.appendChild(
             makeSlider(
-              'Repro Timeout',
+              'Repro Interval (avg)',
               1,
               30,
               0.5,

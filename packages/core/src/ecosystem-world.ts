@@ -238,23 +238,33 @@ export class EcosystemWorld {
   /**
    * Attempt reproduction for a particle.
    * Returns child index if successful, -1 if not.
+   *
+   * Reproduction is probabilistic: after the cooldown expires, each tick has
+   * a random chance to reproduce (if energy allows). The average time between
+   * successful reproductions ≈ reproductionCooldownSec.
    */
-  tryReproduce(index: number): number {
+  tryReproduce(index: number, dt: number = 0.016): number {
     if (this.eco.alive[index] === DEAD) return -1;
     if (this.isAtCap) return -1;
 
     const speciesIdx = this.world.type[index];
     const species = this.species[speciesIdx];
 
-    // Check conditions
+    // Hard gate: cooldown must be expired
     if (this.eco.reproductionCooldown[index] > 0) return -1;
+    // Energy gate
     if (this.eco.energy[index] < species.energy.reproductionCost) return -1;
+
+    // Random chance: average reproduction interval = reproductionCooldownSec.
+    // This spreads reproduction across time so not all particles spawn simultaneously.
+    const interval = Math.max(1, species.lifecycle.reproductionCooldownSec);
+    if (this.rng() > dt / interval) return -1;
 
     // Deduct energy
     this.eco.energy[index] -= species.energy.reproductionCost;
 
-    // Reset cooldown (minimum 1s to prevent infinite reproduction)
-    this.eco.reproductionCooldown[index] = Math.max(1, species.lifecycle.reproductionCooldownSec);
+    // Reset cooldown
+    this.eco.reproductionCooldown[index] = interval;
 
     // Spawn child near parent
     const offsetX = (this.rng() - 0.5) * 20;

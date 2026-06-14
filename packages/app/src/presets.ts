@@ -2,11 +2,15 @@
  * Critterium — Built-in Ecosystem Presets
  *
  * Ready-to-use configurations that produce interesting emergent behavior.
- * Each preset is a CritteriumConfig-compatible object that can be loaded
- * via the deserializeConfig → applyConfig pipeline.
  *
- * Species counts use energyGainPerPrey arrays sized to the number of species
- * in that preset. Arrays are used (not Sets) because these are JSON objects.
+ * Ecosystem balance rules:
+ * - Plants/producers have NEGATIVE idleDrainPerSec (photosynthesis = energy gain)
+ * - Plants have starvationDamagePerSec = 0 (never starve)
+ * - Predators have 2× maxEnergy and 2× reproductionCost of their primary prey
+ * - Population follows trophic pyramid: plants > herbivores > predators (2:1:1)
+ * - Carnibalism: a species can include its own index in canEat
+ * - Non-plant species without explicit food sources get slight negative idleDrain
+ *   (ambient energy) so they don't immediately die out
  */
 
 import type { CritteriumConfig } from '@critterium/core';
@@ -37,7 +41,7 @@ const CLASSIC: EcosystemPreset = preset(
       height: 600,
       boundaryMode: 'wrap',
       seed: 42,
-      populationCap: 600,
+      populationCap: 400,
     },
     species: [
       {
@@ -50,14 +54,14 @@ const CLASSIC: EcosystemPreset = preset(
         energy: {
           maxEnergy: 80,
           initialEnergy: 40,
-          movementCostPerSec: 2,
+          movementCostPerSec: 0.5,
           reproductionCost: 20,
-          idleDrainPerSec: 1,
+          idleDrainPerSec: -0.3, // ambient energy gain (no plant food source)
           energyGainPerPrey: [0, 0],
         },
         lifecycle: {
           maxAgeSec: 40,
-          starvationDamagePerSec: 8,
+          starvationDamagePerSec: 0, // ambient energy, never starves
           reproductionCooldownSec: 3,
         },
         diet: {
@@ -72,22 +76,22 @@ const CLASSIC: EcosystemPreset = preset(
       },
       {
         name: 'Predator',
-        count: 40,
+        count: 60, // ½ of prey (trophic pyramid)
         color: '#ff4444',
         radius: 5,
         initialSpeed: 70,
         maxSpeed: 130,
         energy: {
-          maxEnergy: 150,
+          maxEnergy: 160, // 2× prey's 80
           initialEnergy: 80,
-          movementCostPerSec: 3,
-          reproductionCost: 50,
-          idleDrainPerSec: 2,
+          movementCostPerSec: 2,
+          reproductionCost: 40, // 2× prey's 20
+          idleDrainPerSec: 1.5,
           energyGainPerPrey: [40, 0],
         },
         lifecycle: {
           maxAgeSec: 60,
-          starvationDamagePerSec: 5,
+          starvationDamagePerSec: 3,
           reproductionCooldownSec: 8,
         },
         diet: {
@@ -144,14 +148,14 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
         energy: {
           maxEnergy: 30,
           initialEnergy: 15,
-          movementCostPerSec: 0.2,
-          reproductionCost: 8,
-          idleDrainPerSec: 0.3,
+          movementCostPerSec: 0,
+          reproductionCost: 5,
+          idleDrainPerSec: -1.0, // photosynthesis
           energyGainPerPrey: [0, 0, 0, 0, 0],
         },
         lifecycle: {
-          maxAgeSec: 20,
-          starvationDamagePerSec: 5,
+          maxAgeSec: 60,
+          starvationDamagePerSec: 0, // plants never starve
           reproductionCooldownSec: 2,
         },
         diet: {
@@ -160,7 +164,7 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
       },
       {
         name: 'Zooplankton',
-        count: 225,
+        count: 180, // ½ of Algae
         color: '#4488ff',
         radius: 3,
         initialSpeed: 30,
@@ -168,14 +172,14 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
         energy: {
           maxEnergy: 60,
           initialEnergy: 30,
-          movementCostPerSec: 1,
-          reproductionCost: 15,
-          idleDrainPerSec: 0.8,
-          energyGainPerPrey: [20, 0, 0, 0, 0],
+          movementCostPerSec: 0.5,
+          reproductionCost: 12,
+          idleDrainPerSec: 0.5,
+          energyGainPerPrey: [15, 0, 0, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 30,
-          starvationDamagePerSec: 6,
+          starvationDamagePerSec: 4,
           reproductionCooldownSec: 4,
         },
         diet: {
@@ -184,22 +188,22 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
       },
       {
         name: 'Small Fish',
-        count: 135,
+        count: 90, // ½ of Zooplankton
         color: '#eedd44',
         radius: 4,
         initialSpeed: 50,
         maxSpeed: 90,
         energy: {
-          maxEnergy: 100,
-          initialEnergy: 50,
-          movementCostPerSec: 2,
-          reproductionCost: 25,
-          idleDrainPerSec: 1.5,
+          maxEnergy: 120, // 2× ZooPl's 60
+          initialEnergy: 60,
+          movementCostPerSec: 1.5,
+          reproductionCost: 24, // 2× ZooPl's 12
+          idleDrainPerSec: 1.0,
           energyGainPerPrey: [0, 30, 0, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 50,
-          starvationDamagePerSec: 6,
+          starvationDamagePerSec: 4,
           reproductionCooldownSec: 6,
         },
         diet: {
@@ -208,41 +212,41 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
       },
       {
         name: 'Big Fish',
-        count: 70,
+        count: 45, // ½ of Small Fish
         color: '#ff8833',
         radius: 6,
         initialSpeed: 40,
         maxSpeed: 80,
         energy: {
-          maxEnergy: 200,
-          initialEnergy: 100,
-          movementCostPerSec: 3,
-          reproductionCost: 60,
-          idleDrainPerSec: 2,
-          energyGainPerPrey: [0, 0, 50, 0, 0],
+          maxEnergy: 240, // 2× SmFish's 120
+          initialEnergy: 120,
+          movementCostPerSec: 2,
+          reproductionCost: 48, // 2× SmFish's 24
+          idleDrainPerSec: 1.5,
+          energyGainPerPrey: [0, 0, 50, 40, 0],
         },
         lifecycle: {
           maxAgeSec: 80,
-          starvationDamagePerSec: 4,
+          starvationDamagePerSec: 3,
           reproductionCooldownSec: 12,
         },
         diet: {
-          canEat: [2],
+          canEat: [2, 3], // 3 = self (cannibalism)
         },
       },
       {
         name: 'Whale',
-        count: 5,
+        count: 22, // ½ of Big Fish
         color: '#888899',
         radius: 10,
         initialSpeed: 15,
         maxSpeed: 35,
         energy: {
-          maxEnergy: 500,
-          initialEnergy: 300,
-          movementCostPerSec: 1.5,
-          reproductionCost: 200,
-          idleDrainPerSec: 1,
+          maxEnergy: 480, // 2× BigFish's 240
+          initialEnergy: 240,
+          movementCostPerSec: 1,
+          reproductionCost: 96, // 2× BigFish's 48
+          idleDrainPerSec: 0.8,
           energyGainPerPrey: [0, 0, 0, 80, 0],
         },
         lifecycle: {
@@ -292,7 +296,7 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
 
 const SWARM_INTELLIGENCE: EcosystemPreset = preset(
   'Swarm Intelligence',
-  'Pure flocking: 700 Birds and Locusts with strong alignment forces. No eating, no infection.',
+  'Pure flocking: Birds and Locusts with strong alignment forces. No eating, no infection.',
   {
     version: 1,
     simulation: {
@@ -313,14 +317,14 @@ const SWARM_INTELLIGENCE: EcosystemPreset = preset(
         energy: {
           maxEnergy: 200,
           initialEnergy: 100,
-          movementCostPerSec: 0.5,
+          movementCostPerSec: 0.3,
           reproductionCost: 40,
-          idleDrainPerSec: 0.2,
+          idleDrainPerSec: -0.2, // ambient energy (no food source)
           energyGainPerPrey: [0, 0],
         },
         lifecycle: {
           maxAgeSec: 120,
-          starvationDamagePerSec: 1,
+          starvationDamagePerSec: 0,
           reproductionCooldownSec: 10,
         },
         diet: {
@@ -337,14 +341,14 @@ const SWARM_INTELLIGENCE: EcosystemPreset = preset(
         energy: {
           maxEnergy: 150,
           initialEnergy: 75,
-          movementCostPerSec: 0.3,
+          movementCostPerSec: 0.2,
           reproductionCost: 20,
-          idleDrainPerSec: 0.15,
+          idleDrainPerSec: -0.1, // ambient energy
           energyGainPerPrey: [0, 0],
         },
         lifecycle: {
           maxAgeSec: 80,
-          starvationDamagePerSec: 1,
+          starvationDamagePerSec: 0,
           reproductionCooldownSec: 5,
         },
         diet: {
@@ -381,26 +385,26 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
     species: [
       {
         name: 'Lions',
-        count: 30,
+        count: 20, // ½ of Wolves (apex)
         color: '#ffd700',
         radius: 6,
         initialSpeed: 55,
         maxSpeed: 110,
         energy: {
-          maxEnergy: 250,
+          maxEnergy: 300,
           initialEnergy: 150,
-          movementCostPerSec: 3,
-          reproductionCost: 80,
-          idleDrainPerSec: 2.5,
-          energyGainPerPrey: [0, 50, 60, 30],
+          movementCostPerSec: 2.5,
+          reproductionCost: 75,
+          idleDrainPerSec: 2,
+          energyGainPerPrey: [35, 50, 40, 30],
         },
         lifecycle: {
           maxAgeSec: 100,
-          starvationDamagePerSec: 4,
+          starvationDamagePerSec: 3,
           reproductionCooldownSec: 15,
         },
         diet: {
-          canEat: [1, 2, 3],
+          canEat: [1, 2, 3, 0], // 0 = self (cannibalism)
         },
         stamina: {
           sprintDurationSec: 3,
@@ -411,26 +415,26 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
       },
       {
         name: 'Wolves',
-        count: 40,
+        count: 40, // ½ of Deer
         color: '#c0c0c0',
         radius: 5,
         initialSpeed: 65,
         maxSpeed: 120,
         energy: {
-          maxEnergy: 200,
+          maxEnergy: 200, // 2× Deer's 100
           initialEnergy: 100,
-          movementCostPerSec: 2.5,
-          reproductionCost: 60,
-          idleDrainPerSec: 2,
-          energyGainPerPrey: [0, 0, 45, 25],
+          movementCostPerSec: 2,
+          reproductionCost: 50, // 2× Deer's 25
+          idleDrainPerSec: 1.5,
+          energyGainPerPrey: [0, 30, 45, 25],
         },
         lifecycle: {
           maxAgeSec: 80,
-          starvationDamagePerSec: 5,
+          starvationDamagePerSec: 4,
           reproductionCooldownSec: 10,
         },
         diet: {
-          canEat: [2, 3],
+          canEat: [2, 3, 1], // 1 = self (cannibalism)
         },
         stamina: {
           sprintDurationSec: 4,
@@ -449,14 +453,14 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
         energy: {
           maxEnergy: 100,
           initialEnergy: 50,
-          movementCostPerSec: 2,
+          movementCostPerSec: 1,
           reproductionCost: 25,
-          idleDrainPerSec: 1,
+          idleDrainPerSec: -0.7, // ambient energy (no plant food source)
           energyGainPerPrey: [0, 0, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 50,
-          starvationDamagePerSec: 6,
+          starvationDamagePerSec: 0,
           reproductionCooldownSec: 5,
         },
         diet: {
@@ -479,14 +483,14 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
         energy: {
           maxEnergy: 60,
           initialEnergy: 30,
-          movementCostPerSec: 1,
+          movementCostPerSec: 0.5,
           reproductionCost: 12,
-          idleDrainPerSec: 0.5,
+          idleDrainPerSec: -0.3, // ambient energy
           energyGainPerPrey: [0, 0, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 25,
-          starvationDamagePerSec: 4,
+          starvationDamagePerSec: 0,
           reproductionCooldownSec: 2,
         },
         diet: {
@@ -546,7 +550,7 @@ const TINY_POND: EcosystemPreset = preset(
       height: 300,
       boundaryMode: 'wrap',
       seed: 13,
-      populationCap: 200,
+      populationCap: 250,
     },
     species: [
       {
@@ -558,15 +562,15 @@ const TINY_POND: EcosystemPreset = preset(
         maxSpeed: 90,
         energy: {
           maxEnergy: 50,
-          initialEnergy: 30,
-          movementCostPerSec: 1,
+          initialEnergy: 25,
+          movementCostPerSec: 0.5,
           reproductionCost: 10,
-          idleDrainPerSec: 0.5,
+          idleDrainPerSec: -0.3, // ambient energy
           energyGainPerPrey: [0, 0],
         },
         lifecycle: {
           maxAgeSec: 30,
-          starvationDamagePerSec: 6,
+          starvationDamagePerSec: 0,
           reproductionCooldownSec: 2,
         },
         diet: {
@@ -575,23 +579,23 @@ const TINY_POND: EcosystemPreset = preset(
       },
       {
         name: 'Bass',
-        count: 8,
+        count: 40, // ½ of Minnows
         color: '#336633',
         radius: 6,
         initialSpeed: 40,
         maxSpeed: 80,
         energy: {
-          maxEnergy: 200,
-          initialEnergy: 120,
-          movementCostPerSec: 2,
-          reproductionCost: 60,
-          idleDrainPerSec: 1.5,
-          energyGainPerPrey: [0, 25],
+          maxEnergy: 100, // 2× Minnows' 50
+          initialEnergy: 50,
+          movementCostPerSec: 1.5,
+          reproductionCost: 20, // 2× Minnows' 10
+          idleDrainPerSec: 1.0,
+          energyGainPerPrey: [25, 0],
         },
         lifecycle: {
           maxAgeSec: 80,
           starvationDamagePerSec: 3,
-          reproductionCooldownSec: 15,
+          reproductionCooldownSec: 12,
         },
         diet: {
           canEat: [0],
@@ -643,12 +647,12 @@ const ZEN_GARDEN: EcosystemPreset = preset(
           initialEnergy: 100,
           movementCostPerSec: 0.1,
           reproductionCost: 30,
-          idleDrainPerSec: 0.1,
+          idleDrainPerSec: -0.1, // ambient energy
           energyGainPerPrey: [0, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 150,
-          starvationDamagePerSec: 0.5,
+          starvationDamagePerSec: 0,
           reproductionCooldownSec: 15,
         },
         diet: {
@@ -667,12 +671,12 @@ const ZEN_GARDEN: EcosystemPreset = preset(
           initialEnergy: 300,
           movementCostPerSec: 0.2,
           reproductionCost: 100,
-          idleDrainPerSec: 0.1,
+          idleDrainPerSec: -0.1,
           energyGainPerPrey: [0, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 300,
-          starvationDamagePerSec: 0.3,
+          starvationDamagePerSec: 0,
           reproductionCooldownSec: 40,
         },
         diet: {
@@ -691,12 +695,12 @@ const ZEN_GARDEN: EcosystemPreset = preset(
           initialEnergy: 200,
           movementCostPerSec: 0,
           reproductionCost: 50,
-          idleDrainPerSec: 0.05,
+          idleDrainPerSec: -0.05,
           energyGainPerPrey: [0, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 200,
-          starvationDamagePerSec: 0.2,
+          starvationDamagePerSec: 0,
           reproductionCooldownSec: 20,
         },
         diet: {
@@ -742,14 +746,14 @@ const ROCK_PAPER_SCISSORS: EcosystemPreset = preset(
         energy: {
           maxEnergy: 80,
           initialEnergy: 40,
-          movementCostPerSec: 2,
+          movementCostPerSec: 1,
           reproductionCost: 20,
-          idleDrainPerSec: 1,
+          idleDrainPerSec: 0.5,
           energyGainPerPrey: [0, 0, 30],
         },
         lifecycle: {
           maxAgeSec: 50,
-          starvationDamagePerSec: 6,
+          starvationDamagePerSec: 4,
           reproductionCooldownSec: 4,
         },
         diet: {
@@ -772,14 +776,14 @@ const ROCK_PAPER_SCISSORS: EcosystemPreset = preset(
         energy: {
           maxEnergy: 80,
           initialEnergy: 40,
-          movementCostPerSec: 2,
+          movementCostPerSec: 1,
           reproductionCost: 20,
-          idleDrainPerSec: 1,
+          idleDrainPerSec: 0.5,
           energyGainPerPrey: [30, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 50,
-          starvationDamagePerSec: 6,
+          starvationDamagePerSec: 4,
           reproductionCooldownSec: 4,
         },
         diet: {
@@ -802,14 +806,14 @@ const ROCK_PAPER_SCISSORS: EcosystemPreset = preset(
         energy: {
           maxEnergy: 80,
           initialEnergy: 40,
-          movementCostPerSec: 2,
+          movementCostPerSec: 1,
           reproductionCost: 20,
-          idleDrainPerSec: 1,
+          idleDrainPerSec: 0.5,
           energyGainPerPrey: [0, 30, 0],
         },
         lifecycle: {
           maxAgeSec: 50,
-          starvationDamagePerSec: 6,
+          starvationDamagePerSec: 4,
           reproductionCooldownSec: 4,
         },
         diet: {
@@ -877,12 +881,12 @@ const GRASSLANDS: EcosystemPreset = preset(
           initialEnergy: 20,
           movementCostPerSec: 0,
           reproductionCost: 5,
-          idleDrainPerSec: 0.1,
+          idleDrainPerSec: -0.5, // photosynthesis
           energyGainPerPrey: [0, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 60,
-          starvationDamagePerSec: 1,
+          starvationDamagePerSec: 0, // plants never starve
           reproductionCooldownSec: 1.5,
         },
         diet: {
@@ -892,7 +896,7 @@ const GRASSLANDS: EcosystemPreset = preset(
       // ── Primary consumer: Rabbits ────────────────────────────
       {
         name: 'Rabbits',
-        count: 100,
+        count: 100, // ½ of Grass
         color: '#d4a373',
         radius: 3,
         initialSpeed: 55,
@@ -900,14 +904,14 @@ const GRASSLANDS: EcosystemPreset = preset(
         energy: {
           maxEnergy: 80,
           initialEnergy: 40,
-          movementCostPerSec: 1.5,
+          movementCostPerSec: 1,
           reproductionCost: 20,
-          idleDrainPerSec: 1,
+          idleDrainPerSec: 0.5,
           energyGainPerPrey: [15, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 40,
-          starvationDamagePerSec: 6,
+          starvationDamagePerSec: 4,
           reproductionCooldownSec: 3,
         },
         diet: {
@@ -923,22 +927,22 @@ const GRASSLANDS: EcosystemPreset = preset(
       // ── Secondary consumer: Foxes ────────────────────────────
       {
         name: 'Foxes',
-        count: 15,
+        count: 50, // ½ of Rabbits
         color: '#cc4125',
         radius: 5,
         initialSpeed: 65,
         maxSpeed: 120,
         energy: {
-          maxEnergy: 150,
+          maxEnergy: 160, // 2× Rabbits' 80
           initialEnergy: 80,
-          movementCostPerSec: 2.5,
-          reproductionCost: 50,
-          idleDrainPerSec: 2,
+          movementCostPerSec: 2,
+          reproductionCost: 40, // 2× Rabbits' 20
+          idleDrainPerSec: 1.5,
           energyGainPerPrey: [0, 35, 0],
         },
         lifecycle: {
           maxAgeSec: 70,
-          starvationDamagePerSec: 4,
+          starvationDamagePerSec: 3,
           reproductionCooldownSec: 10,
         },
         diet: {
@@ -978,7 +982,7 @@ const GRASSLANDS: EcosystemPreset = preset(
 
 const BIRDS: EcosystemPreset = preset(
   'Birds',
-  'A murmuration at dusk: hundreds of Starlings wheel as one shifting cloud while a lone Hawk picks off stragglers.',
+  'A murmuration at dusk: hundreds of Starlings wheel as one shifting cloud while Hawks pick off stragglers.',
   {
     version: 1,
     simulation: {
@@ -992,7 +996,7 @@ const BIRDS: EcosystemPreset = preset(
       // ── The flock: Starlings ─────────────────────────────────
       {
         name: 'Starlings',
-        count: 350,
+        count: 200,
         color: '#1b1b2f',
         radius: 2,
         initialSpeed: 45,
@@ -1000,14 +1004,14 @@ const BIRDS: EcosystemPreset = preset(
         energy: {
           maxEnergy: 160,
           initialEnergy: 90,
-          movementCostPerSec: 0.4,
+          movementCostPerSec: 0.3,
           reproductionCost: 25,
-          idleDrainPerSec: 0.2,
+          idleDrainPerSec: -0.15, // ambient energy
           energyGainPerPrey: [0, 0],
         },
         lifecycle: {
           maxAgeSec: 100,
-          starvationDamagePerSec: 1,
+          starvationDamagePerSec: 0,
           reproductionCooldownSec: 6,
         },
         diet: {
@@ -1023,23 +1027,23 @@ const BIRDS: EcosystemPreset = preset(
       // ── The predator: Hawk ───────────────────────────────────
       {
         name: 'Hawk',
-        count: 5,
+        count: 100, // ½ of Starlings
         color: '#8b5a2b',
         radius: 5,
         initialSpeed: 60,
         maxSpeed: 115,
         energy: {
-          maxEnergy: 180,
-          initialEnergy: 100,
+          maxEnergy: 320, // 2× Starlings' 160
+          initialEnergy: 160,
           movementCostPerSec: 2,
-          reproductionCost: 70,
+          reproductionCost: 50, // 2× Starlings' 25
           idleDrainPerSec: 1.5,
           energyGainPerPrey: [35, 0],
         },
         lifecycle: {
           maxAgeSec: 90,
-          starvationDamagePerSec: 4,
-          reproductionCooldownSec: 20,
+          starvationDamagePerSec: 3,
+          reproductionCooldownSec: 15,
         },
         diet: {
           canEat: [0],
@@ -1089,7 +1093,7 @@ const FISHES: EcosystemPreset = preset(
       // ── Schooling prey: Tetras ────────────────────────────────
       {
         name: 'Tetras',
-        count: 250,
+        count: 200,
         color: '#2e86de',
         radius: 2,
         initialSpeed: 40,
@@ -1097,14 +1101,14 @@ const FISHES: EcosystemPreset = preset(
         energy: {
           maxEnergy: 120,
           initialEnergy: 60,
-          movementCostPerSec: 0.8,
+          movementCostPerSec: 0.5,
           reproductionCost: 15,
-          idleDrainPerSec: 0.4,
+          idleDrainPerSec: -0.2, // ambient energy
           energyGainPerPrey: [0, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 80,
-          starvationDamagePerSec: 3,
+          starvationDamagePerSec: 0,
           reproductionCooldownSec: 4,
         },
         diet: {
@@ -1114,23 +1118,23 @@ const FISHES: EcosystemPreset = preset(
       // ── Symbiotic cleaner: Cleaner Wrasse ─────────────────────
       {
         name: 'Cleaner Wrasse',
-        count: 12,
+        count: 100, // ½ of Tetras
         color: '#feca57',
         radius: 3,
         initialSpeed: 35,
         maxSpeed: 70,
         energy: {
-          maxEnergy: 100,
-          initialEnergy: 50,
-          movementCostPerSec: 1,
-          reproductionCost: 30,
-          idleDrainPerSec: 0.5,
+          maxEnergy: 60,
+          initialEnergy: 30,
+          movementCostPerSec: 0.5,
+          reproductionCost: 8,
+          idleDrainPerSec: 0.3,
           energyGainPerPrey: [20, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 90,
-          starvationDamagePerSec: 4,
-          reproductionCooldownSec: 12,
+          starvationDamagePerSec: 3,
+          reproductionCooldownSec: 8,
         },
         diet: {
           canEat: [0],
@@ -1145,18 +1149,18 @@ const FISHES: EcosystemPreset = preset(
       // ── Apex predator: Barracuda ──────────────────────────────
       {
         name: 'Barracuda',
-        count: 10,
+        count: 100, // ½ of Tetras
         color: '#7f8c8d',
         radius: 6,
         initialSpeed: 55,
         maxSpeed: 120,
         energy: {
-          maxEnergy: 200,
-          initialEnergy: 100,
-          movementCostPerSec: 2.5,
-          reproductionCost: 70,
+          maxEnergy: 240, // 2× Tetras' 120
+          initialEnergy: 120,
+          movementCostPerSec: 2,
+          reproductionCost: 30, // 2× Tetras' 15
           idleDrainPerSec: 1.5,
-          energyGainPerPrey: [35, 0, 0],
+          energyGainPerPrey: [35, 0, 30],
         },
         lifecycle: {
           maxAgeSec: 100,
@@ -1164,7 +1168,7 @@ const FISHES: EcosystemPreset = preset(
           reproductionCooldownSec: 15,
         },
         diet: {
-          canEat: [0],
+          canEat: [0, 2], // 2 = self (cannibalism)
         },
         stamina: {
           sprintDurationSec: 3,
