@@ -67,8 +67,20 @@ function makeTestEcoConfig(): EcosystemConfig {
 
 function makeTestMatrix(): InteractionMatrix {
   const m = new InteractionMatrix(2);
-  m.set(0, 1, { innerStrength: 30, outerStrength: 30, innerRadius: 0, outerRadius: 100, falloff: 'linear' });
-  m.set(1, 0, { innerStrength: -50, outerStrength: -50, innerRadius: 0, outerRadius: 80, falloff: 'inverse' });
+  m.set(0, 1, {
+    innerStrength: 30,
+    outerStrength: 30,
+    innerRadius: 0,
+    outerRadius: 100,
+    falloff: 'linear',
+  });
+  m.set(1, 0, {
+    innerStrength: -50,
+    outerStrength: -50,
+    innerRadius: 0,
+    outerRadius: 80,
+    falloff: 'inverse',
+  });
   return m;
 }
 
@@ -875,56 +887,128 @@ describe('CRT-47: Config Validation Hardening', () => {
   describe('interaction matrix entry clamping', () => {
     it('clamps NaN outerStrength in matrix entry to 0', () => {
       const cfg = cloneConfig() as any;
-      cfg.interactionMatrix = [[{ innerStrength: NaN, outerStrength: NaN, innerRadius: 0, outerRadius: 50, falloff: 'linear' }]];
+      cfg.interactionMatrix = [
+        [
+          {
+            innerStrength: NaN,
+            outerStrength: NaN,
+            innerRadius: 0,
+            outerRadius: 50,
+            falloff: 'linear',
+          },
+        ],
+      ];
       const result = deserializeConfig(cfg);
       expect(result.interactionMatrix[0][0]?.outerStrength).toBe(0);
     });
 
     it('clamps Infinity outerRadius in matrix entry to default 100', () => {
       const cfg = cloneConfig() as any;
-      cfg.interactionMatrix = [[{ innerStrength: 30, outerStrength: 30, innerRadius: 0, outerRadius: Infinity, falloff: 'linear' }]];
+      cfg.interactionMatrix = [
+        [
+          {
+            innerStrength: 30,
+            outerStrength: 30,
+            innerRadius: 0,
+            outerRadius: Infinity,
+            falloff: 'linear',
+          },
+        ],
+      ];
       const result = deserializeConfig(cfg);
       expect(result.interactionMatrix[0][0]?.outerRadius).toBe(100);
     });
 
     it('clamps negative outerRadius in matrix entry to default 100', () => {
       const cfg = cloneConfig() as any;
-      cfg.interactionMatrix = [[{ innerStrength: 30, outerStrength: 30, innerRadius: 0, outerRadius: -10, falloff: 'linear' }]];
+      cfg.interactionMatrix = [
+        [
+          {
+            innerStrength: 30,
+            outerStrength: 30,
+            innerRadius: 0,
+            outerRadius: -10,
+            falloff: 'linear',
+          },
+        ],
+      ];
       const result = deserializeConfig(cfg);
       expect(result.interactionMatrix[0][0]?.outerRadius).toBe(100);
     });
 
     it('clamps oversized outerRadius (>5000) to 5000', () => {
       const cfg = cloneConfig() as any;
-      cfg.interactionMatrix = [[{ innerStrength: 30, outerStrength: 30, innerRadius: 0, outerRadius: 99999, falloff: 'linear' }]];
+      cfg.interactionMatrix = [
+        [
+          {
+            innerStrength: 30,
+            outerStrength: 30,
+            innerRadius: 0,
+            outerRadius: 99999,
+            falloff: 'linear',
+          },
+        ],
+      ];
       const result = deserializeConfig(cfg);
       expect(result.interactionMatrix[0][0]?.outerRadius).toBe(5000);
     });
 
     it('defaults invalid falloff to linear', () => {
       const cfg = cloneConfig() as any;
-      cfg.interactionMatrix = [[{ innerStrength: 30, outerStrength: 30, innerRadius: 0, outerRadius: 50, falloff: 'invalid-mode' }]];
+      cfg.interactionMatrix = [
+        [
+          {
+            innerStrength: 30,
+            outerStrength: 30,
+            innerRadius: 0,
+            outerRadius: 50,
+            falloff: 'invalid-mode',
+          },
+        ],
+      ];
       const result = deserializeConfig(cfg);
       expect(result.interactionMatrix[0][0]?.falloff).toBe('linear');
     });
 
     it('defaults missing falloff to linear', () => {
       const cfg = cloneConfig() as any;
-      cfg.interactionMatrix = [[{ innerStrength: 30, outerStrength: 30, innerRadius: 0, outerRadius: 50 }]]; // no falloff field
+      cfg.interactionMatrix = [
+        [{ innerStrength: 30, outerStrength: 30, innerRadius: 0, outerRadius: 50 }],
+      ]; // no falloff field
       const result = deserializeConfig(cfg);
       expect(result.interactionMatrix[0][0]?.falloff).toBe('linear');
     });
 
     it('clamps Infinity outerStrength to 0', () => {
       const cfg = cloneConfig() as any;
-      cfg.interactionMatrix = [[{ innerStrength: Infinity, outerStrength: Infinity, innerRadius: 0, outerRadius: 50, falloff: 'linear' }]];
+      cfg.interactionMatrix = [
+        [
+          {
+            innerStrength: Infinity,
+            outerStrength: Infinity,
+            innerRadius: 0,
+            outerRadius: 50,
+            falloff: 'linear',
+          },
+        ],
+      ];
       const result = deserializeConfig(cfg);
       expect(result.interactionMatrix[0][0]?.outerStrength).toBe(0);
     });
 
     it('preserves valid negative outerStrength (repel)', () => {
       const cfg = cloneConfig() as any;
-      cfg.interactionMatrix = [[{ innerStrength: -50, outerStrength: -50, innerRadius: 0, outerRadius: 50, falloff: 'inverse' }]];
+      cfg.interactionMatrix = [
+        [
+          {
+            innerStrength: -50,
+            outerStrength: -50,
+            innerRadius: 0,
+            outerRadius: 50,
+            falloff: 'inverse',
+          },
+        ],
+      ];
       const result = deserializeConfig(cfg);
       expect(result.interactionMatrix[0][0]?.outerStrength).toBe(-50);
     });
@@ -940,6 +1024,46 @@ describe('CRT-47: Config Validation Hardening', () => {
       cfg.interactionMatrix = [[null]];
       const result = deserializeConfig(cfg);
       expect(result.interactionMatrix[0][0]).toBeNull();
+    });
+
+    it('migrates legacy { strength, radius } entries to two-zone format on deserialize', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species = [cfg.species[0], { ...cfg.species[0], name: 'Other' }];
+      cfg.interactionMatrix = [
+        [null, { strength: 30, radius: 100, falloff: 'linear' }],
+        [{ strength: -50, radius: 80, falloff: 'inverse' }, null],
+      ];
+      const result = deserializeConfig(cfg);
+      const e01 = result.interactionMatrix[0][1];
+      expect(e01?.innerStrength).toBe(30);
+      expect(e01?.outerStrength).toBe(30);
+      expect(e01?.innerRadius).toBe(0);
+      expect(e01?.outerRadius).toBe(100);
+      expect(e01?.falloff).toBe('linear');
+      const e10 = result.interactionMatrix[1][0];
+      expect(e10?.innerStrength).toBe(-50);
+      expect(e10?.outerStrength).toBe(-50);
+      expect(e10?.innerRadius).toBe(0);
+      expect(e10?.outerRadius).toBe(80);
+      expect(e10?.falloff).toBe('inverse');
+    });
+
+    it('legacy { strength, radius } migration preserves force behavior via applyConfig', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species = [cfg.species[0], { ...cfg.species[0], name: 'Other' }];
+      cfg.interactionMatrix = [
+        [null, { strength: 30, radius: 100, falloff: 'linear' }],
+        [null, null],
+      ];
+      const applied = applyConfig(deserializeConfig(cfg));
+      const entry = applied.matrix.get(0, 1);
+      expect(entry).not.toBeNull();
+      expect(entry!.outerStrength).toBe(30);
+      expect(entry!.outerRadius).toBe(100);
+      // Behavior-preserving: dist=50 (half radius), linear falloff → strength*(1-0.5)=15
+      expect(InteractionMatrix.forceAtDistance(entry!, 50)).toBe(15);
+      // No force at or beyond outerRadius
+      expect(InteractionMatrix.forceAtDistance(entry!, 100)).toBe(0);
     });
   });
 });
