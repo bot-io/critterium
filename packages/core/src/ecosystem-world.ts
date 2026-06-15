@@ -40,6 +40,12 @@ export class EcosystemWorld {
   // Current alive count
   private _aliveCount: number = 0;
 
+  // Per-species alive count (for fair population cap distribution)
+  private _speciesCounts: number[] = [];
+
+  // Per-species population cap (ceil(populationCap / numSpecies))
+  private _perSpeciesCap: number[] = [];
+
   // Current highest used index
   private _highWaterMark: number = 0;
 
@@ -95,6 +101,15 @@ export class EcosystemWorld {
     this._aliveCount = totalCount;
     this._highWaterMark = totalCount;
 
+    // Per-species fair cap: each species gets ceil(populationCap / numSpecies) guaranteed slots.
+    // This prevents fast-breeding species from monopolizing the global cap.
+    const numSpecies = config.species.length;
+    this._speciesCounts = new Array(numSpecies).fill(0);
+    this._perSpeciesCap = config.species.map(() => Math.ceil(config.populationCap / numSpecies));
+    for (let i = 0; i < totalCount; i++) {
+      this._speciesCounts[this.world.type[i]]++;
+    }
+
     // Limit World iteration to active range (avoids processing dead/unused slots)
     this.world.effectiveCount = totalCount;
   }
@@ -114,7 +129,22 @@ export class EcosystemWorld {
     return this.config.populationCap;
   }
 
-  /** Is the population at cap? */
+  /** Per-species alive count. */
+  speciesCount(speciesIdx: number): number {
+    return this._speciesCounts[speciesIdx] ?? 0;
+  }
+
+  /** Per-species population cap (fair share of global cap). */
+  perSpeciesCap(speciesIdx: number): number {
+    return this._perSpeciesCap[speciesIdx] ?? this.config.populationCap;
+  }
+
+  /** Is this species at its per-species cap? */
+  isSpeciesAtCap(speciesIdx: number): boolean {
+    return this._speciesCounts[speciesIdx] >= this._perSpeciesCap[speciesIdx];
+  }
+
+  /** Is the population at global cap? */
   get isAtCap(): boolean {
     return this._aliveCount >= this.config.populationCap;
   }
@@ -127,8 +157,6 @@ export class EcosystemWorld {
     if (this.isAtCap) return -1;
 
     const species = this.species[speciesIndex];
-
-    // Try to reuse a free slot
     let idx = this.freeList.pop();
 
     if (idx === -1) {
@@ -158,6 +186,7 @@ export class EcosystemWorld {
     // Initialize ecosystem state
     this.eco.initParticle(idx, speciesIndex, species, this.rng);
     this._aliveCount++;
+    this._speciesCounts[speciesIndex]++;
 
     return idx;
   }
@@ -169,9 +198,13 @@ export class EcosystemWorld {
     if (index < 0 || index >= this._highWaterMark) return;
     if (this.eco.alive[index] === DEAD) return; // already dead
 
+    const speciesIdx = this.world.type[index];
     this.eco.kill(index);
     this.freeList.push(index);
     this._aliveCount--;
+    if (speciesIdx < this._speciesCounts.length) {
+      this._speciesCounts[speciesIdx]--;
+    }
 
     // Zero out velocity to prevent ghost movement
     this.world.vx[index] = 0;
@@ -252,15 +285,33 @@ export class EcosystemWorld {
    */
   tryReproduce(index: number, _dt: number = 0.016): number {
     if (this.eco.alive[index] === DEAD) return -1;
-    if (this.isAtCap) return -1;
 
     const speciesIdx = this.world.type[index];
+
+    // Per-species cap: prevents one fast-breeding species from monopolizing slots
+    if (this.isSpeciesAtCap(speciesIdx)) return -1;
+
+    // Global cap: total population safety valve
+    if (this.isAtCap) return -1;
+
     const species = this.species[speciesIdx];
 
-    // Hard gate: cooldown must be expired
-    if (this.eco.reproductionCooldown[index] > 0) return -1;
-    // Energy gate
-    if (this.eco.energy[index] < species.energy.reproductionCost) return -1;
+    // Endangered species boost: when population < 25% of cap, reproduction is
+    // cheaper and faster. This prevents death spirals — as a species declines,
+    // reduced competition lets survivors breed faster (biologically realistic
+    // density-dependent reproduction). The boost scales smoothly from 1× (at
+    // 25% of cap) to 2× (at 0).
+    const count = this._speciesCounts[speciesIdx];
+    const cap = this._perSpeciesCap[speciesIdx];
+    const ratio = cap > 0 ? count / cap : 1;
+    const endangeredBoost = ratio < 0.25 ? 1 + (0.25 - ratio) * 4 : 1; // 1×→2×
+
+    // Hard gate: cooldown must be expired (halved when endangered)
+    const effectiveCooldown = this.eco.reproductionCooldown[index] / endangeredBoost;
+    if (effectiveCooldown > 0) return -1;
+    // Energy gate (cost reduced when endangered)
+    const effectiveCost = species.energy.reproductionCost / endangeredBoost;
+    if (this.eco.energy[index] < effectiveCost) return -1;
 
     // Spawn child near parent FIRST — only deduct energy if spawn succeeds
     const offsetX = (this.rng() - 0.5) * 20;
@@ -271,8 +322,8 @@ export class EcosystemWorld {
     const childIdx = this.spawn(speciesIdx, childX, childY);
     if (childIdx < 0) return -1; // spawn failed — don't punish parent
 
-    // Deduct energy only after successful spawn
-    this.eco.energy[index] -= species.energy.reproductionCost;
+    // Deduct energy only after successful spawn (uses effective cost)
+    this.eco.energy[index] -= effectiveCost;
 
     // Reset cooldown
     this.eco.reproductionCooldown[index] = species.lifecycle.reproductionCooldownSec;
