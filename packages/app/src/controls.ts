@@ -47,6 +47,7 @@ export interface ControlsPanelOptions {
   onShowErrorLog?: () => void;
   onClearErrorLog?: () => void;
   onExport?: () => void;
+  onExportLog?: () => void;
   onImport?: () => void;
   onSavePreset?: (name: string) => void;
   onLoadPreset?: (name: string) => void;
@@ -1444,6 +1445,18 @@ function buildActionsSection(opts: ControlsPanelOptions): HTMLElement {
     importBtn.addEventListener('click', () => opts.onImport?.());
     ioRow.appendChild(importBtn);
     body.appendChild(ioRow);
+
+    // Log export row
+    const logRow = el('div', 'crit-row');
+    const logBtn = el('button', 'crit-btn');
+    logBtn.textContent = '📋 Export Log';
+    logBtn.addEventListener('click', () => opts.onExportLog?.());
+    logRow.appendChild(logBtn);
+    const errBtn = el('button', 'crit-btn');
+    errBtn.textContent = '🪲 Errors';
+    errBtn.addEventListener('click', () => opts.onShowErrorLog?.());
+    logRow.appendChild(errBtn);
+    body.appendChild(logRow);
 
     // Built-in Presets dropdown
     const builtinRow = el('div', 'crit-preset-row');

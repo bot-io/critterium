@@ -47,6 +47,14 @@ import {
   importConfig,
 } from './persistence.js';
 import { installErrorCapture, getErrors, clearErrors, formatErrors } from './error-log.js';
+import {
+  initLogger,
+  log as simLog,
+  recordPopulation,
+  startAutoPersist,
+  formatLogText,
+  exportLog,
+} from './sim-logger.js';
 import { getBuiltinPreset } from './presets.js';
 import { PopulationGraph } from './population-graph.js';
 import { AdaptiveQuality } from './adaptive-quality.js';
@@ -248,14 +256,71 @@ let freezeDetected = false;
 let consecutiveSlowFrames = 0;
 
 function onError(err: unknown): void {
+  const msg = err instanceof Error ? err.message : String(err);
+  const stack = err instanceof Error ? err.stack : undefined;
   console.error('[Critterium] Fatal error:', err);
+
+  // Log to sim-logger and persist immediately so it survives
+  simLog('fatal', 'crash', msg, { stack });
+
+  // Also keep existing error capture
   const el = document.getElementById('app');
   if (el) {
-    const msg = document.createElement('div');
-    msg.style.cssText =
-      'position:fixed;top:0;left:0;right:0;padding:12px;background:#cc0000;color:#fff;font:14px monospace;z-index:9999;white-space:pre-wrap;';
-    msg.textContent = `Critterium crashed:\n${err instanceof Error ? err.message + '\n' + err.stack : String(err)}`;
-    el.appendChild(msg);
+    const overlay = document.createElement('div');
+    overlay.style.cssText =
+      'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+
+    const box = document.createElement('div');
+    box.style.cssText =
+      'background:#1a1a1a;color:#ff6666;border:1px solid #ff4444;border-radius:8px;padding:20px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column;gap:12px;';
+
+    const title = document.createElement('h2');
+    title.textContent = '⚠️ Critterium Crashed';
+    title.style.cssText = 'color:#ff4444;margin:0;font:bold 18px sans-serif;';
+    box.appendChild(title);
+
+    const errorMsg = document.createElement('pre');
+    errorMsg.style.cssText =
+      'color:#aaa;font:12px "SF Mono","Consolas",monospace;white-space:pre-wrap;word-break:break-all;overflow:auto;max-height:200px;';
+    errorMsg.textContent = msg + (stack ? '\n\n' + stack : '');
+    box.appendChild(errorMsg);
+
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:8px;';
+
+    const dlBtn = document.createElement('button');
+    dlBtn.textContent = '📋 Download Log';
+    dlBtn.style.cssText =
+      'background:#2563eb;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font:14px sans-serif;flex:1;';
+    dlBtn.addEventListener('click', () => {
+      exportLog()
+        .then(() => {
+          dlBtn.textContent = '✓ Shared!';
+        })
+        .catch(() => {
+          dlBtn.textContent = '❌ Failed';
+        });
+    });
+    btnRow.appendChild(dlBtn);
+
+    const copyBtn = document.createElement('button');
+    copyBtn.textContent = '📋 Copy to Clipboard';
+    copyBtn.style.cssText =
+      'background:#333;color:#fff;border:1px solid #555;padding:10px 20px;border-radius:6px;cursor:pointer;font:14px sans-serif;flex:1;';
+    copyBtn.addEventListener('click', () => {
+      const text = formatLogText();
+      navigator.clipboard.writeText(text).then(() => {
+        copyBtn.textContent = '✓ Copied!';
+      });
+    });
+    btnRow.appendChild(copyBtn);
+
+    box.appendChild(btnRow);
+    overlay.appendChild(box);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+    el.appendChild(overlay);
   }
 }
 
@@ -375,6 +440,11 @@ async function main(): Promise<void> {
     eco = new EcosystemWorld(liveConfig);
     interactionMatrix = buildInteractionMatrix();
   }
+
+  // Initialise the simulation logger with species names (so extinction events
+  // display real names) and start the crash-safe auto-persist timer.
+  initLogger(liveConfig.species.map((s) => s.name));
+  startAutoPersist();
 
   // 2. Build physics forces
   //
@@ -630,6 +700,15 @@ async function main(): Promise<void> {
       // Rebuild spatial hash (skip dead particles, only up to highWaterMark)
       grid.rebuild(eco.world, eco.eco.alive, eco.highWaterMark);
 
+      // Initialize simulation logger with current species names
+      initLogger(liveConfig.species.map((s) => s.name));
+      startAutoPersist();
+      simLog(
+        'info',
+        'system',
+        `Simulation started: ${liveConfig.species.length} species, cap=${liveConfig.populationCap}`,
+      );
+
       // Reset timing
       accumulator = 0;
       lastTime = performance.now();
@@ -773,6 +852,13 @@ async function main(): Promise<void> {
         totalSimTime += dt;
         accumulator -= dt;
         stepsThisFrame++;
+
+        // Record population snapshot for logging (throttled internally)
+        const speciesCounts: number[] = [];
+        for (let s = 0; s < eco.species.length; s++) {
+          speciesCounts.push(eco.speciesCount(s));
+        }
+        recordPopulation(totalSimTime, speciesCounts);
       }
 
       // Extinction detection: if all particles died after sim has been running,
@@ -1290,6 +1376,10 @@ async function main(): Promise<void> {
     onExport: () => {
       const config = getCurrentConfig();
       exportConfig(config, 'critterium-config.json');
+    },
+
+    onExportLog: () => {
+      exportLog();
     },
 
     onShowErrorLog: () => {

@@ -168,7 +168,8 @@ describe('Reproduction — gates still enforced', () => {
   });
 
   it('deducts reproductionCost from parent energy', () => {
-    const cfg = makeConfig([reproSpecies(5)], 500);
+    // cap=4 so 1 individual = 25% (no endangered boost)
+    const cfg = makeConfig([reproSpecies(5)], 4);
     const eco = new EcosystemWorld(cfg);
     eco.eco.reproductionCooldown[0] = 0;
     const energyBefore = eco.eco.energy[0];

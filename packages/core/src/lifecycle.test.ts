@@ -139,7 +139,8 @@ describe('processReproduction', () => {
   });
 
   it('deducts reproduction cost from parent', () => {
-    const cfg = reproConfig(1, 100);
+    // cap=20 so 5 individuals = 25% of cap (no endangered boost)
+    const cfg = reproConfig(5, 20);
     const eco = new EcosystemWorld(cfg);
     eco.eco.reproductionCooldown[0] = 0;
     const energyBefore = eco.eco.energy[0];
