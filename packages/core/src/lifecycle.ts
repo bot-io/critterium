@@ -35,6 +35,11 @@ export interface EcosystemStepResult {
  * - The global population is not at cap
  *
  * Returns the number of new children spawned.
+ *
+ * ALLOCATION-FREE (CRT-59): the per-species queues and cursors are
+ * pre-allocated on the EcosystemWorld and reused every call via
+ * beginReproductionPass() / collectReadyReproducer() / nextReproducer().
+ * No `new Array()`, `new Int32Array()`, or `.push()` happens here.
  */
 export function processReproduction(eco: EcosystemWorld, dt: number): number {
   let born = 0;
@@ -43,25 +48,21 @@ export function processReproduction(eco: EcosystemWorld, dt: number): number {
 
   if (eco.isAtCap) return 0;
 
-  // Phase 1: collect ready individuals per species.
+  // Phase 1: collect ready individuals per species into pre-allocated queues.
   // "Ready" = alive, cooldown expired, enough energy.
-  const readyBySpecies: number[][] = [];
-  for (let s = 0; s < numSpecies; s++) readyBySpecies.push([]);
-
+  eco.beginReproductionPass();
   for (let i = 0; i < hwm; i++) {
     if (eco.eco.alive[i] === DEAD) continue;
     if (eco.eco.reproductionCooldown[i] > 0) continue;
     const speciesIdx = eco.world.type[i];
     const species = eco.species[speciesIdx];
     if (eco.eco.energy[i] < species.energy.reproductionCost) continue;
-    readyBySpecies[speciesIdx].push(i);
+    eco.collectReadyReproducer(speciesIdx, i);
   }
 
   // Phase 2: round-robin reproduction.
   // Process one individual per species per round. Per-species cursors
-  // avoid array.shift() for O(1) advancement.
-  const cursors = new Int32Array(numSpecies);
-
+  // (on the world) advance over the pre-allocated queues for O(1) progress.
   for (;;) {
     if (eco.isAtCap) break;
 
@@ -70,11 +71,13 @@ export function processReproduction(eco: EcosystemWorld, dt: number): number {
     for (let s = 0; s < numSpecies; s++) {
       if (eco.isAtCap) break;
 
-      // Advance cursor to next still-alive individual for this species
-      while (cursors[s] < readyBySpecies[s].length) {
-        const idx = readyBySpecies[s][cursors[s]++];
+      // Advance cursor to the next still-alive individual for this species.
+      // nextReproducer() returns -1 when the queue is exhausted.
+      for (;;) {
+        const idx = eco.nextReproducer(s);
+        if (idx < 0) break;
         processedAny = true;
-        // Individual may have died this frame (e.g. eaten between phases)
+        // Individual may have died this frame (e.g. eaten between phases).
         if (eco.eco.alive[idx] === DEAD) continue;
         const childIdx = eco.tryReproduce(idx, dt);
         if (childIdx >= 0) born++;

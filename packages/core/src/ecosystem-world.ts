@@ -43,6 +43,15 @@ export class EcosystemWorld {
   // Per-species alive count (for logging & round-robin reproduction)
   private _speciesCounts: number[] = [];
 
+  // Reusable buffers for round-robin reproduction — pre-allocated once in the
+  // constructor and cleared each frame by beginReproductionPass(). Eliminates
+  // the per-step `readyBySpecies` array + `new Int32Array(numSpecies)` + `.push()`
+  // allocations that processReproduction previously made every call
+  // (zero hot-loop allocation constraint, CRT-59).
+  private _readyQueues: Int32Array[] = [];
+  private _readyCounts: Int32Array = new Int32Array(0);
+  private _reproCursors: Int32Array = new Int32Array(0);
+
   // Current highest used index
   private _highWaterMark: number = 0;
 
@@ -105,6 +114,16 @@ export class EcosystemWorld {
       this._speciesCounts[this.world.type[i]]++;
     }
 
+    // Pre-allocate reproduction buffers (CRT-59). One queue per species,
+    // sized to populationCap so a single species can never overflow its queue
+    // (alive count ≤ populationCap). Reused every frame — zero per-step alloc.
+    this._readyQueues = new Array(numSpecies);
+    for (let s = 0; s < numSpecies; s++) {
+      this._readyQueues[s] = new Int32Array(config.populationCap);
+    }
+    this._readyCounts = new Int32Array(numSpecies);
+    this._reproCursors = new Int32Array(numSpecies);
+
     // Limit World iteration to active range (avoids processing dead/unused slots)
     this.world.effectiveCount = totalCount;
   }
@@ -127,6 +146,65 @@ export class EcosystemWorld {
   /** Per-species alive count. */
   speciesCount(speciesIdx: number): number {
     return this._speciesCounts[speciesIdx] ?? 0;
+  }
+
+  // ─── Reproduction buffers (zero per-frame allocation, CRT-59) ───
+  //
+  // processReproduction() in lifecycle.ts collects ready individuals per
+  // species then processes them round-robin. The three buffers below are
+  // pre-allocated once and reused every frame; beginReproductionPass() resets
+  // counts/cursors in place. This removes the old per-call allocations
+  // (`readyBySpecies: number[][]`, `new Int32Array(numSpecies)`, `.push()`).
+
+  /**
+   * Begin a new reproduction pass: zero the per-species ready counts and
+   * round-robin cursors. Grows the buffers if species were added at runtime
+   * (a rare, amortized reallocation — not a per-frame allocation).
+   */
+  beginReproductionPass(): void {
+    const numSpecies = this.species.length;
+    if (numSpecies > this._readyCounts.length) {
+      // Species added at runtime — grow buffers (rare, amortized, not hot).
+      this._readyCounts = new Int32Array(numSpecies);
+      this._reproCursors = new Int32Array(numSpecies);
+      this._readyQueues = new Array(numSpecies);
+      for (let s = 0; s < numSpecies; s++) {
+        this._readyQueues[s] = new Int32Array(this.config.populationCap);
+      }
+    } else {
+      // Steady state: in-place zeroing (zero allocation).
+      this._readyCounts.fill(0);
+      this._reproCursors.fill(0);
+    }
+  }
+
+  /**
+   * Record a particle as ready to reproduce this pass.
+   * Safe no-op if the per-species queue is full (cannot exceed populationCap).
+   */
+  collectReadyReproducer(speciesIdx: number, particleIdx: number): void {
+    const count = this._readyCounts[speciesIdx];
+    if (count < this._readyQueues[speciesIdx].length) {
+      this._readyQueues[speciesIdx][count] = particleIdx;
+      this._readyCounts[speciesIdx] = count + 1;
+    }
+  }
+
+  /**
+   * Advance the round-robin cursor and return the next ready particle for the
+   * given species, or -1 when the queue is exhausted. Each call consumes one
+   * candidate (skipping dead ones is the caller's responsibility).
+   */
+  nextReproducer(speciesIdx: number): number {
+    const cursor = this._reproCursors[speciesIdx];
+    if (cursor >= this._readyCounts[speciesIdx]) return -1;
+    this._reproCursors[speciesIdx] = cursor + 1;
+    return this._readyQueues[speciesIdx][cursor];
+  }
+
+  /** Number of ready reproducers collected for a species this pass. */
+  readyReproducerCount(speciesIdx: number): number {
+    return this._readyCounts[speciesIdx];
   }
 
   /** Is the population at global cap? */

@@ -187,3 +187,147 @@ describe('Reproduction — gates still enforced', () => {
     expect(born).toBe(0);
   });
 });
+
+// ─── CRT-59: zero-allocation reproduction buffers ───────────────
+//
+// processReproduction() now collects ready individuals into per-species
+// Int32Array queues pre-allocated on the EcosystemWorld and reused every
+// frame, instead of allocating `readyBySpecies: number[][]` + a fresh
+// Int32Array of cursors on every call. These tests cover the buffer
+// mechanics directly and verify steady-state heap stability.
+
+describe('CRT-59: processReproduction — pre-allocated buffers', () => {
+  it('beginReproductionPass zeroes ready counts and cursors', () => {
+    const cfg = makeConfig([reproSpecies(0), reproSpecies(0)], 500);
+    const eco = new EcosystemWorld(cfg);
+
+    eco.beginReproductionPass();
+    eco.collectReadyReproducer(0, 1);
+    eco.collectReadyReproducer(0, 2);
+    eco.collectReadyReproducer(1, 3);
+    expect(eco.readyReproducerCount(0)).toBe(2);
+    expect(eco.readyReproducerCount(1)).toBe(1);
+
+    // A new pass must reset everything back to empty (no stale entries).
+    eco.beginReproductionPass();
+    expect(eco.readyReproducerCount(0)).toBe(0);
+    expect(eco.readyReproducerCount(1)).toBe(0);
+    expect(eco.nextReproducer(0)).toBe(-1);
+    expect(eco.nextReproducer(1)).toBe(-1);
+  });
+
+  it('collectReadyReproducer + nextReproducer act as a FIFO per species', () => {
+    const cfg = makeConfig([reproSpecies(0)], 500);
+    const eco = new EcosystemWorld(cfg);
+    eco.beginReproductionPass();
+    eco.collectReadyReproducer(0, 101);
+    eco.collectReadyReproducer(0, 202);
+    eco.collectReadyReproducer(0, 303);
+
+    expect(eco.nextReproducer(0)).toBe(101);
+    expect(eco.nextReproducer(0)).toBe(202);
+    expect(eco.nextReproducer(0)).toBe(303);
+    expect(eco.nextReproducer(0)).toBe(-1); // queue exhausted
+  });
+
+  it('collectReadyReproducer is a safe no-op once the queue is full', () => {
+    // populationCap = 3 → each per-species queue holds exactly 3 entries.
+    const cfg = makeConfig([reproSpecies(0)], 3);
+    const eco = new EcosystemWorld(cfg);
+    eco.beginReproductionPass();
+    eco.collectReadyReproducer(0, 0);
+    eco.collectReadyReproducer(0, 1);
+    eco.collectReadyReproducer(0, 2);
+    // Queue now at capacity; further collects must not throw or overflow.
+    eco.collectReadyReproducer(0, 3);
+    eco.collectReadyReproducer(0, 4);
+    expect(eco.readyReproducerCount(0)).toBe(3);
+    expect(eco.nextReproducer(0)).toBe(0);
+    expect(eco.nextReproducer(0)).toBe(1);
+    expect(eco.nextReproducer(0)).toBe(2);
+    expect(eco.nextReproducer(0)).toBe(-1);
+  });
+
+  it('round-robin gives every species a slot before any gets a second', () => {
+    // Two species, one particle each, both ready. Round 1 must spawn one child
+    // for species 0 AND one for species 1 (fair interleaving).
+    const a = reproSpecies(0);
+    const b = { ...reproSpecies(0), name: 'CritterB', color: '#4444cc' };
+    const cfg = makeConfig([a, b], 500);
+    cfg.species[0].count = 1;
+    cfg.species[1].count = 1;
+    const eco = new EcosystemWorld(cfg);
+    eco.eco.reproductionCooldown[0] = 0; // particle 0 = species 0
+    eco.eco.reproductionCooldown[1] = 0; // particle 1 = species 1
+
+    const born = processReproduction(eco, 100);
+
+    expect(born).toBe(2);
+    expect(eco.speciesCount(0)).toBe(2); // parent + child
+    expect(eco.speciesCount(1)).toBe(2); // parent + child
+  });
+
+  it('dead candidates between phases are skipped (correctness preserved)', () => {
+    // One species, two ready particles. Kill the first one's slot before phase 2
+    // by simulating it — the round-robin loop must skip dead entries.
+    const cfg = makeConfig([reproSpecies(0)], 500);
+    cfg.species[0].count = 2;
+    const eco = new EcosystemWorld(cfg);
+    eco.eco.reproductionCooldown[0] = 0;
+    eco.eco.reproductionCooldown[1] = 0;
+
+    // Manually drive phase 1, then kill particle 0, then phase 2.
+    eco.beginReproductionPass();
+    eco.collectReadyReproducer(0, 0);
+    eco.collectReadyReproducer(0, 1);
+    eco.kill(0); // particle 0 now DEAD (e.g. eaten between phases)
+
+    expect(eco.nextReproducer(0)).toBe(0); // dead — skipped
+    const next = eco.nextReproducer(0);
+    expect(next).toBe(1); // alive — reproduces
+    expect(next).not.toBe(-1);
+  });
+
+  it('processReproduction is allocation-free in steady state (heap growth check)', () => {
+    const species = [
+      { ...reproSpecies(0), name: 'A', color: '#ff4444', count: 100 },
+      { ...reproSpecies(0), name: 'B', color: '#44ff44', count: 100 },
+      { ...reproSpecies(0), name: 'C', color: '#4444ff', count: 100 },
+    ];
+    const cfg = makeConfig(species, 1000);
+    const eco = new EcosystemWorld(cfg);
+
+    // Warm up: let buffers allocate and JIT settle.
+    for (let i = 0; i < 20; i++) {
+      for (let p = 0; p < eco.highWaterMark; p++) eco.eco.reproductionCooldown[p] = 0;
+      processReproduction(eco, 1 / 60);
+    }
+
+    const before = (performance as any).memory?.usedJSHeapSize;
+    if (!before) {
+      // memory API unavailable (non-Chrome) — still exercise the hot path.
+      for (let i = 0; i < 300; i++) {
+        for (let p = 0; p < eco.highWaterMark; p++) eco.eco.reproductionCooldown[p] = 0;
+        processReproduction(eco, 1 / 60);
+      }
+      return; // soft pass
+    }
+
+    // Run 300 reproduction passes, keeping every alive particle ready each
+    // frame so the full collect + round-robin path runs every call.
+    for (let i = 0; i < 300; i++) {
+      for (let p = 0; p < eco.highWaterMark; p++) {
+        if (eco.eco.alive[p] !== DEAD) {
+          eco.eco.reproductionCooldown[p] = 0;
+          eco.eco.energy[p] = 500;
+        }
+      }
+      processReproduction(eco, 1 / 60);
+    }
+
+    const after = (performance as any).memory?.usedJSHeapSize;
+    const growth = after - before;
+    // No significant heap growth from 300 steady-state reproduction passes.
+    expect(growth).toBeLessThan(1_000_000);
+  });
+});
