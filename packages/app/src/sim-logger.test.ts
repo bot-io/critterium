@@ -272,3 +272,26 @@ describe('sim-logger', () => {
     });
   });
 });
+
+// ─── Regression: exportLog must use shareContent ─────────────────
+// Bug: exportLog had its own broken Share.share({ url }) implementation.
+// Fixed: now delegates to shareContent from persistence.
+
+describe('exportLog (Android export regression)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    initLogger(['Cat', 'Dog']);
+  });
+
+  it('exportLog is exported', async () => {
+    const mod = await import('./sim-logger.js');
+    expect(mod.exportLog).toBeDefined();
+    expect(typeof mod.exportLog).toBe('function');
+  });
+
+  it('exportLog resolves without throwing', async () => {
+    const { exportLog } = await import('./sim-logger.js');
+    // Should not throw even without Capacitor available
+    await expect(exportLog()).resolves.toBeUndefined();
+  });
+});

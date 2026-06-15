@@ -462,23 +462,20 @@ describe('sim: reproduction', () => {
 
   it('reproduction deducts energy', () => {
     const eco = new EcosystemWorld(
-      ecoCfg(
-        [
-          species({
-            count: 1,
-            energy: {
-              maxEnergy: 200,
-              initialEnergy: 100,
-              movementCostPerSec: 0,
-              reproductionCost: 30,
-              idleDrainPerSec: 0,
-              energyGainPerPrey: [0],
-            },
-            lifecycle: { maxAgeSec: 999, starvationDamagePerSec: 0, reproductionCooldownSec: 0 },
-          }),
-        ],
-        { populationCap: 4 },
-      ), // cap=4 so 1 ind = 25% (no endangered boost)
+      ecoCfg([
+        species({
+          count: 1,
+          energy: {
+            maxEnergy: 200,
+            initialEnergy: 100,
+            movementCostPerSec: 0,
+            reproductionCost: 30,
+            idleDrainPerSec: 0,
+            energyGainPerPrey: [0],
+          },
+          lifecycle: { maxAgeSec: 999, starvationDamagePerSec: 0, reproductionCooldownSec: 0 },
+        }),
+      ]),
     );
     const e0 = eco.eco.energy[0];
     processReproduction(eco, 100);
@@ -487,23 +484,20 @@ describe('sim: reproduction', () => {
 
   it('insufficient energy prevents reproduction', () => {
     const eco = new EcosystemWorld(
-      ecoCfg(
-        [
-          species({
-            count: 1,
-            energy: {
-              maxEnergy: 200,
-              initialEnergy: 20,
-              movementCostPerSec: 0,
-              reproductionCost: 30,
-              idleDrainPerSec: 0,
-              energyGainPerPrey: [0],
-            },
-            lifecycle: { maxAgeSec: 999, starvationDamagePerSec: 0, reproductionCooldownSec: 0 },
-          }),
-        ],
-        { populationCap: 4 },
-      ), // cap=4 so 1 ind = 25% (no endangered boost)
+      ecoCfg([
+        species({
+          count: 1,
+          energy: {
+            maxEnergy: 200,
+            initialEnergy: 20,
+            movementCostPerSec: 0,
+            reproductionCost: 30,
+            idleDrainPerSec: 0,
+            energyGainPerPrey: [0],
+          },
+          lifecycle: { maxAgeSec: 999, starvationDamagePerSec: 0, reproductionCooldownSec: 0 },
+        }),
+      ]),
     );
     expect(processReproduction(eco, 100)).toBe(0);
   });

@@ -32,7 +32,6 @@ export interface EcosystemStepResult {
  * A particle reproduces (fission) when:
  * - Its cooldown has expired
  * - It has enough energy (>= reproductionCost)
- * - Its species is not at per-species cap
  * - The global population is not at cap
  *
  * Returns the number of new children spawned.
@@ -45,7 +44,7 @@ export function processReproduction(eco: EcosystemWorld, dt: number): number {
   if (eco.isAtCap) return 0;
 
   // Phase 1: collect ready individuals per species.
-  // "Ready" = alive, cooldown expired, enough energy, species not at cap.
+  // "Ready" = alive, cooldown expired, enough energy.
   const readyBySpecies: number[][] = [];
   for (let s = 0; s < numSpecies; s++) readyBySpecies.push([]);
 
@@ -53,7 +52,6 @@ export function processReproduction(eco: EcosystemWorld, dt: number): number {
     if (eco.eco.alive[i] === DEAD) continue;
     if (eco.eco.reproductionCooldown[i] > 0) continue;
     const speciesIdx = eco.world.type[i];
-    if (eco.isSpeciesAtCap(speciesIdx)) continue;
     const species = eco.species[speciesIdx];
     if (eco.eco.energy[i] < species.energy.reproductionCost) continue;
     readyBySpecies[speciesIdx].push(i);
@@ -71,7 +69,6 @@ export function processReproduction(eco: EcosystemWorld, dt: number): number {
 
     for (let s = 0; s < numSpecies; s++) {
       if (eco.isAtCap) break;
-      if (eco.isSpeciesAtCap(s)) continue;
 
       // Advance cursor to next still-alive individual for this species
       while (cursors[s] < readyBySpecies[s].length) {

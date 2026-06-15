@@ -456,28 +456,6 @@ describe('Per-species fair population cap', () => {
     };
   }
 
-  it('perSpeciesCap returns ceil(populationCap / numSpecies)', () => {
-    const eco = new EcosystemWorld(twoSpeciesConfig(10, 10, 100));
-    expect(eco.perSpeciesCap(0)).toBe(50); // ceil(100/2) = 50
-    expect(eco.perSpeciesCap(1)).toBe(50);
-  });
-
-  it('perSpeciesCap handles odd division with ceil', () => {
-    // 3 species, cap 100: ceil(100/3) = 34
-    const base = twoSpeciesConfig(10, 10, 100);
-    const cfg: EcosystemConfig = {
-      ...base,
-      species: [
-        ...base.species,
-        { ...singleSpeciesConfig(10, 100).species[0], count: 10, name: 'C' },
-      ],
-    };
-    const eco = new EcosystemWorld(cfg);
-    expect(eco.perSpeciesCap(0)).toBe(34); // ceil(100/3)
-    expect(eco.perSpeciesCap(1)).toBe(34);
-    expect(eco.perSpeciesCap(2)).toBe(34);
-  });
-
   it('speciesCount returns correct per-species alive count at init', () => {
     const eco = new EcosystemWorld(twoSpeciesConfig(10, 20, 100));
     expect(eco.speciesCount(0)).toBe(10);
@@ -501,95 +479,9 @@ describe('Per-species fair population cap', () => {
     expect(eco.aliveCount).toBe(9);
   });
 
-  it('isSpeciesAtCap returns false below cap, true at cap', () => {
-    const eco = new EcosystemWorld(twoSpeciesConfig(5, 5, 100));
-    // per-species cap = 50
-    expect(eco.isSpeciesAtCap(0)).toBe(false);
-    // Spawn species A to reach per-species cap of 50
-    for (let i = 0; i < 45; i++) eco.spawn(0);
-    expect(eco.speciesCount(0)).toBe(50);
-    expect(eco.isSpeciesAtCap(0)).toBe(true);
-    // Species B still below cap
-    expect(eco.isSpeciesAtCap(1)).toBe(false);
-  });
-
-  it('tryReproduce respects per-species cap before global cap', () => {
-    // 2 species, cap 100 (50 each). Fill species A to its per-species cap.
-    const eco = new EcosystemWorld(twoSpeciesConfig(10, 10, 100));
-    // Spawn species A up to 50 (per-species cap)
-    for (let i = 0; i < 40; i++) eco.spawn(0);
-    expect(eco.speciesCount(0)).toBe(50);
-    expect(eco.isSpeciesAtCap(0)).toBe(true);
-    // Global cap NOT reached (60/100)
-    expect(eco.aliveCount).toBe(60);
-    expect(eco.isAtCap).toBe(false);
-
-    // Particle 0 is species A — reproduction blocked by per-species cap
-    eco.eco.reproductionCooldown[0] = 0;
-    eco.eco.energy[0] = 200;
-    expect(eco.tryReproduce(0, 100)).toBe(-1);
-
-    // Particle 10 is species B — reproduction allowed (below per-species cap)
-    eco.eco.reproductionCooldown[10] = 0;
-    eco.eco.energy[10] = 200;
-    expect(eco.tryReproduce(10, 100)).toBeGreaterThanOrEqual(0);
-    expect(eco.speciesCount(1)).toBe(11);
-  });
-
-  it('per-species cap prevents monopolization during reproduction', () => {
-    // 2 species, cap 100 (50 each). Species A can reproduce, B cannot.
-    const cfg: EcosystemConfig = {
-      width: 800,
-      height: 600,
-      boundaryMode: 'bounce',
-      seed: 42,
-      populationCap: 100,
-      species: [
-        {
-          ...singleSpeciesConfig(10, 100).species[0],
-          count: 10,
-          name: 'FastBreeder',
-          energy: defaultEnergyConfig({ initialEnergy: 500, reproductionCost: 5 }),
-          lifecycle: defaultLifecycleConfig({ reproductionCooldownSec: 0 }),
-        },
-        {
-          ...singleSpeciesConfig(10, 100).species[0],
-          count: 10,
-          name: 'SlowBreeder',
-          energy: defaultEnergyConfig({ initialEnergy: 50, reproductionCost: 999 }),
-          lifecycle: defaultLifecycleConfig({ reproductionCooldownSec: 999 }),
-        },
-      ],
-      interactionRules: [],
-    };
-    const eco = new EcosystemWorld(cfg);
-    // Run several reproduction cycles — species A breeds fast
-    for (let frame = 0; frame < 10; frame++) {
-      processReproduction(eco, 100);
-      eco.processLifecycle(1 / 60);
-    }
-    // Species A capped at per-species cap (50), never monopolizes
-    expect(eco.speciesCount(0)).toBeLessThanOrEqual(50);
-    // Species B unchanged (can't reproduce)
-    expect(eco.speciesCount(1)).toBe(10);
-    // Total within global cap
-    expect(eco.aliveCount).toBeLessThanOrEqual(100);
-  });
-
   it('speciesCount for invalid index returns 0', () => {
     const eco = new EcosystemWorld(twoSpeciesConfig(5, 5, 100));
     expect(eco.speciesCount(99)).toBe(0);
     expect(eco.speciesCount(-1)).toBe(0);
-  });
-
-  it('perSpeciesCap for invalid index falls back to global cap', () => {
-    const eco = new EcosystemWorld(twoSpeciesConfig(5, 5, 100));
-    expect(eco.perSpeciesCap(99)).toBe(100);
-  });
-
-  it('single species: per-species cap equals global cap', () => {
-    const eco = new EcosystemWorld(singleSpeciesConfig(10, 80));
-    expect(eco.perSpeciesCap(0)).toBe(80);
-    expect(eco.isSpeciesAtCap(0)).toBe(false);
   });
 });

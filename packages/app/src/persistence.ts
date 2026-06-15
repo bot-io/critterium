@@ -55,74 +55,75 @@ export function clearAutosave(): void {
 
 /**
  * Export a config as a downloadable .json file.
- * On Android/Capacitor, uses the Capacitor Share plugin.
- * Falls back to Web Share API, then anchor download, then clipboard.
+ * On Android/Capacitor, writes to Documents and opens share sheet.
  */
 export async function exportConfig(config: CritteriumConfig, filename: string): Promise<void> {
-  try {
-    const json = JSON.stringify(config, null, 2);
-    const safeName = filename.endsWith('.json') ? filename : `${filename}.json`;
-
-    // Try Capacitor Share plugin first (works in Android WebView)
-    try {
-      const { Share } = await import('@capacitor/share');
-      const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem');
-
-      // Write to a temp file, then share it
-      const result = await Filesystem.writeFile({
-        path: safeName,
-        data: json,
-        directory: Directory.Cache,
-        encoding: Encoding.UTF8,
-      });
-
-      await Share.share({
-        title: 'Critterium Config',
-        text: safeName,
-        url: result.uri,
-      });
-      return;
-    } catch {
-      // Capacitor not available or share cancelled — fall through
-    }
-
-    const blob = new Blob([json], { type: 'application/json' });
-    const file = new File([blob], safeName, { type: 'application/json' });
-
-    // Try Web Share API
-    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: 'Critterium Config' });
-        return;
-      } catch (err) {
-        if ((err as DOMException).name === 'AbortError') return;
-      }
-    }
-
-    // Fallback: anchor download (desktop browsers)
-    fallbackDownload(blob, safeName);
-  } catch (err) {
-    // Last resort: copy to clipboard
-    try {
-      const json = JSON.stringify(config, null, 2);
-      await navigator.clipboard.writeText(json);
-      alert('Config copied to clipboard (share/download not available)');
-      return;
-    } catch {
-      console.error('[Critterium] Export failed completely:', err);
-    }
-  }
+  const json = JSON.stringify(config, null, 2);
+  const safeName = filename.endsWith('.json') ? filename : `${filename}.json`;
+  await shareContent(json, safeName, 'Critterium Config');
 }
 
-function fallbackDownload(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+/**
+ * Core share/export utility — works on Android (Capacitor) and desktop.
+ */
+export async function shareContent(text: string, filename: string, title: string): Promise<void> {
+  // Try Capacitor Share plugin (Android native)
+  try {
+    const { Share } = await import('@capacitor/share');
+    const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem');
+
+    // Write to Documents so the file persists and is findable
+    await Filesystem.writeFile({
+      path: filename,
+      data: text,
+      directory: Directory.Documents,
+      encoding: Encoding.UTF8,
+      recursive: true,
+    });
+
+    // Open share sheet with just text (most reliable on Android)
+    await Share.share({
+      dialogTitle: title,
+      text: text,
+    });
+    return;
+  } catch (err) {
+    if ((err as Error)?.message?.includes('cancelled')) return; // user cancelled share
+    // Capacitor not available — fall through
+  }
+
+  // Desktop: try Web Share API with file
+  try {
+    const blob = new Blob([text], { type: 'text/plain' });
+    const file = new File([blob], filename, { type: 'text/plain' });
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title });
+      return;
+    }
+  } catch (err) {
+    if ((err as DOMException).name === 'AbortError') return;
+  }
+
+  // Fallback: anchor download (desktop browsers)
+  try {
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch {
+    // Last resort: clipboard
+    try {
+      await navigator.clipboard.writeText(text);
+      alert(`${title} copied to clipboard`);
+    } catch {
+      console.error(`[Critterium] Export of ${filename} failed`);
+    }
+  }
 }
 
 /**

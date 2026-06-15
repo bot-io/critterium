@@ -8,6 +8,8 @@
  * Export via Capacitor Share/Filesystem (Android) or clipboard fallback.
  */
 
+import { shareContent } from './persistence';
+
 // ─── Types ─────────────────────────────────────────────────────
 
 export type LogLevel = 'info' | 'warn' | 'error' | 'fatal';
@@ -252,65 +254,11 @@ export function formatLogText(): string {
 
 /**
  * Export the full log as a shareable text file.
- * Uses Capacitor Share API on Android, falls back to clipboard.
  */
 export async function exportLog(): Promise<void> {
   const text = formatLogText();
   const filename = `critterium-log-${Date.now()}.txt`;
-
-  try {
-    // Try Capacitor Share plugin first (Android)
-    try {
-      const { Share } = await import('@capacitor/share');
-      const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem');
-
-      const result = await Filesystem.writeFile({
-        path: filename,
-        data: text,
-        directory: Directory.Cache,
-        encoding: Encoding.UTF8,
-      });
-
-      await Share.share({
-        title: 'Critterium Log',
-        text: filename,
-        url: result.uri,
-      });
-      return;
-    } catch {
-      // Capacitor not available — fall through
-    }
-
-    // Web Share API
-    const blob = new Blob([text], { type: 'text/plain' });
-    const file = new File([blob], filename, { type: 'text/plain' });
-    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: 'Critterium Log' });
-        return;
-      } catch (err) {
-        if ((err as DOMException).name === 'AbortError') return;
-      }
-    }
-
-    // Fallback: anchor download (desktop)
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  } catch {
-    // Last resort: clipboard
-    try {
-      await navigator.clipboard.writeText(text);
-      alert('Log copied to clipboard');
-    } catch {
-      console.error('[Critterium] Log export failed');
-    }
-  }
+  await shareContent(text, filename, 'Critterium Sim Log');
 }
 
 /** Check if a previous crash log exists in storage. */

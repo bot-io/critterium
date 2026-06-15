@@ -1446,14 +1446,16 @@ function buildActionsSection(opts: ControlsPanelOptions): HTMLElement {
     ioRow.appendChild(importBtn);
     body.appendChild(ioRow);
 
-    // Log export row
+    // Log export row — Sim Log export + Error viewer
     const logRow = el('div', 'crit-row');
     const logBtn = el('button', 'crit-btn');
-    logBtn.textContent = '📋 Export Log';
+    logBtn.textContent = '📋 Sim Log';
+    logBtn.title = 'Export simulation log';
     logBtn.addEventListener('click', () => opts.onExportLog?.());
     logRow.appendChild(logBtn);
     const errBtn = el('button', 'crit-btn');
     errBtn.textContent = '🪲 Errors';
+    errBtn.title = 'View captured errors';
     errBtn.addEventListener('click', () => opts.onShowErrorLog?.());
     logRow.appendChild(errBtn);
     body.appendChild(logRow);
@@ -1543,22 +1545,6 @@ function buildActionsSection(opts: ControlsPanelOptions): HTMLElement {
     presetRow.appendChild(loadBtn);
     presetRow.appendChild(delBtn);
     body.appendChild(presetRow);
-
-    // Error Log section
-    const errorDivider = el('div');
-    errorDivider.style.cssText = 'border-top:1px solid rgba(255,255,255,0.08); margin:6px 0;';
-    body.appendChild(errorDivider);
-
-    const errorRow = el('div', 'crit-row');
-    const errorLogBtn = el('button', 'crit-btn');
-    errorLogBtn.textContent = '📋 Error Log';
-    errorLogBtn.addEventListener('click', () => opts.onShowErrorLog?.());
-    errorRow.appendChild(errorLogBtn);
-    const clearLogBtn = el('button', 'crit-btn crit-btn-small');
-    clearLogBtn.textContent = '🗑 Clear';
-    clearLogBtn.addEventListener('click', () => opts.onClearErrorLog?.());
-    errorRow.appendChild(clearLogBtn);
-    body.appendChild(errorRow);
   });
 }
 

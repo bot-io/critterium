@@ -147,10 +147,14 @@ describe('processEating', () => {
   it('satiated predator (energy > 75% max) skips eating', () => {
     const cfg = predatorPreyConfig(1, 1, 100);
     const eco = new EcosystemWorld(cfg);
-    eco.world.x[0] = 100; eco.world.y[0] = 100;
-    eco.world.x[1] = 100; eco.world.y[1] = 100;
-    eco.world.vx[0] = 0; eco.world.vy[0] = 0;
-    eco.world.vx[1] = 0; eco.world.vy[1] = 0;
+    eco.world.x[0] = 100;
+    eco.world.y[0] = 100;
+    eco.world.x[1] = 100;
+    eco.world.y[1] = 100;
+    eco.world.vx[0] = 0;
+    eco.world.vy[0] = 0;
+    eco.world.vx[1] = 0;
+    eco.world.vy[1] = 0;
     // Predator at 180/200 energy (90% — above 75% satiation threshold)
     eco.eco.energy[0] = 180;
 

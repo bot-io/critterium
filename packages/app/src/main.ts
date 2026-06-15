@@ -586,6 +586,8 @@ async function main(): Promise<void> {
     renderer.setSpeciesMaxEnergy(
       new Float32Array(liveConfig.species.map((s) => s.energy.maxEnergy)),
     );
+    // Update population graph colors to match
+    popGraph.setColors(liveConfig.species.map((s) => parseInt(s.color.slice(1), 16)));
   }
 
   // Attach canvas to DOM
@@ -687,7 +689,7 @@ async function main(): Promise<void> {
         grid.cellSize !== 150 ||
         grid.cols !== Math.ceil(liveConfig.width / 150) ||
         grid.rows !== Math.ceil(liveConfig.height / 150) ||
-        eco.config.populationCap !== liveConfig.populationCap
+        grid.maxParticles < liveConfig.populationCap
       ) {
         grid = new SpatialHashGrid(
           liveConfig.width,
@@ -714,7 +716,7 @@ async function main(): Promise<void> {
       lastTime = performance.now();
 
       // Reset renderer state (clear stale birth/death effects + prevAlive)
-      renderer.resetState();
+      renderer.resetState(liveConfig.populationCap);
 
       // Reallocate species counts array for current species count
       speciesCounts = new Int32Array(liveConfig.species.length);

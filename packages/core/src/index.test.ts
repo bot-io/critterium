@@ -812,6 +812,38 @@ describe('SpatialHashGrid', () => {
       expect(gridResult).toEqual(bruteResult);
     }
   });
+
+  // ─── Regression: maxParticles must be exposed for capacity checks ───────
+  // Bug: increasing populationCap at runtime crashed because the grid's next[]
+  // array was never resized. The grid must expose maxParticles so callers
+  // can detect when recreation is needed.
+
+  it('exposes maxParticles property', () => {
+    const grid = new SpatialHashGrid(800, 600, 100, 500);
+    expect(grid.maxParticles).toBe(500);
+  });
+
+  it('maxParticles differs between grids of different capacity', () => {
+    const small = new SpatialHashGrid(800, 600, 100, 200);
+    const large = new SpatialHashGrid(800, 600, 100, 2000);
+    expect(small.maxParticles).toBe(200);
+    expect(large.maxParticles).toBe(2000);
+    expect(small.maxParticles).toBeLessThan(large.maxParticles);
+  });
+
+  it('can insert at indices up to maxParticles - 1 without crash', () => {
+    const grid = new SpatialHashGrid(800, 600, 100, 50);
+    grid.clear();
+    grid.insert(49, 100, 100); // last valid index
+    const xArr = new Float32Array(50);
+    const yArr = new Float32Array(50);
+    xArr[49] = 100;
+    yArr[49] = 100;
+    const out = new Int32Array(10);
+    const count = grid.queryRadiusToArray(100, 100, 50, xArr, yArr, 50, out, 10);
+    // Should find something without crashing
+    expect(count).toBeGreaterThanOrEqual(0);
+  });
 });
 
 // ─── InteractionMatrix ─────────────────────────────────────────

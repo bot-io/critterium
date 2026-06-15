@@ -121,7 +121,10 @@ export class CritteriumRenderer {
    * Reset tracking state (prevAlive, effect pools). Call after sim rebuild
    * to prevent stale birth/death effects from lingering.
    */
-  resetState(): void {
+  resetState(maxParticles?: number): void {
+    if (maxParticles !== undefined && maxParticles > this.prevAlive.length) {
+      this.prevAlive = new Uint8Array(maxParticles);
+    }
     this.prevAlive.fill(DEAD);
     this.skipEffectsFrame = true;
     for (const effect of this.birthPool) {

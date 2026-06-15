@@ -131,3 +131,19 @@ describe('No dead sickness/infection code', () => {
     expect(proto.sicknessGfx).toBeUndefined();
   });
 });
+
+// ─── Regression: resetState must accept new capacity ───────────────
+// Bug: increasing populationCap crashed the renderer because prevAlive
+// array was never resized. resetState now accepts optional maxParticles.
+
+describe('resetState capacity resize (regression)', () => {
+  it('CritteriumRenderer.prototype.resetState is defined', () => {
+    expect(CritteriumRenderer.prototype.resetState).toBeDefined();
+    expect(typeof CritteriumRenderer.prototype.resetState).toBe('function');
+  });
+
+  it('resetState accepts a maxParticles parameter (arity >= 1)', () => {
+    // The function should accept at least 1 argument (maxParticles)
+    expect(CritteriumRenderer.prototype.resetState.length).toBeGreaterThanOrEqual(1);
+  });
+});

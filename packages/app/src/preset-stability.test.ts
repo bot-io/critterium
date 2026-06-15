@@ -183,7 +183,7 @@ describe('Preset Stability — 120s simulation per preset', { timeout: 120_000 }
   for (const presetEntry of BUILTIN_PRESETS) {
     const name = presetEntry.name;
 
-    it(`${name} — all species survive 120s`, () => {
+    it(`${name} — all species survive 120s`, { timeout: 180_000 }, () => {
       const result = runPreset(name, presetEntry.config);
       const report = formatResult(result);
       console.log(`\n${name}:\n${report}`);

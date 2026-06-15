@@ -40,11 +40,8 @@ export class EcosystemWorld {
   // Current alive count
   private _aliveCount: number = 0;
 
-  // Per-species alive count (for fair population cap distribution)
+  // Per-species alive count (for logging & round-robin reproduction)
   private _speciesCounts: number[] = [];
-
-  // Per-species population cap (ceil(populationCap / numSpecies))
-  private _perSpeciesCap: number[] = [];
 
   // Current highest used index
   private _highWaterMark: number = 0;
@@ -101,11 +98,9 @@ export class EcosystemWorld {
     this._aliveCount = totalCount;
     this._highWaterMark = totalCount;
 
-    // Per-species fair cap: each species gets ceil(populationCap / numSpecies) guaranteed slots.
-    // This prevents fast-breeding species from monopolizing the global cap.
+    // Per-species counts for logging & round-robin reproduction
     const numSpecies = config.species.length;
     this._speciesCounts = new Array(numSpecies).fill(0);
-    this._perSpeciesCap = config.species.map(() => Math.ceil(config.populationCap / numSpecies));
     for (let i = 0; i < totalCount; i++) {
       this._speciesCounts[this.world.type[i]]++;
     }
@@ -132,16 +127,6 @@ export class EcosystemWorld {
   /** Per-species alive count. */
   speciesCount(speciesIdx: number): number {
     return this._speciesCounts[speciesIdx] ?? 0;
-  }
-
-  /** Per-species population cap (fair share of global cap). */
-  perSpeciesCap(speciesIdx: number): number {
-    return this._perSpeciesCap[speciesIdx] ?? this.config.populationCap;
-  }
-
-  /** Is this species at its per-species cap? */
-  isSpeciesAtCap(speciesIdx: number): boolean {
-    return this._speciesCounts[speciesIdx] >= this._perSpeciesCap[speciesIdx];
   }
 
   /** Is the population at global cap? */
@@ -291,10 +276,8 @@ export class EcosystemWorld {
 
     const speciesIdx = this.world.type[index];
 
-    // Per-species cap: prevents one fast-breeding species from monopolizing slots
-    if (this.isSpeciesAtCap(speciesIdx)) return -1;
-
-    // Global cap: total population safety valve
+    // Global cap: total population safety valve.
+    // Fairness across species is enforced by processReproduction()'s round-robin queue.
     if (this.isAtCap) return -1;
 
     const species = this.species[speciesIdx];

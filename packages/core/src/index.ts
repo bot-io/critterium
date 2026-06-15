@@ -370,6 +370,7 @@ export class SpatialHashGrid {
   readonly invCellSize: number;
   readonly cols: number;
   readonly rows: number;
+  readonly maxParticles: number;
 
   // head[cellIndex] = first particle index in linked list for that cell, or -1
   private head: Int32Array;
@@ -386,6 +387,7 @@ export class SpatialHashGrid {
     this.invCellSize = 1 / cellSize;
     this.cols = Math.ceil(width / cellSize);
     this.rows = Math.ceil(height / cellSize);
+    this.maxParticles = maxParticles;
 
     const numCells = this.cols * this.rows;
     this.head = new Int32Array(numCells);

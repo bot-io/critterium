@@ -735,7 +735,7 @@ const ROCK_PAPER_SCISSORS: EcosystemPreset = preset(
       {
         name: 'Rock',
         count: 60,
-        color: '#9e9eae',
+        color: '#ff0000',
         radius: 4,
         initialSpeed: 50,
         maxSpeed: 100,
@@ -765,7 +765,7 @@ const ROCK_PAPER_SCISSORS: EcosystemPreset = preset(
       {
         name: 'Paper',
         count: 60,
-        color: '#f0f0f0',
+        color: '#00ff00',
         radius: 4,
         initialSpeed: 50,
         maxSpeed: 100,
@@ -795,7 +795,7 @@ const ROCK_PAPER_SCISSORS: EcosystemPreset = preset(
       {
         name: 'Scissors',
         count: 60,
-        color: '#ff9933',
+        color: '#0099ff',
         radius: 4,
         initialSpeed: 50,
         maxSpeed: 100,
