@@ -73,6 +73,12 @@ export function processEating(eco: EcosystemWorld, grid: SpatialHashGrid): Eatin
     if (diet.canEat.size === 0) continue;
 
     const ri = species[speciesIdx].radius;
+    const maxE = species[speciesIdx].energy.maxEnergy;
+
+    // Predator satiation: predators above 75% of max energy don't hunt.
+    // This prevents over-predation when predators are well-fed, giving
+    // prey populations room to recover (biologically realistic).
+    const isSatiated = state.energy[i] > maxE * 0.75;
 
     // Query spatial hash for neighbors within max eat radius.
     // Pass selfIdx=i so co-located prey (dSq===0) are still found.
@@ -91,6 +97,9 @@ export function processEating(eco: EcosystemWorld, grid: SpatialHashGrid): Eatin
         const preySpeciesIdx = type[j];
         if (!diet.canEat.has(preySpeciesIdx)) return;
 
+        // Skip if predator is satiated (energy > 75% of max)
+        if (isSatiated) return;
+
         // Check overlap: distance < sum of radii
         const rj = species[preySpeciesIdx].radius;
         const minDist = ri + rj;
@@ -105,7 +114,6 @@ export function processEating(eco: EcosystemWorld, grid: SpatialHashGrid): Eatin
         result.killed++;
 
         if (energyGain > 0) {
-          const maxE = species[speciesIdx].energy.maxEnergy;
           const actualGain = Math.min(energyGain, maxE - state.energy[i]);
           if (actualGain > 0) {
             state.energy[i] += actualGain;

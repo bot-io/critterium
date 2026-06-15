@@ -134,13 +134,13 @@ describe('processEating', () => {
     eco.world.vy[0] = 0;
     eco.world.vx[1] = 0;
     eco.world.vy[1] = 0;
-    // Set predator energy near max
-    eco.eco.energy[0] = 195; // max is 200, gain is 30 → would be 225, capped at 200
+    // Set predator energy below 75% satiation threshold (max is 200, 75% = 150)
+    eco.eco.energy[0] = 140; // gain is 30 → would be 170, under cap
 
     const grid = makeGrid(eco);
     const result = processEating(eco, grid);
     expect(result.killed).toBe(1); // prey killed
-    expect(eco.eco.energy[0]).toBe(200); // energy capped at max
+    expect(eco.eco.energy[0]).toBe(170); // 140 + 30 gain
     expect(eco.eco.alive[1]).toBe(DEAD); // prey eaten
   });
 
