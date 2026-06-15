@@ -144,6 +144,22 @@ describe('processEating', () => {
     expect(eco.eco.alive[1]).toBe(DEAD); // prey eaten
   });
 
+  it('satiated predator (energy > 75% max) skips eating', () => {
+    const cfg = predatorPreyConfig(1, 1, 100);
+    const eco = new EcosystemWorld(cfg);
+    eco.world.x[0] = 100; eco.world.y[0] = 100;
+    eco.world.x[1] = 100; eco.world.y[1] = 100;
+    eco.world.vx[0] = 0; eco.world.vy[0] = 0;
+    eco.world.vx[1] = 0; eco.world.vy[1] = 0;
+    // Predator at 180/200 energy (90% — above 75% satiation threshold)
+    eco.eco.energy[0] = 180;
+
+    const grid = makeGrid(eco);
+    const result = processEating(eco, grid);
+    expect(result.killed).toBe(0); // satiated — didn't eat
+    expect(eco.eco.alive[1]).not.toBe(DEAD); // prey survived
+  });
+
   it('predator can eat multiple prey in one step', () => {
     const cfg = predatorPreyConfig(1, 3, 100);
     const eco = new EcosystemWorld(cfg);
