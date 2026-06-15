@@ -63,7 +63,15 @@ export interface ControlsPanelOptions {
   initialForceValues?: Record<string, Record<string, number>>;
   pipelineForces?: PipelineForceEntry[];
   forceTypeDescriptors?: ForceTypeDescriptor[];
-  initialMatrixValues?: Array<Array<{ innerStrength: number; outerStrength: number; innerRadius: number; outerRadius: number; falloff: string } | null>>;
+  initialMatrixValues?: Array<
+    Array<{
+      innerStrength: number;
+      outerStrength: number;
+      innerRadius: number;
+      outerRadius: number;
+      falloff: string;
+    } | null>
+  >;
   initialSpeciesValues?: Array<Record<string, number>>;
   maxCount?: number;
 }
@@ -1324,7 +1332,8 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
 
     const zoneLegend = el('div');
     zoneLegend.style.cssText = 'font-size:9px; color:#777; margin:2px 0 4px 0;';
-    zoneLegend.textContent = 'Inner = close range (personal space) · Outer = far range (detection/flocking)';
+    zoneLegend.textContent =
+      'Inner = close range (personal space) · Outer = far range (detection/flocking)';
     zoneSection.appendChild(zoneLegend);
 
     const zoneBody = el('div', 'crit-section-body');
@@ -1340,12 +1349,14 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
         lbl.style.minWidth = '60px';
         rowDiv.appendChild(lbl);
 
-        const ii = i, jj = j;
+        const ii = i,
+          jj = j;
 
         // ── Inner strength slider ──
         const innerStrVal = el('span', 'crit-value');
         innerStrVal.textContent = String(init?.innerStrength ?? 0);
-        innerStrVal.style.cssText = 'min-width:28px; font-size:9px; color:#ff88aa; text-align:right;';
+        innerStrVal.style.cssText =
+          'min-width:28px; font-size:9px; color:#ff88aa; text-align:right;';
         rowDiv.appendChild(innerStrVal);
         const innerStrSlider = document.createElement('input');
         innerStrSlider.type = 'range';
@@ -1403,7 +1414,8 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
         rowDiv.appendChild(outerStrSlider);
         const outerStrVal = el('span', 'crit-value');
         outerStrVal.textContent = String(init?.outerStrength ?? 0);
-        outerStrVal.style.cssText = 'min-width:28px; font-size:9px; color:#88ff88; text-align:right;';
+        outerStrVal.style.cssText =
+          'min-width:28px; font-size:9px; color:#88ff88; text-align:right;';
         rowDiv.appendChild(outerStrVal);
 
         const updateZones = (): void => {
@@ -1420,7 +1432,8 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
           outerStrVal.textContent = outerStrSlider.value;
           const falloff = init?.falloff ?? 'linear';
           opts.onMatrixChange?.(
-            ii, jj,
+            ii,
+            jj,
             parseInt(innerStrSlider.value),
             parseInt(outerStrSlider.value),
             innerR,

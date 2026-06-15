@@ -677,11 +677,19 @@ function validateInteractionMatrix(raw: unknown, numSpecies: number): void {
         e.outerStrength = 0;
       }
       // Clamp innerRadius: NaN/Infinity/negative → 0
-      if (typeof e.innerRadius !== 'number' || !Number.isFinite(e.innerRadius) || (e.innerRadius as number) < 0) {
+      if (
+        typeof e.innerRadius !== 'number' ||
+        !Number.isFinite(e.innerRadius) ||
+        (e.innerRadius as number) < 0
+      ) {
         e.innerRadius = 0;
       }
       // Clamp outerRadius: NaN/Infinity/negative → default 100; clamp upper bound
-      if (typeof e.outerRadius !== 'number' || !Number.isFinite(e.outerRadius) || (e.outerRadius as number) < 0) {
+      if (
+        typeof e.outerRadius !== 'number' ||
+        !Number.isFinite(e.outerRadius) ||
+        (e.outerRadius as number) < 0
+      ) {
         e.outerRadius = 100;
       } else if ((e.outerRadius as number) > 5000) {
         e.outerRadius = 5000;

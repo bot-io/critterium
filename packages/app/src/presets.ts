@@ -105,11 +105,29 @@ const CLASSIC: EcosystemPreset = preset(
       /*         Prey     Predator */
       /* Prey     */ [
         { innerStrength: 0, outerStrength: 30, innerRadius: 0, outerRadius: 80, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -80, innerRadius: 0, outerRadius: 120, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: -80,
+          innerRadius: 0,
+          outerRadius: 120,
+          falloff: 'linear',
+        },
       ],
       /* Predator */ [
-        { innerStrength: 0, outerStrength: 60, innerRadius: 0, outerRadius: 150, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -20, innerRadius: 0, outerRadius: 50, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: 60,
+          innerRadius: 0,
+          outerRadius: 150,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: -20,
+          innerRadius: 0,
+          outerRadius: 50,
+          falloff: 'linear',
+        },
       ],
     ],
     forces: [
@@ -259,27 +277,87 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
       /*           Algae   Zoopl.  SmFish  BigFish Whale  */
       /* Algae   */ [null, null, null, null, null],
       /* Zoopl.  */ [
-        { innerStrength: 0, outerStrength: 40, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: 40,
+          innerRadius: 0,
+          outerRadius: 100,
+          falloff: 'linear',
+        },
         null,
-        { innerStrength: 0, outerStrength: -60, innerRadius: 0, outerRadius: 80, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -80, innerRadius: 0, outerRadius: 120, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: -60,
+          innerRadius: 0,
+          outerRadius: 80,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: -80,
+          innerRadius: 0,
+          outerRadius: 120,
+          falloff: 'linear',
+        },
         null,
       ],
       /* SmFish  */ [
         null,
-        { innerStrength: 0, outerStrength: 50, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: 50,
+          innerRadius: 0,
+          outerRadius: 100,
+          falloff: 'linear',
+        },
         { innerStrength: 0, outerStrength: 25, innerRadius: 0, outerRadius: 60, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -70, innerRadius: 0, outerRadius: 120, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: -70,
+          innerRadius: 0,
+          outerRadius: 120,
+          falloff: 'linear',
+        },
         null,
       ],
       /* BigFish */ [
         null,
         null,
-        { innerStrength: 0, outerStrength: 60, innerRadius: 0, outerRadius: 150, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -30, innerRadius: 0, outerRadius: 80, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -50, innerRadius: 0, outerRadius: 150, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: 60,
+          innerRadius: 0,
+          outerRadius: 150,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: -30,
+          innerRadius: 0,
+          outerRadius: 80,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: -50,
+          innerRadius: 0,
+          outerRadius: 150,
+          falloff: 'linear',
+        },
       ],
-      /* Whale   */ [null, null, null, { innerStrength: 0, outerStrength: 40, innerRadius: 0, outerRadius: 200, falloff: 'linear' }, null],
+      /* Whale   */ [
+        null,
+        null,
+        null,
+        {
+          innerStrength: 0,
+          outerStrength: 40,
+          innerRadius: 0,
+          outerRadius: 200,
+          falloff: 'linear',
+        },
+        null,
+      ],
     ],
     forces: [
       { type: 'drag', enabled: true, params: { coefficient: 0.6 } },
@@ -354,8 +432,14 @@ const SWARM_INTELLIGENCE: EcosystemPreset = preset(
     ],
     interactionMatrix: [
       /*         Birds     Locusts */
-      /* Birds   */ [{ innerStrength: 0, outerStrength: 50, innerRadius: 0, outerRadius: 80, falloff: 'linear' }, null],
-      /* Locusts */ [null, { innerStrength: 0, outerStrength: 60, innerRadius: 0, outerRadius: 50, falloff: 'linear' }],
+      /* Birds   */ [
+        { innerStrength: 0, outerStrength: 50, innerRadius: 0, outerRadius: 80, falloff: 'linear' },
+        null,
+      ],
+      /* Locusts */ [
+        null,
+        { innerStrength: 0, outerStrength: 60, innerRadius: 0, outerRadius: 50, falloff: 'linear' },
+      ],
     ],
     forces: [
       { type: 'drag', enabled: true, params: { coefficient: 1.2 } },
@@ -503,26 +587,98 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
     interactionMatrix: [
       /*         Lions    Wolves   Deer     Rabbits */
       /* Lions  */ [
-        { innerStrength: 0, outerStrength: -40, innerRadius: 0, outerRadius: 60, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: 30, innerRadius: 0, outerRadius: 150, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: 70, innerRadius: 0, outerRadius: 130, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: 50, innerRadius: 0, outerRadius: 140, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: -40,
+          innerRadius: 0,
+          outerRadius: 60,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: 30,
+          innerRadius: 0,
+          outerRadius: 150,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: 70,
+          innerRadius: 0,
+          outerRadius: 130,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: 50,
+          innerRadius: 0,
+          outerRadius: 140,
+          falloff: 'linear',
+        },
       ],
       /* Wolves */ [
-        { innerStrength: 0, outerStrength: -60, innerRadius: 0, outerRadius: 120, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -25, innerRadius: 0, outerRadius: 50, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: 65, innerRadius: 0, outerRadius: 110, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: 55, innerRadius: 0, outerRadius: 130, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: -60,
+          innerRadius: 0,
+          outerRadius: 120,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: -25,
+          innerRadius: 0,
+          outerRadius: 50,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: 65,
+          innerRadius: 0,
+          outerRadius: 110,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: 55,
+          innerRadius: 0,
+          outerRadius: 130,
+          falloff: 'linear',
+        },
       ],
       /* Deer   */ [
-        { innerStrength: 0, outerStrength: -90, innerRadius: 0, outerRadius: 150, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -80, innerRadius: 0, outerRadius: 130, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: -90,
+          innerRadius: 0,
+          outerRadius: 150,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: -80,
+          innerRadius: 0,
+          outerRadius: 130,
+          falloff: 'linear',
+        },
         { innerStrength: 0, outerStrength: 30, innerRadius: 0, outerRadius: 70, falloff: 'linear' },
         null,
       ],
       /* Rabbits*/ [
-        { innerStrength: 0, outerStrength: -70, innerRadius: 0, outerRadius: 120, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -60, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: -70,
+          innerRadius: 0,
+          outerRadius: 120,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: -60,
+          innerRadius: 0,
+          outerRadius: 100,
+          falloff: 'linear',
+        },
         null,
         { innerStrength: 0, outerStrength: 20, innerRadius: 0, outerRadius: 40, falloff: 'linear' },
       ],
@@ -602,11 +758,29 @@ const TINY_POND: EcosystemPreset = preset(
       /*         Minnows  Bass */
       /* Minnows */ [
         { innerStrength: 0, outerStrength: 40, innerRadius: 0, outerRadius: 60, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -100, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: -100,
+          innerRadius: 0,
+          outerRadius: 100,
+          falloff: 'linear',
+        },
       ],
       /* Bass    */ [
-        { innerStrength: 0, outerStrength: 70, innerRadius: 0, outerRadius: 150, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -30, innerRadius: 0, outerRadius: 60, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: 70,
+          innerRadius: 0,
+          outerRadius: 150,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: -30,
+          innerRadius: 0,
+          outerRadius: 60,
+          falloff: 'linear',
+        },
       ],
     ],
     forces: [
@@ -706,7 +880,11 @@ const ZEN_GARDEN: EcosystemPreset = preset(
     ],
     interactionMatrix: [
       /*           Fireflies  Koi       Leaves  */
-      /* Fireflies*/ [{ innerStrength: 0, outerStrength: 15, innerRadius: 0, outerRadius: 60, falloff: 'linear' }, null, null],
+      /* Fireflies*/ [
+        { innerStrength: 0, outerStrength: 15, innerRadius: 0, outerRadius: 60, falloff: 'linear' },
+        null,
+        null,
+      ],
       /* Koi      */ [null, null, null],
       /* Leaves   */ [null, null, null],
     ],
@@ -827,19 +1005,73 @@ const ROCK_PAPER_SCISSORS: EcosystemPreset = preset(
     interactionMatrix: [
       /*             Rock         Paper        Scissors  */
       /* Rock     */ [
-        { innerStrength: 0, outerStrength: -20, innerRadius: 0, outerRadius: 40, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -60, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: 50, innerRadius: 0, outerRadius: 120, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: -20,
+          innerRadius: 0,
+          outerRadius: 40,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: -60,
+          innerRadius: 0,
+          outerRadius: 100,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: 50,
+          innerRadius: 0,
+          outerRadius: 120,
+          falloff: 'linear',
+        },
       ],
       /* Paper    */ [
-        { innerStrength: 0, outerStrength: 50, innerRadius: 0, outerRadius: 120, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -20, innerRadius: 0, outerRadius: 40, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -60, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: 50,
+          innerRadius: 0,
+          outerRadius: 120,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: -20,
+          innerRadius: 0,
+          outerRadius: 40,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: -60,
+          innerRadius: 0,
+          outerRadius: 100,
+          falloff: 'linear',
+        },
       ],
       /* Scissors */ [
-        { innerStrength: 0, outerStrength: -60, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: 50, innerRadius: 0, outerRadius: 120, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -20, innerRadius: 0, outerRadius: 40, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: -60,
+          innerRadius: 0,
+          outerRadius: 100,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: 50,
+          innerRadius: 0,
+          outerRadius: 120,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: -20,
+          innerRadius: 0,
+          outerRadius: 40,
+          falloff: 'linear',
+        },
       ],
     ],
     forces: [
@@ -955,16 +1187,50 @@ const GRASSLANDS: EcosystemPreset = preset(
     // src=row (how this species reacts to target col)
     //         Grass       Rabbits     Foxes
     interactionMatrix: [
-      /* Grass   */ [{ innerStrength: 0, outerStrength: -15, innerRadius: 0, outerRadius: 30, falloff: 'linear' }, null, null],
+      /* Grass   */ [
+        {
+          innerStrength: 0,
+          outerStrength: -15,
+          innerRadius: 0,
+          outerRadius: 30,
+          falloff: 'linear',
+        },
+        null,
+        null,
+      ],
       /* Rabbits */ [
-        { innerStrength: 0, outerStrength: 40, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: 40,
+          innerRadius: 0,
+          outerRadius: 100,
+          falloff: 'linear',
+        },
         { innerStrength: 0, outerStrength: 20, innerRadius: 0, outerRadius: 50, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -80, innerRadius: 0, outerRadius: 130, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: -80,
+          innerRadius: 0,
+          outerRadius: 130,
+          falloff: 'linear',
+        },
       ],
       /* Foxes   */ [
         null,
-        { innerStrength: 0, outerStrength: 60, innerRadius: 0, outerRadius: 160, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -30, innerRadius: 0, outerRadius: 60, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: 60,
+          innerRadius: 0,
+          outerRadius: 160,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: -30,
+          innerRadius: 0,
+          outerRadius: 60,
+          falloff: 'linear',
+        },
       ],
     ],
     forces: [
@@ -1056,12 +1322,36 @@ const BIRDS: EcosystemPreset = preset(
     //         Starlings    Hawk
     interactionMatrix: [
       /* Starlings */ [
-        { innerStrength: 0, outerStrength: 55, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -95, innerRadius: 0, outerRadius: 140, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: 55,
+          innerRadius: 0,
+          outerRadius: 100,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: -95,
+          innerRadius: 0,
+          outerRadius: 140,
+          falloff: 'linear',
+        },
       ],
       /* Hawk      */ [
-        { innerStrength: 0, outerStrength: 70, innerRadius: 0, outerRadius: 170, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -35, innerRadius: 0, outerRadius: 90, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: 70,
+          innerRadius: 0,
+          outerRadius: 170,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: -35,
+          innerRadius: 0,
+          outerRadius: 90,
+          falloff: 'linear',
+        },
       ],
     ],
     forces: [
@@ -1180,13 +1470,35 @@ const FISHES: EcosystemPreset = preset(
       /* Tetras    */ [
         { innerStrength: 0, outerStrength: 40, innerRadius: 0, outerRadius: 80, falloff: 'linear' },
         null,
-        { innerStrength: 0, outerStrength: -85, innerRadius: 0, outerRadius: 130, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: -85,
+          innerRadius: 0,
+          outerRadius: 130,
+          falloff: 'linear',
+        },
       ],
-      /* Wrasse    */ [null, null, { innerStrength: 0, outerStrength: 30, innerRadius: 0, outerRadius: 90, falloff: 'linear' }],
-      /* Barracuda */ [
-        { innerStrength: 0, outerStrength: 60, innerRadius: 0, outerRadius: 150, falloff: 'linear' },
+      /* Wrasse    */ [
         null,
-        { innerStrength: 0, outerStrength: -25, innerRadius: 0, outerRadius: 70, falloff: 'linear' },
+        null,
+        { innerStrength: 0, outerStrength: 30, innerRadius: 0, outerRadius: 90, falloff: 'linear' },
+      ],
+      /* Barracuda */ [
+        {
+          innerStrength: 0,
+          outerStrength: 60,
+          innerRadius: 0,
+          outerRadius: 150,
+          falloff: 'linear',
+        },
+        null,
+        {
+          innerStrength: 0,
+          outerStrength: -25,
+          innerRadius: 0,
+          outerRadius: 70,
+          falloff: 'linear',
+        },
       ],
     ],
     forces: [
@@ -1367,30 +1679,78 @@ const CORAL_REEF: EcosystemPreset = preset(
       /* Zoopl.  */ [
         { innerStrength: 0, outerStrength: 35, innerRadius: 0, outerRadius: 90, falloff: 'linear' },
         null,
-        { innerStrength: 0, outerStrength: -50, innerRadius: 0, outerRadius: 110, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: -50,
+          innerRadius: 0,
+          outerRadius: 110,
+          falloff: 'linear',
+        },
         null,
         null,
       ],
       /* Clown   */ [
         null,
-        { innerStrength: 0, outerStrength: 50, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: 50,
+          innerRadius: 0,
+          outerRadius: 100,
+          falloff: 'linear',
+        },
         { innerStrength: 0, outerStrength: 30, innerRadius: 0, outerRadius: 70, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -70, innerRadius: 0, outerRadius: 130, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: -70,
+          innerRadius: 0,
+          outerRadius: 130,
+          falloff: 'linear',
+        },
         null,
       ],
       /* Eel     */ [
         null,
         null,
-        { innerStrength: 0, outerStrength: 55, innerRadius: 0, outerRadius: 140, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -20, innerRadius: 0, outerRadius: 60, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -40, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: 55,
+          innerRadius: 0,
+          outerRadius: 140,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: -20,
+          innerRadius: 0,
+          outerRadius: 60,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: -40,
+          innerRadius: 0,
+          outerRadius: 100,
+          falloff: 'linear',
+        },
       ],
       /* Shark   */ [
         null,
         null,
         null,
-        { innerStrength: 0, outerStrength: 45, innerRadius: 0, outerRadius: 170, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -35, innerRadius: 0, outerRadius: 80, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: 45,
+          innerRadius: 0,
+          outerRadius: 170,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: -35,
+          innerRadius: 0,
+          outerRadius: 80,
+          falloff: 'linear',
+        },
       ],
     ],
     forces: [
@@ -1501,17 +1861,47 @@ const TORNADO_ALLEY: EcosystemPreset = preset(
     interactionMatrix: [
       /* Dust   */ [
         { innerStrength: 0, outerStrength: 20, innerRadius: 0, outerRadius: 50, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -40, innerRadius: 0, outerRadius: 70, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: -40,
+          innerRadius: 0,
+          outerRadius: 70,
+          falloff: 'linear',
+        },
         null,
       ],
       /* Debris */ [
-        { innerStrength: 0, outerStrength: -40, innerRadius: 0, outerRadius: 70, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -50, innerRadius: 0, outerRadius: 60, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -45, innerRadius: 0, outerRadius: 80, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: -40,
+          innerRadius: 0,
+          outerRadius: 70,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: -50,
+          innerRadius: 0,
+          outerRadius: 60,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: -45,
+          innerRadius: 0,
+          outerRadius: 80,
+          falloff: 'linear',
+        },
       ],
       /* Birds  */ [
         null,
-        { innerStrength: 0, outerStrength: -45, innerRadius: 0, outerRadius: 80, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: -45,
+          innerRadius: 0,
+          outerRadius: 80,
+          falloff: 'linear',
+        },
         { innerStrength: 0, outerStrength: 30, innerRadius: 0, outerRadius: 90, falloff: 'linear' },
       ],
     ],
@@ -1672,24 +2062,71 @@ const DEEP_SEA_VENT: EcosystemPreset = preset(
     // src=row (how this species reacts to target col)
     //          Bacteria  Worms     Crabs     Octopus
     interactionMatrix: [
-      /* Bacteria */ [{ innerStrength: 0, outerStrength: -10, innerRadius: 0, outerRadius: 35, falloff: 'linear' }, null, null, null],
+      /* Bacteria */ [
+        {
+          innerStrength: 0,
+          outerStrength: -10,
+          innerRadius: 0,
+          outerRadius: 35,
+          falloff: 'linear',
+        },
+        null,
+        null,
+        null,
+      ],
       /* Worms    */ [
         { innerStrength: 0, outerStrength: 35, innerRadius: 0, outerRadius: 85, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -15, innerRadius: 0, outerRadius: 45, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: -15,
+          innerRadius: 0,
+          outerRadius: 45,
+          falloff: 'linear',
+        },
         null,
         null,
       ],
       /* Crabs    */ [
         null,
-        { innerStrength: 0, outerStrength: 45, innerRadius: 0, outerRadius: 110, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -12, innerRadius: 0, outerRadius: 40, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -55, innerRadius: 0, outerRadius: 120, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: 45,
+          innerRadius: 0,
+          outerRadius: 110,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: -12,
+          innerRadius: 0,
+          outerRadius: 40,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: -55,
+          innerRadius: 0,
+          outerRadius: 120,
+          falloff: 'linear',
+        },
       ],
       /* Octopus  */ [
         null,
         null,
-        { innerStrength: 0, outerStrength: 55, innerRadius: 0, outerRadius: 140, falloff: 'linear' },
-        { innerStrength: 0, outerStrength: -25, innerRadius: 0, outerRadius: 70, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: 55,
+          innerRadius: 0,
+          outerRadius: 140,
+          falloff: 'linear',
+        },
+        {
+          innerStrength: 0,
+          outerStrength: -25,
+          innerRadius: 0,
+          outerRadius: 70,
+          falloff: 'linear',
+        },
       ],
     ],
     forces: [
@@ -1813,10 +2250,20 @@ const SYMBIOSIS: EcosystemPreset = preset(
         { innerStrength: 0, outerStrength: 30, innerRadius: 0, outerRadius: 90, falloff: 'linear' },
         null,
       ],
-      /* Coral   */ [{ innerStrength: 0, outerStrength: 30, innerRadius: 0, outerRadius: 90, falloff: 'linear' }, null, null],
+      /* Coral   */ [
+        { innerStrength: 0, outerStrength: 30, innerRadius: 0, outerRadius: 90, falloff: 'linear' },
+        null,
+        null,
+      ],
       /* Shrimp  */ [
         null,
-        { innerStrength: 0, outerStrength: 40, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
+        {
+          innerStrength: 0,
+          outerStrength: 40,
+          innerRadius: 0,
+          outerRadius: 100,
+          falloff: 'linear',
+        },
         { innerStrength: 0, outerStrength: 18, innerRadius: 0, outerRadius: 60, falloff: 'linear' },
       ],
     ],

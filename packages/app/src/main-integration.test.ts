@@ -148,10 +148,34 @@ function buildTestConfig(seed = 42): EcosystemConfig {
  */
 function buildInteractionMatrix(): InteractionMatrix {
   const matrix = new InteractionMatrix(2);
-  matrix.set(0, 0, { innerStrength: 30, outerStrength: 30, innerRadius: 0, outerRadius: 80, falloff: 'linear' });
-  matrix.set(0, 1, { innerStrength: -80, outerStrength: -80, innerRadius: 0, outerRadius: 120, falloff: 'linear' });
-  matrix.set(1, 0, { innerStrength: 60, outerStrength: 60, innerRadius: 0, outerRadius: 150, falloff: 'linear' });
-  matrix.set(1, 1, { innerStrength: -20, outerStrength: -20, innerRadius: 0, outerRadius: 50, falloff: 'linear' });
+  matrix.set(0, 0, {
+    innerStrength: 30,
+    outerStrength: 30,
+    innerRadius: 0,
+    outerRadius: 80,
+    falloff: 'linear',
+  });
+  matrix.set(0, 1, {
+    innerStrength: -80,
+    outerStrength: -80,
+    innerRadius: 0,
+    outerRadius: 120,
+    falloff: 'linear',
+  });
+  matrix.set(1, 0, {
+    innerStrength: 60,
+    outerStrength: 60,
+    innerRadius: 0,
+    outerRadius: 150,
+    falloff: 'linear',
+  });
+  matrix.set(1, 1, {
+    innerStrength: -20,
+    outerStrength: -20,
+    innerRadius: 0,
+    outerRadius: 50,
+    falloff: 'linear',
+  });
   return matrix;
 }
 
@@ -169,7 +193,13 @@ function createSimContext(config?: EcosystemConfig): SimContext {
     { force: createForce('drag', { coefficient: 0.8 }), enabled: true },
     { force: createForce('wander', { strength: 40, rate: 2.5 }), enabled: true },
     {
-      force: createForce('pointer', { innerStrength: 200, outerStrength: 200, innerRadius: 0, outerRadius: 150, falloff: 'linear' }),
+      force: createForce('pointer', {
+        innerStrength: 200,
+        outerStrength: 200,
+        innerRadius: 0,
+        outerRadius: 150,
+        falloff: 'linear',
+      }),
       enabled: false,
     },
   ];
@@ -832,7 +862,13 @@ describe('CRT-39: main.ts integration — full simulation stability', () => {
 
     // Add a vortex force
     ctx.forcePipeline.push({
-      force: createForce('vortex', { innerStrength: 200, outerStrength: 200, innerRadius: 0, outerRadius: 400, falloff: 'linear' }),
+      force: createForce('vortex', {
+        innerStrength: 200,
+        outerStrength: 200,
+        innerRadius: 0,
+        outerRadius: 400,
+        falloff: 'linear',
+      }),
       enabled: true,
     });
 

@@ -36,7 +36,12 @@ function runPreset(name: string, config: CritteriumConfig) {
     if (dragEntry?.params?.coeff !== undefined) dragCoeff = dragEntry.params.coeff as number;
   }
   const dragForce = new DragForce(dragCoeff);
-  const grid = new SpatialHashGrid(config.simulation.width, config.simulation.height, 150, config.simulation.populationCap);
+  const grid = new SpatialHashGrid(
+    config.simulation.width,
+    config.simulation.height,
+    150,
+    config.simulation.populationCap,
+  );
   const numSpecies = config.species.length;
   const speciesNames = config.species.map((s) => s.name);
   const initialPops = Array.from({ length: numSpecies }, (_, i) => eco.speciesCount(i));
@@ -59,7 +64,10 @@ function runPreset(name: string, config: CritteriumConfig) {
       const excess = eco.aliveCount - config.simulation.populationCap;
       let killed = 0;
       for (let i = 0; i < eco.highWaterMark && killed < excess; i++) {
-        if (eco.eco.alive[i] !== 0) { eco.kill(i); killed++; }
+        if (eco.eco.alive[i] !== 0) {
+          eco.kill(i);
+          killed++;
+        }
       }
     }
     simTime += DT;
@@ -88,22 +96,29 @@ describe('Stability Analysis (unstable presets only)', { timeout: 600_000 }, () 
     for (const preset of presets) {
       const r = runPreset(preset.name, preset.config);
       results.push(r);
-      const status = r.extinctSpecies.length === 0 ? '✅ STABLE' : `⚠️ EXTINCT: ${r.extinctSpecies.join(', ')}`;
+      const status =
+        r.extinctSpecies.length === 0 ? '✅ STABLE' : `⚠️ EXTINCT: ${r.extinctSpecies.join(', ')}`;
       console.log(`\n  ${preset.name} — ${status}`);
       for (let i = 0; i < r.finalPops.length; i++) {
         const ext = r.finalPops[i] === 0 ? ' ❌' : '';
-        console.log(`    [${i}] ${r.speciesNames[i].padEnd(16)} init=${r.initialPops[i]} final=${r.finalPops[i]} min=${r.minPops[i]} peak=${r.peakPops[i]}${ext}`);
+        console.log(
+          `    [${i}] ${r.speciesNames[i].padEnd(16)} init=${r.initialPops[i]} final=${r.finalPops[i]} min=${r.minPops[i]} peak=${r.peakPops[i]}${ext}`,
+        );
       }
       if (r.extinctSpecies.length > 0) {
         for (const snap of r.curve) {
           const pops = snap.populations.map((p) => String(p).padStart(4)).join(' ');
-          console.log(`      t=${snap.time.toFixed(0).padStart(3)}s total=${String(snap.total).padStart(4)} [${pops}]`);
+          console.log(
+            `      t=${snap.time.toFixed(0).padStart(3)}s total=${String(snap.total).padStart(4)} [${pops}]`,
+          );
         }
       }
     }
     const stable = results.filter((r) => r.extinctSpecies.length === 0).length;
     const partial = results.filter((r) => r.extinctSpecies.length > 0).length;
-    console.log(`\n══════ SUMMARY: ${stable}/${results.length} stable, ${partial} with extinctions ══════`);
+    console.log(
+      `\n══════ SUMMARY: ${stable}/${results.length} stable, ${partial} with extinctions ══════`,
+    );
     expect(results.length).toBe(presets.length);
   });
 });

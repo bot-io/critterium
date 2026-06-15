@@ -70,7 +70,13 @@ const TEST_FORCE_TYPES: ForceTypeDescriptor[] = [
     type: 'vortex',
     displayName: 'Vortex',
     description: 'Swirl force around center.',
-    defaultParams: { innerStrength: 150, outerStrength: 150, innerRadius: 0, outerRadius: 300, falloff: 'linear' },
+    defaultParams: {
+      innerStrength: 150,
+      outerStrength: 150,
+      innerRadius: 0,
+      outerRadius: 300,
+      falloff: 'linear',
+    },
     paramSchema: [
       {
         key: 'strength',
@@ -95,7 +101,17 @@ const TEST_FORCE_TYPES: ForceTypeDescriptor[] = [
 
 const TEST_PIPELINE: PipelineForceEntry[] = [
   { type: 'drag', enabled: true, params: { coefficient: 0.8 } },
-  { type: 'vortex', enabled: false, params: { innerStrength: 150, outerStrength: 150, innerRadius: 0, outerRadius: 300, falloff: 'linear' } },
+  {
+    type: 'vortex',
+    enabled: false,
+    params: {
+      innerStrength: 150,
+      outerStrength: 150,
+      innerRadius: 0,
+      outerRadius: 300,
+      falloff: 'linear',
+    },
+  },
 ];
 
 describe('controls panel', () => {

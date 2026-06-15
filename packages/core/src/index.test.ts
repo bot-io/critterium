@@ -861,7 +861,13 @@ describe('InteractionMatrix', () => {
 
   it('stores and retrieves entries', () => {
     const m = new InteractionMatrix(2);
-    const entry: InteractionEntry = { innerStrength: 100, outerStrength: 100, innerRadius: 0, outerRadius: 50, falloff: 'linear' };
+    const entry: InteractionEntry = {
+      innerStrength: 100,
+      outerStrength: 100,
+      innerRadius: 0,
+      outerRadius: 50,
+      falloff: 'linear',
+    };
     m.set(0, 1, entry);
     const got = m.get(0, 1);
     expect(got).not.toBeNull();
@@ -872,8 +878,20 @@ describe('InteractionMatrix', () => {
 
   it('supports asymmetric entries (A→B ≠ B→A)', () => {
     const m = new InteractionMatrix(2);
-    m.set(0, 1, { innerStrength: 100, outerStrength: 100, innerRadius: 0, outerRadius: 50, falloff: 'linear' }); // A chases B
-    m.set(1, 0, { innerStrength: -80, outerStrength: -80, innerRadius: 0, outerRadius: 40, falloff: 'inverse' }); // B flees A
+    m.set(0, 1, {
+      innerStrength: 100,
+      outerStrength: 100,
+      innerRadius: 0,
+      outerRadius: 50,
+      falloff: 'linear',
+    }); // A chases B
+    m.set(1, 0, {
+      innerStrength: -80,
+      outerStrength: -80,
+      innerRadius: 0,
+      outerRadius: 40,
+      falloff: 'inverse',
+    }); // B flees A
     const aToB = m.get(0, 1)!;
     const bToA = m.get(1, 0)!;
     expect(aToB.outerStrength).toBe(100);
@@ -886,19 +904,37 @@ describe('InteractionMatrix', () => {
 
   describe('forceAtDistance', () => {
     it('returns 0 when distance >= radius', () => {
-      const entry: InteractionEntry = { innerStrength: 100, outerStrength: 100, innerRadius: 0, outerRadius: 50, falloff: 'linear' };
+      const entry: InteractionEntry = {
+        innerStrength: 100,
+        outerStrength: 100,
+        innerRadius: 0,
+        outerRadius: 50,
+        falloff: 'linear',
+      };
       expect(InteractionMatrix.forceAtDistance(entry, 50)).toBe(0);
       expect(InteractionMatrix.forceAtDistance(entry, 60)).toBe(0);
     });
 
     it('returns 0 when distance <= 0', () => {
-      const entry: InteractionEntry = { innerStrength: 100, outerStrength: 100, innerRadius: 0, outerRadius: 50, falloff: 'linear' };
+      const entry: InteractionEntry = {
+        innerStrength: 100,
+        outerStrength: 100,
+        innerRadius: 0,
+        outerRadius: 50,
+        falloff: 'linear',
+      };
       expect(InteractionMatrix.forceAtDistance(entry, 0)).toBe(0);
       expect(InteractionMatrix.forceAtDistance(entry, -5)).toBe(0);
     });
 
     it('linear falloff: force = strength * (1 - d/r)', () => {
-      const entry: InteractionEntry = { innerStrength: 100, outerStrength: 100, innerRadius: 0, outerRadius: 100, falloff: 'linear' };
+      const entry: InteractionEntry = {
+        innerStrength: 100,
+        outerStrength: 100,
+        innerRadius: 0,
+        outerRadius: 100,
+        falloff: 'linear',
+      };
       expect(InteractionMatrix.forceAtDistance(entry, 0)).toBeCloseTo(0, 3); // d=0 excluded
       expect(InteractionMatrix.forceAtDistance(entry, 25)).toBeCloseTo(75, 3);
       expect(InteractionMatrix.forceAtDistance(entry, 50)).toBeCloseTo(50, 3);
@@ -906,21 +942,39 @@ describe('InteractionMatrix', () => {
     });
 
     it('inverse falloff: force = strength / (d/r + 0.1)', () => {
-      const entry: InteractionEntry = { innerStrength: 100, outerStrength: 100, innerRadius: 0, outerRadius: 100, falloff: 'inverse' };
+      const entry: InteractionEntry = {
+        innerStrength: 100,
+        outerStrength: 100,
+        innerRadius: 0,
+        outerRadius: 100,
+        falloff: 'inverse',
+      };
       const d = 50;
       const expected = 100 / (0.5 + 0.1); // 100/0.6 ≈ 166.67
       expect(InteractionMatrix.forceAtDistance(entry, d)).toBeCloseTo(expected, 2);
     });
 
     it('constant falloff: force = strength regardless of distance', () => {
-      const entry: InteractionEntry = { innerStrength: 100, outerStrength: 100, innerRadius: 0, outerRadius: 100, falloff: 'constant' };
+      const entry: InteractionEntry = {
+        innerStrength: 100,
+        outerStrength: 100,
+        innerRadius: 0,
+        outerRadius: 100,
+        falloff: 'constant',
+      };
       expect(InteractionMatrix.forceAtDistance(entry, 10)).toBeCloseTo(100, 3);
       expect(InteractionMatrix.forceAtDistance(entry, 50)).toBeCloseTo(100, 3);
       expect(InteractionMatrix.forceAtDistance(entry, 99)).toBeCloseTo(100, 3);
     });
 
     it('negative strength produces repulsive force', () => {
-      const entry: InteractionEntry = { innerStrength: -200, outerStrength: -200, innerRadius: 0, outerRadius: 50, falloff: 'constant' };
+      const entry: InteractionEntry = {
+        innerStrength: -200,
+        outerStrength: -200,
+        innerRadius: 0,
+        outerRadius: 50,
+        falloff: 'constant',
+      };
       expect(InteractionMatrix.forceAtDistance(entry, 25)).toBe(-200);
     });
   });
@@ -978,7 +1032,13 @@ describe('PairwiseForce', () => {
     const { world, grid } = twoParticleWorld(0, 1, 100, 300, 120, 300);
     const matrix = new InteractionMatrix(2);
     // Type 0 is attracted to type 1
-    matrix.set(0, 1, { innerStrength: 1000, outerStrength: 1000, innerRadius: 0, outerRadius: 50, falloff: 'linear' });
+    matrix.set(0, 1, {
+      innerStrength: 1000,
+      outerStrength: 1000,
+      innerRadius: 0,
+      outerRadius: 50,
+      falloff: 'linear',
+    });
 
     const force = new PairwiseForce(matrix, { strength: 0, radius: 0 });
     const dt = 1 / 60;
@@ -997,7 +1057,13 @@ describe('PairwiseForce', () => {
     const { world, grid } = twoParticleWorld(0, 1, 100, 300, 120, 300);
     const matrix = new InteractionMatrix(2);
     // Type 0 is repelled by type 1
-    matrix.set(0, 1, { innerStrength: -1000, outerStrength: -1000, innerRadius: 0, outerRadius: 50, falloff: 'linear' });
+    matrix.set(0, 1, {
+      innerStrength: -1000,
+      outerStrength: -1000,
+      innerRadius: 0,
+      outerRadius: 50,
+      falloff: 'linear',
+    });
 
     const force = new PairwiseForce(matrix, { strength: 0, radius: 0 });
     const dt = 1 / 60;
@@ -1015,9 +1081,21 @@ describe('PairwiseForce', () => {
     const matrix = new InteractionMatrix(2);
 
     // Predator (type 0) is attracted to prey (type 1) → chases
-    matrix.set(0, 1, { innerStrength: 1000, outerStrength: 1000, innerRadius: 0, outerRadius: 50, falloff: 'linear' });
+    matrix.set(0, 1, {
+      innerStrength: 1000,
+      outerStrength: 1000,
+      innerRadius: 0,
+      outerRadius: 50,
+      falloff: 'linear',
+    });
     // Prey (type 1) is repelled by predator (type 0) → flees
-    matrix.set(1, 0, { innerStrength: -800, outerStrength: -800, innerRadius: 0, outerRadius: 50, falloff: 'linear' });
+    matrix.set(1, 0, {
+      innerStrength: -800,
+      outerStrength: -800,
+      innerRadius: 0,
+      outerRadius: 50,
+      falloff: 'linear',
+    });
 
     const force = new PairwiseForce(matrix, { strength: 0, radius: 0 });
     const dt = 1 / 60;
@@ -1056,7 +1134,13 @@ describe('PairwiseForce', () => {
     const { world, grid } = twoParticleWorld(0, 1, 100, 300, 102, 300);
     const matrix = new InteractionMatrix(2);
     // Attraction that would collapse particles
-    matrix.set(0, 1, { innerStrength: 1000, outerStrength: 1000, innerRadius: 0, outerRadius: 50, falloff: 'constant' });
+    matrix.set(0, 1, {
+      innerStrength: 1000,
+      outerStrength: 1000,
+      innerRadius: 0,
+      outerRadius: 50,
+      falloff: 'constant',
+    });
 
     // Repulsion with radius 8 will kick in at distance 2
     const force = new PairwiseForce(matrix, { strength: 5000, radius: 8 });
@@ -1110,7 +1194,13 @@ describe('PairwiseForce', () => {
     const dist = 30;
     const { world, grid } = twoParticleWorld(0, 1, 100, 300, 100 + dist, 300);
     const matrix = new InteractionMatrix(2);
-    matrix.set(0, 1, { innerStrength: 600, outerStrength: 600, innerRadius: 0, outerRadius: 60, falloff: 'linear' });
+    matrix.set(0, 1, {
+      innerStrength: 600,
+      outerStrength: 600,
+      innerRadius: 0,
+      outerRadius: 60,
+      falloff: 'linear',
+    });
 
     const force = new PairwiseForce(matrix, { strength: 0, radius: 0 });
     const dt = 1 / 60;
@@ -1126,7 +1216,13 @@ describe('PairwiseForce', () => {
     const dist = 25;
     const { world, grid } = twoParticleWorld(0, 1, 400, 200, 400, 200 + dist);
     const matrix = new InteractionMatrix(2);
-    matrix.set(0, 1, { innerStrength: 900, outerStrength: 900, innerRadius: 0, outerRadius: 50, falloff: 'linear' });
+    matrix.set(0, 1, {
+      innerStrength: 900,
+      outerStrength: 900,
+      innerRadius: 0,
+      outerRadius: 50,
+      falloff: 'linear',
+    });
 
     const force = new PairwiseForce(matrix, { strength: 0, radius: 0 });
     const dt = 1 / 60;
@@ -1141,7 +1237,13 @@ describe('PairwiseForce', () => {
   it('analytic: two particles diagonal, force direction correct', () => {
     const { world, grid } = twoParticleWorld(0, 1, 200, 200, 230, 230);
     const matrix = new InteractionMatrix(2);
-    matrix.set(0, 1, { innerStrength: 1000, outerStrength: 1000, innerRadius: 0, outerRadius: 100, falloff: 'constant' });
+    matrix.set(0, 1, {
+      innerStrength: 1000,
+      outerStrength: 1000,
+      innerRadius: 0,
+      outerRadius: 100,
+      falloff: 'constant',
+    });
 
     const force = new PairwiseForce(matrix, { strength: 0, radius: 0 });
     const dt = 1 / 60;
@@ -1193,9 +1295,21 @@ describe('PairwiseForce', () => {
 
     const matrix = new InteractionMatrix(3);
     // Predator chases prey
-    matrix.set(0, 1, { innerStrength: 1000, outerStrength: 1000, innerRadius: 0, outerRadius: 100, falloff: 'linear' });
+    matrix.set(0, 1, {
+      innerStrength: 1000,
+      outerStrength: 1000,
+      innerRadius: 0,
+      outerRadius: 100,
+      falloff: 'linear',
+    });
     // Prey flees predator
-    matrix.set(1, 0, { innerStrength: -600, outerStrength: -600, innerRadius: 0, outerRadius: 80, falloff: 'linear' });
+    matrix.set(1, 0, {
+      innerStrength: -600,
+      outerStrength: -600,
+      innerRadius: 0,
+      outerRadius: 80,
+      falloff: 'linear',
+    });
     // Neutral has no interactions
 
     const force = new PairwiseForce(matrix, { strength: 0, radius: 0 });
@@ -1245,14 +1359,50 @@ describe('PairwiseForce', () => {
 
     const matrix = new InteractionMatrix(3);
     // 0→1: strong attract, 0→2: weak attract
-    matrix.set(0, 1, { innerStrength: 1000, outerStrength: 1000, innerRadius: 0, outerRadius: 50, falloff: 'constant' });
-    matrix.set(0, 2, { innerStrength: 100, outerStrength: 100, innerRadius: 0, outerRadius: 50, falloff: 'constant' });
+    matrix.set(0, 1, {
+      innerStrength: 1000,
+      outerStrength: 1000,
+      innerRadius: 0,
+      outerRadius: 50,
+      falloff: 'constant',
+    });
+    matrix.set(0, 2, {
+      innerStrength: 100,
+      outerStrength: 100,
+      innerRadius: 0,
+      outerRadius: 50,
+      falloff: 'constant',
+    });
     // 1→0: repel, 1→2: attract
-    matrix.set(1, 0, { innerStrength: -500, outerStrength: -500, innerRadius: 0, outerRadius: 50, falloff: 'constant' });
-    matrix.set(1, 2, { innerStrength: 800, outerStrength: 800, innerRadius: 0, outerRadius: 50, falloff: 'constant' });
+    matrix.set(1, 0, {
+      innerStrength: -500,
+      outerStrength: -500,
+      innerRadius: 0,
+      outerRadius: 50,
+      falloff: 'constant',
+    });
+    matrix.set(1, 2, {
+      innerStrength: 800,
+      outerStrength: 800,
+      innerRadius: 0,
+      outerRadius: 50,
+      falloff: 'constant',
+    });
     // 2→0: repel, 2→1: repel
-    matrix.set(2, 0, { innerStrength: -200, outerStrength: -200, innerRadius: 0, outerRadius: 50, falloff: 'constant' });
-    matrix.set(2, 1, { innerStrength: -300, outerStrength: -300, innerRadius: 0, outerRadius: 50, falloff: 'constant' });
+    matrix.set(2, 0, {
+      innerStrength: -200,
+      outerStrength: -200,
+      innerRadius: 0,
+      outerRadius: 50,
+      falloff: 'constant',
+    });
+    matrix.set(2, 1, {
+      innerStrength: -300,
+      outerStrength: -300,
+      innerRadius: 0,
+      outerRadius: 50,
+      falloff: 'constant',
+    });
 
     const force = new PairwiseForce(matrix, { strength: 0, radius: 0 });
     force.apply(world, grid, 1 / 60);
@@ -1276,9 +1426,21 @@ describe('PairwiseForce', () => {
 
     const matrix = new InteractionMatrix(3);
     // Type 0 attracted to type 1
-    matrix.set(0, 1, { innerStrength: 500, outerStrength: 500, innerRadius: 0, outerRadius: 80, falloff: 'linear' });
+    matrix.set(0, 1, {
+      innerStrength: 500,
+      outerStrength: 500,
+      innerRadius: 0,
+      outerRadius: 80,
+      falloff: 'linear',
+    });
     // Type 1 repelled by type 0
-    matrix.set(1, 0, { innerStrength: -300, outerStrength: -300, innerRadius: 0, outerRadius: 60, falloff: 'linear' });
+    matrix.set(1, 0, {
+      innerStrength: -300,
+      outerStrength: -300,
+      innerRadius: 0,
+      outerRadius: 60,
+      falloff: 'linear',
+    });
     // Type 2 neutral
 
     const force = new PairwiseForce(matrix, { strength: 1000, radius: 5 });
@@ -1320,7 +1482,13 @@ describe('PairwiseForce', () => {
   it('particles beyond interaction radius are unaffected', () => {
     const { world, grid } = twoParticleWorld(0, 1, 100, 300, 500, 300);
     const matrix = new InteractionMatrix(2);
-    matrix.set(0, 1, { innerStrength: 10000, outerStrength: 10000, innerRadius: 0, outerRadius: 50, falloff: 'constant' });
+    matrix.set(0, 1, {
+      innerStrength: 10000,
+      outerStrength: 10000,
+      innerRadius: 0,
+      outerRadius: 50,
+      falloff: 'constant',
+    });
 
     const force = new PairwiseForce(matrix, { strength: 0, radius: 0 });
     force.apply(world, grid, 1 / 60);
@@ -1742,8 +1910,20 @@ describe('ForcePipeline', () => {
     const grid = new SpatialHashGrid(world.width, world.height, 100, world.count);
 
     const matrix = new InteractionMatrix(3);
-    matrix.set(0, 1, { innerStrength: 500, outerStrength: 500, innerRadius: 0, outerRadius: 80, falloff: 'linear' });
-    matrix.set(1, 0, { innerStrength: -300, outerStrength: -300, innerRadius: 0, outerRadius: 60, falloff: 'linear' });
+    matrix.set(0, 1, {
+      innerStrength: 500,
+      outerStrength: 500,
+      innerRadius: 0,
+      outerRadius: 80,
+      falloff: 'linear',
+    });
+    matrix.set(1, 0, {
+      innerStrength: -300,
+      outerStrength: -300,
+      innerRadius: 0,
+      outerRadius: 60,
+      falloff: 'linear',
+    });
 
     const pipeline = new ForcePipeline();
     const pairwise = new PairwiseForce(matrix, { strength: 1000, radius: 5 });

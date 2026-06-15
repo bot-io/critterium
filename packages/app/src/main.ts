@@ -158,16 +158,40 @@ function buildInteractionMatrix(): InteractionMatrix {
   const matrix = new InteractionMatrix(2);
 
   // Prey ↔ Prey: flocking — attract at distance (outer), repel when close (inner)
-  matrix.set(0, 0, { innerStrength: -30, outerStrength: 30, innerRadius: 20, outerRadius: 80, falloff: 'linear' });
+  matrix.set(0, 0, {
+    innerStrength: -30,
+    outerStrength: 30,
+    innerRadius: 20,
+    outerRadius: 80,
+    falloff: 'linear',
+  });
 
   // Prey → Predator: flee — panic when close, wary from far
-  matrix.set(0, 1, { innerStrength: -120, outerStrength: -80, innerRadius: 40, outerRadius: 120, falloff: 'linear' });
+  matrix.set(0, 1, {
+    innerStrength: -120,
+    outerStrength: -80,
+    innerRadius: 40,
+    outerRadius: 120,
+    falloff: 'linear',
+  });
 
   // Predator → Prey: chase — lunge when close, detect from far
-  matrix.set(1, 0, { innerStrength: 100, outerStrength: 60, innerRadius: 50, outerRadius: 150, falloff: 'linear' });
+  matrix.set(1, 0, {
+    innerStrength: 100,
+    outerStrength: 60,
+    innerRadius: 50,
+    outerRadius: 150,
+    falloff: 'linear',
+  });
 
   // Predator ↔ Predator: spacing — repel when close
-  matrix.set(1, 1, { innerStrength: -40, outerStrength: -20, innerRadius: 20, outerRadius: 50, falloff: 'linear' });
+  matrix.set(1, 1, {
+    innerStrength: -40,
+    outerStrength: -20,
+    innerRadius: 20,
+    outerRadius: 50,
+    falloff: 'linear',
+  });
 
   return matrix;
 }
@@ -362,14 +386,44 @@ function buildSpeciesValues(species: readonly SpeciesConfig[]): Array<Record<str
 function buildMatrixValues(
   matrix: InteractionMatrix,
   n: number,
-): Array<Array<{ innerStrength: number; outerStrength: number; innerRadius: number; outerRadius: number; falloff: string } | null>> {
-  const result: Array<Array<{ innerStrength: number; outerStrength: number; innerRadius: number; outerRadius: number; falloff: string } | null>> = [];
+): Array<
+  Array<{
+    innerStrength: number;
+    outerStrength: number;
+    innerRadius: number;
+    outerRadius: number;
+    falloff: string;
+  } | null>
+> {
+  const result: Array<
+    Array<{
+      innerStrength: number;
+      outerStrength: number;
+      innerRadius: number;
+      outerRadius: number;
+      falloff: string;
+    } | null>
+  > = [];
   for (let i = 0; i < n; i++) {
-    const row: Array<{ innerStrength: number; outerStrength: number; innerRadius: number; outerRadius: number; falloff: string } | null> = [];
+    const row: Array<{
+      innerStrength: number;
+      outerStrength: number;
+      innerRadius: number;
+      outerRadius: number;
+      falloff: string;
+    } | null> = [];
     for (let j = 0; j < n; j++) {
       const entry = matrix.get(i, j);
       row.push(
-        entry ? { innerStrength: entry.innerStrength, outerStrength: entry.outerStrength, innerRadius: entry.innerRadius, outerRadius: entry.outerRadius, falloff: entry.falloff } : null,
+        entry
+          ? {
+              innerStrength: entry.innerStrength,
+              outerStrength: entry.outerStrength,
+              innerRadius: entry.innerRadius,
+              outerRadius: entry.outerRadius,
+              falloff: entry.falloff,
+            }
+          : null,
       );
     }
     result.push(row);
@@ -654,7 +708,15 @@ async function main(): Promise<void> {
 
   // ─── Matrix state tracking ──────────────────────────────────
   let nSpecies = liveConfig.species.length;
-  let matrixState: Array<Array<{ innerStrength: number; outerStrength: number; innerRadius: number; outerRadius: number; falloff: string } | null>>;
+  let matrixState: Array<
+    Array<{
+      innerStrength: number;
+      outerStrength: number;
+      innerRadius: number;
+      outerRadius: number;
+      falloff: string;
+    } | null>
+  >;
 
   function initMatrixState(matrix: InteractionMatrix): void {
     matrixState = buildMatrixValues(matrix, nSpecies);
@@ -1309,7 +1371,15 @@ async function main(): Promise<void> {
         })),
         interactionMatrix: matrixState.map((row) =>
           row.map((cell) =>
-            cell ? { innerStrength: cell.innerStrength, outerStrength: cell.outerStrength, innerRadius: cell.innerRadius, outerRadius: cell.outerRadius, falloff: cell.falloff } : null,
+            cell
+              ? {
+                  innerStrength: cell.innerStrength,
+                  outerStrength: cell.outerStrength,
+                  innerRadius: cell.innerRadius,
+                  outerRadius: cell.outerRadius,
+                  falloff: cell.falloff,
+                }
+              : null,
           ),
         ),
         forces: getPipelineForceEntries(),
@@ -1375,7 +1445,15 @@ async function main(): Promise<void> {
         })),
         interactionMatrix: matrixState.map((row) =>
           row.map((cell) =>
-            cell ? { innerStrength: cell.innerStrength, outerStrength: cell.outerStrength, innerRadius: cell.innerRadius, outerRadius: cell.outerRadius, falloff: cell.falloff } : null,
+            cell
+              ? {
+                  innerStrength: cell.innerStrength,
+                  outerStrength: cell.outerStrength,
+                  innerRadius: cell.innerRadius,
+                  outerRadius: cell.outerRadius,
+                  falloff: cell.falloff,
+                }
+              : null,
           ),
         ),
         forces: getPipelineForceEntries(),
