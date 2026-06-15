@@ -282,6 +282,9 @@ export class EcosystemWorld {
    * Reproduction is cooldown-gated: after the cooldown expires, the particle
    * reproduces immediately if it has enough energy. No probabilistic gate —
    * the cooldown alone controls the rate.
+   *
+   * Fairness is enforced by processReproduction(), which calls this in a
+   * round-robin order across species.
    */
   tryReproduce(index: number, _dt: number = 0.016): number {
     if (this.eco.alive[index] === DEAD) return -1;
@@ -296,24 +299,12 @@ export class EcosystemWorld {
 
     const species = this.species[speciesIdx];
 
-    // Endangered species boost: when population < 25% of cap, reproduction is
-    // cheaper and faster. This prevents death spirals — as a species declines,
-    // reduced competition lets survivors breed faster (biologically realistic
-    // density-dependent reproduction). The boost scales smoothly from 1× (at
-    // 25% of cap) to 2× (at 0).
-    const count = this._speciesCounts[speciesIdx];
-    const cap = this._perSpeciesCap[speciesIdx];
-    const ratio = cap > 0 ? count / cap : 1;
-    const endangeredBoost = ratio < 0.25 ? 1 + (0.25 - ratio) * 4 : 1; // 1×→2×
+    // Hard gate: cooldown must be expired
+    if (this.eco.reproductionCooldown[index] > 0) return -1;
+    // Energy gate
+    if (this.eco.energy[index] < species.energy.reproductionCost) return -1;
 
-    // Hard gate: cooldown must be expired (halved when endangered)
-    const effectiveCooldown = this.eco.reproductionCooldown[index] / endangeredBoost;
-    if (effectiveCooldown > 0) return -1;
-    // Energy gate (cost reduced when endangered)
-    const effectiveCost = species.energy.reproductionCost / endangeredBoost;
-    if (this.eco.energy[index] < effectiveCost) return -1;
-
-    // Spawn child near parent FIRST — only deduct energy if spawn succeeds
+    // Spawn child near parent
     const offsetX = (this.rng() - 0.5) * 20;
     const offsetY = (this.rng() - 0.5) * 20;
     const childX = this.world.x[index] + offsetX;
@@ -322,8 +313,8 @@ export class EcosystemWorld {
     const childIdx = this.spawn(speciesIdx, childX, childY);
     if (childIdx < 0) return -1; // spawn failed — don't punish parent
 
-    // Deduct energy only after successful spawn (uses effective cost)
-    this.eco.energy[index] -= effectiveCost;
+    // Deduct energy after successful spawn
+    this.eco.energy[index] -= species.energy.reproductionCost;
 
     // Reset cooldown
     this.eco.reproductionCooldown[index] = species.lifecycle.reproductionCooldownSec;

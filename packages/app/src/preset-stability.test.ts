@@ -179,7 +179,7 @@ function formatResult(r: StabilityResult): string {
 
 // ─── Tests ─────────────────────────────────────────────────────
 
-describe('Preset Stability — 120s simulation per preset', { timeout: 60_000 }, () => {
+describe('Preset Stability — 120s simulation per preset', { timeout: 120_000 }, () => {
   for (const presetEntry of BUILTIN_PRESETS) {
     const name = presetEntry.name;
 

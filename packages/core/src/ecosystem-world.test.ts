@@ -235,8 +235,7 @@ describe('EcosystemWorld.tryReproduce', () => {
   });
 
   it('deducts reproduction cost from parent energy', () => {
-    // Use cap=4 so 1 individual = 25% of cap (no endangered boost)
-    const cfg = singleSpeciesConfig(1, 4);
+    const cfg = singleSpeciesConfig(1, 100);
     cfg.species[0].energy.initialEnergy = 100;
     cfg.species[0].energy.reproductionCost = 30;
     cfg.species[0].lifecycle.reproductionCooldownSec = 0;
