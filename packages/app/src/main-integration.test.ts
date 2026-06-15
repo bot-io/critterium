@@ -148,10 +148,10 @@ function buildTestConfig(seed = 42): EcosystemConfig {
  */
 function buildInteractionMatrix(): InteractionMatrix {
   const matrix = new InteractionMatrix(2);
-  matrix.set(0, 0, { strength: 30, radius: 80, falloff: 'linear' });
-  matrix.set(0, 1, { strength: -80, radius: 120, falloff: 'linear' });
-  matrix.set(1, 0, { strength: 60, radius: 150, falloff: 'linear' });
-  matrix.set(1, 1, { strength: -20, radius: 50, falloff: 'linear' });
+  matrix.set(0, 0, { innerStrength: 30, outerStrength: 30, innerRadius: 0, outerRadius: 80, falloff: 'linear' });
+  matrix.set(0, 1, { innerStrength: -80, outerStrength: -80, innerRadius: 0, outerRadius: 120, falloff: 'linear' });
+  matrix.set(1, 0, { innerStrength: 60, outerStrength: 60, innerRadius: 0, outerRadius: 150, falloff: 'linear' });
+  matrix.set(1, 1, { innerStrength: -20, outerStrength: -20, innerRadius: 0, outerRadius: 50, falloff: 'linear' });
   return matrix;
 }
 
@@ -169,7 +169,7 @@ function createSimContext(config?: EcosystemConfig): SimContext {
     { force: createForce('drag', { coefficient: 0.8 }), enabled: true },
     { force: createForce('wander', { strength: 40, rate: 2.5 }), enabled: true },
     {
-      force: createForce('pointer', { strength: 200, radius: 150, falloff: 'linear' }),
+      force: createForce('pointer', { innerStrength: 200, outerStrength: 200, innerRadius: 0, outerRadius: 150, falloff: 'linear' }),
       enabled: false,
     },
   ];
@@ -409,10 +409,10 @@ describe('CRT-39: main.ts integration — preset loading lifecycle', () => {
         for (let j = 0; j < nSpecies; j++) {
           // Accessing should not throw
           const entry = applied.matrix.get(i, j);
-          // entry is either null or has strength/radius/falloff
+          // entry is either null or has outerStrength/outerRadius/falloff
           if (entry) {
-            expect(entry).toHaveProperty('strength');
-            expect(entry).toHaveProperty('radius');
+            expect(entry).toHaveProperty('outerStrength');
+            expect(entry).toHaveProperty('outerRadius');
             expect(entry).toHaveProperty('falloff');
           }
         }
@@ -476,12 +476,12 @@ describe('CRT-39: main.ts integration — preset loading lifecycle', () => {
     // Verify predator-prey chain: Foxes (idx 2) chase Rabbits (idx 1)
     const foxToRabbit = applied.matrix.get(2, 1);
     expect(foxToRabbit).not.toBeNull();
-    expect(foxToRabbit!.strength).toBeGreaterThan(0); // attract = chase
+    expect(foxToRabbit!.outerStrength).toBeGreaterThan(0); // attract = chase
 
     // Rabbits flee Foxes
     const rabbitToFox = applied.matrix.get(1, 2);
     expect(rabbitToFox).not.toBeNull();
-    expect(rabbitToFox!.strength).toBeLessThan(0); // repel = flee
+    expect(rabbitToFox!.outerStrength).toBeLessThan(0); // repel = flee
   });
 });
 
@@ -832,7 +832,7 @@ describe('CRT-39: main.ts integration — full simulation stability', () => {
 
     // Add a vortex force
     ctx.forcePipeline.push({
-      force: createForce('vortex', { strength: 200, radius: 400, falloff: 'linear' }),
+      force: createForce('vortex', { innerStrength: 200, outerStrength: 200, innerRadius: 0, outerRadius: 400, falloff: 'linear' }),
       enabled: true,
     });
 

@@ -144,9 +144,9 @@ describe('presets', () => {
         for (const entry of row) {
           if (entry !== null) {
             expect(validFalloffs).toContain(entry.falloff);
-            expect(Number.isFinite(entry.strength)).toBe(true);
-            expect(Number.isFinite(entry.radius)).toBe(true);
-            expect(entry.radius).toBeGreaterThan(0);
+            expect(Number.isFinite(entry.outerStrength)).toBe(true);
+            expect(Number.isFinite(entry.outerRadius)).toBe(true);
+            expect(entry.outerRadius).toBeGreaterThan(0);
           }
         }
       }
@@ -250,26 +250,26 @@ describe('presets', () => {
     const m = rps!.config.interactionMatrix;
     // source = row, target = col
     // Rock (0) chases Scissors (2): positive strength
-    expect(m[0][2]!.strength).toBeGreaterThan(0);
+    expect(m[0][2]!.outerStrength).toBeGreaterThan(0);
     // Rock (0) flees Paper (1): negative strength
-    expect(m[0][1]!.strength).toBeLessThan(0);
+    expect(m[0][1]!.outerStrength).toBeLessThan(0);
     // Paper (1) chases Rock (0): positive
-    expect(m[1][0]!.strength).toBeGreaterThan(0);
+    expect(m[1][0]!.outerStrength).toBeGreaterThan(0);
     // Paper (1) flees Scissors (2): negative
-    expect(m[1][2]!.strength).toBeLessThan(0);
+    expect(m[1][2]!.outerStrength).toBeLessThan(0);
     // Scissors (2) chases Paper (1): positive
-    expect(m[2][1]!.strength).toBeGreaterThan(0);
+    expect(m[2][1]!.outerStrength).toBeGreaterThan(0);
     // Scissors (2) flees Rock (0): negative
-    expect(m[2][0]!.strength).toBeLessThan(0);
+    expect(m[2][0]!.outerStrength).toBeLessThan(0);
   });
 
   it('Rock Paper Scissors: self-repulsion prevents collapse', () => {
     const rps = getBuiltinPreset('Rock Paper Scissors');
     const m = rps!.config.interactionMatrix;
     // Diagonal (self-interaction) should be repulsive (negative)
-    expect(m[0][0]!.strength).toBeLessThan(0);
-    expect(m[1][1]!.strength).toBeLessThan(0);
-    expect(m[2][2]!.strength).toBeLessThan(0);
+    expect(m[0][0]!.outerStrength).toBeLessThan(0);
+    expect(m[1][1]!.outerStrength).toBeLessThan(0);
+    expect(m[2][2]!.outerStrength).toBeLessThan(0);
   });
 
   it('Rock Paper Scissors: all three species have distinct colors', () => {
@@ -347,35 +347,35 @@ describe('presets', () => {
     const gl = getBuiltinPreset('Grasslands');
     const m = gl!.config.interactionMatrix;
     // Rabbits (row 1) attracted to Grass (col 0)
-    expect(m[1][0]!.strength).toBeGreaterThan(0);
+    expect(m[1][0]!.outerStrength).toBeGreaterThan(0);
   });
 
   it('Grasslands: Rabbits flee Foxes (predator avoidance)', () => {
     const gl = getBuiltinPreset('Grasslands');
     const m = gl!.config.interactionMatrix;
     // Rabbits (row 1) flee Foxes (col 2)
-    expect(m[1][2]!.strength).toBeLessThan(0);
+    expect(m[1][2]!.outerStrength).toBeLessThan(0);
   });
 
   it('Grasslands: Foxes chase Rabbits (hunting)', () => {
     const gl = getBuiltinPreset('Grasslands');
     const m = gl!.config.interactionMatrix;
     // Foxes (row 2) chase Rabbits (col 1)
-    expect(m[2][1]!.strength).toBeGreaterThan(0);
+    expect(m[2][1]!.outerStrength).toBeGreaterThan(0);
   });
 
   it('Grasslands: Foxes are territorial (self-repulsion)', () => {
     const gl = getBuiltinPreset('Grasslands');
     const m = gl!.config.interactionMatrix;
     // Foxes (row 2) self-repel (col 2)
-    expect(m[2][2]!.strength).toBeLessThan(0);
+    expect(m[2][2]!.outerStrength).toBeLessThan(0);
   });
 
   it('Grasslands: Rabbits flock with own kind (positive self-interaction)', () => {
     const gl = getBuiltinPreset('Grasslands');
     const m = gl!.config.interactionMatrix;
     // Rabbits (row 1) attract own kind (col 1)
-    expect(m[1][1]!.strength).toBeGreaterThan(0);
+    expect(m[1][1]!.outerStrength).toBeGreaterThan(0);
   });
 
   it('Grasslands: Grass ignores animals (null entries to Rabbits and Foxes)', () => {
@@ -441,36 +441,36 @@ describe('presets', () => {
     const birds = getBuiltinPreset('Birds');
     const m = birds!.config.interactionMatrix;
     // Starlings (row 0) attract own kind (col 0)
-    expect(m[0][0]!.strength).toBeGreaterThan(0);
+    expect(m[0][0]!.outerStrength).toBeGreaterThan(0);
   });
 
   it('Birds: Starlings flee the Hawk (predator avoidance)', () => {
     const birds = getBuiltinPreset('Birds');
     const m = birds!.config.interactionMatrix;
     // Starlings (row 0) flee Hawk (col 1)
-    expect(m[0][1]!.strength).toBeLessThan(0);
+    expect(m[0][1]!.outerStrength).toBeLessThan(0);
   });
 
   it('Birds: Hawk chases Starlings (hunting)', () => {
     const birds = getBuiltinPreset('Birds');
     const m = birds!.config.interactionMatrix;
     // Hawk (row 1) chases Starlings (col 0)
-    expect(m[1][0]!.strength).toBeGreaterThan(0);
+    expect(m[1][0]!.outerStrength).toBeGreaterThan(0);
   });
 
   it('Birds: Hawk is solitary/territorial (negative self-interaction)', () => {
     const birds = getBuiltinPreset('Birds');
     const m = birds!.config.interactionMatrix;
     // Hawk (row 1) repels own kind (col 1)
-    expect(m[1][1]!.strength).toBeLessThan(0);
+    expect(m[1][1]!.outerStrength).toBeLessThan(0);
   });
 
   it('Birds: Starlings have stronger cohesion than the Hawk chase radius (flock sticks together)', () => {
     const birds = getBuiltinPreset('Birds');
     const m = birds!.config.interactionMatrix;
     // Cohesion radius (Starlings→Starlings) should be substantial for visible flocking
-    expect(m[0][0]!.radius).toBeGreaterThan(50);
-    expect(m[0][0]!.strength).toBeGreaterThan(30);
+    expect(m[0][0]!.outerRadius).toBeGreaterThan(50);
+    expect(m[0][0]!.outerStrength).toBeGreaterThan(30);
   });
 
   it('Birds: Starlings flee radius is larger than Hawk chase radius (prey can escape)', () => {
@@ -478,7 +478,7 @@ describe('presets', () => {
     const m = birds!.config.interactionMatrix;
     // Starlings detect and flee the Hawk before the Hawk is in chase range is *not* required,
     // but the flee interaction must exist and be strong.
-    expect(m[0][1]!.strength).toBeLessThan(-50);
+    expect(m[0][1]!.outerStrength).toBeLessThan(-50);
   });
 
   it('Birds: Starlings are smaller than the Hawk', () => {
@@ -560,21 +560,21 @@ describe('presets', () => {
     const fishes = getBuiltinPreset('Fishes');
     const m = fishes!.config.interactionMatrix;
     // Tetras (row 0) attract own kind (col 0)
-    expect(m[0][0]!.strength).toBeGreaterThan(0);
+    expect(m[0][0]!.outerStrength).toBeGreaterThan(0);
   });
 
   it('Fishes: Tetras flee the Barracuda (predator avoidance)', () => {
     const fishes = getBuiltinPreset('Fishes');
     const m = fishes!.config.interactionMatrix;
     // Tetras (row 0) flee Barracuda (col 2)
-    expect(m[0][2]!.strength).toBeLessThan(0);
+    expect(m[0][2]!.outerStrength).toBeLessThan(0);
   });
 
   it('Fishes: Barracuda chases Tetras (hunting)', () => {
     const fishes = getBuiltinPreset('Fishes');
     const m = fishes!.config.interactionMatrix;
     // Barracuda (row 2) chases Tetras (col 0)
-    expect(m[2][0]!.strength).toBeGreaterThan(0);
+    expect(m[2][0]!.outerStrength).toBeGreaterThan(0);
   });
 
   it('Fishes: Barracuda completely ignores Cleaner Wrasse (symbiosis — null interaction)', () => {
@@ -588,14 +588,14 @@ describe('presets', () => {
     const fishes = getBuiltinPreset('Fishes');
     const m = fishes!.config.interactionMatrix;
     // Wrasse (row 1) attracted to Barracuda (col 2)
-    expect(m[1][2]!.strength).toBeGreaterThan(0);
+    expect(m[1][2]!.outerStrength).toBeGreaterThan(0);
   });
 
   it('Fishes: Barracuda is territorial (negative self-interaction)', () => {
     const fishes = getBuiltinPreset('Fishes');
     const m = fishes!.config.interactionMatrix;
     // Barracuda (row 2) self-repel (col 2)
-    expect(m[2][2]!.strength).toBeLessThan(0);
+    expect(m[2][2]!.outerStrength).toBeLessThan(0);
   });
 
   it('Fishes: Barracuda is larger than Cleaner Wrasse which is larger than Tetras', () => {
@@ -695,70 +695,70 @@ describe('presets', () => {
     const reef = getBuiltinPreset('Coral Reef');
     const m = reef!.config.interactionMatrix;
     // Zooplankton (row 1) attracted to Coral (col 0)
-    expect(m[1][0]!.strength).toBeGreaterThan(0);
+    expect(m[1][0]!.outerStrength).toBeGreaterThan(0);
   });
 
   it('Coral Reef: Zooplankton flee Clownfish (predator avoidance)', () => {
     const reef = getBuiltinPreset('Coral Reef');
     const m = reef!.config.interactionMatrix;
     // Zooplankton (row 1) flee Clownfish (col 2)
-    expect(m[1][2]!.strength).toBeLessThan(0);
+    expect(m[1][2]!.outerStrength).toBeLessThan(0);
   });
 
   it('Coral Reef: Clownfish chase Zooplankton (hunting)', () => {
     const reef = getBuiltinPreset('Coral Reef');
     const m = reef!.config.interactionMatrix;
     // Clownfish (row 2) chase Zooplankton (col 1)
-    expect(m[2][1]!.strength).toBeGreaterThan(0);
+    expect(m[2][1]!.outerStrength).toBeGreaterThan(0);
   });
 
   it('Coral Reef: Clownfish school together (positive self-cohesion)', () => {
     const reef = getBuiltinPreset('Coral Reef');
     const m = reef!.config.interactionMatrix;
     // Clownfish (row 2) attract own kind (col 2)
-    expect(m[2][2]!.strength).toBeGreaterThan(0);
+    expect(m[2][2]!.outerStrength).toBeGreaterThan(0);
   });
 
   it('Coral Reef: Clownfish flee Moray Eel (predator avoidance)', () => {
     const reef = getBuiltinPreset('Coral Reef');
     const m = reef!.config.interactionMatrix;
     // Clownfish (row 2) flee Eel (col 3)
-    expect(m[2][3]!.strength).toBeLessThan(0);
+    expect(m[2][3]!.outerStrength).toBeLessThan(0);
   });
 
   it('Coral Reef: Moray Eel chases Clownfish (hunting)', () => {
     const reef = getBuiltinPreset('Coral Reef');
     const m = reef!.config.interactionMatrix;
     // Eel (row 3) chases Clownfish (col 2)
-    expect(m[3][2]!.strength).toBeGreaterThan(0);
+    expect(m[3][2]!.outerStrength).toBeGreaterThan(0);
   });
 
   it('Coral Reef: Moray Eel flees Reef Shark (apex predator avoidance)', () => {
     const reef = getBuiltinPreset('Coral Reef');
     const m = reef!.config.interactionMatrix;
     // Eel (row 3) flees Shark (col 4)
-    expect(m[3][4]!.strength).toBeLessThan(0);
+    expect(m[3][4]!.outerStrength).toBeLessThan(0);
   });
 
   it('Coral Reef: Moray Eel is territorial (negative self-interaction)', () => {
     const reef = getBuiltinPreset('Coral Reef');
     const m = reef!.config.interactionMatrix;
     // Eel (row 3) self-repel (col 3)
-    expect(m[3][3]!.strength).toBeLessThan(0);
+    expect(m[3][3]!.outerStrength).toBeLessThan(0);
   });
 
   it('Coral Reef: Reef Shark chases Moray Eel (hunting)', () => {
     const reef = getBuiltinPreset('Coral Reef');
     const m = reef!.config.interactionMatrix;
     // Shark (row 4) chases Eel (col 3)
-    expect(m[4][3]!.strength).toBeGreaterThan(0);
+    expect(m[4][3]!.outerStrength).toBeGreaterThan(0);
   });
 
   it('Coral Reef: Reef Shark is solitary/territorial (negative self-interaction)', () => {
     const reef = getBuiltinPreset('Coral Reef');
     const m = reef!.config.interactionMatrix;
     // Shark (row 4) self-repel (col 4)
-    expect(m[4][4]!.strength).toBeLessThan(0);
+    expect(m[4][4]!.outerStrength).toBeLessThan(0);
   });
 
   it('Coral Reef: Coral ignores all other species (null row entries)', () => {
@@ -875,7 +875,7 @@ describe('presets', () => {
     // Debris (row 1) reacts negatively to Dust (col 0), Debris (col 1), Birds (col 2)
     for (let col = 0; col < 3; col++) {
       expect(m[1][col]).not.toBeNull();
-      expect(m[1][col]!.strength).toBeLessThan(0);
+      expect(m[1][col]!.outerStrength).toBeLessThan(0);
     }
   });
 
@@ -884,7 +884,7 @@ describe('presets', () => {
     const m = tornado!.config.interactionMatrix;
     // Birds (row 2) attract own kind (col 2)
     expect(m[2][2]).not.toBeNull();
-    expect(m[2][2]!.strength).toBeGreaterThan(0);
+    expect(m[2][2]!.outerStrength).toBeGreaterThan(0);
   });
 
   it('Tornado Alley: Dust Motes weakly cohere (positive self-attraction)', () => {
@@ -892,7 +892,7 @@ describe('presets', () => {
     const m = tornado!.config.interactionMatrix;
     // Dust (row 0) attract own kind (col 0) — dust wisps
     expect(m[0][0]).not.toBeNull();
-    expect(m[0][0]!.strength).toBeGreaterThan(0);
+    expect(m[0][0]!.outerStrength).toBeGreaterThan(0);
   });
 
   it('Tornado Alley: forces include a vortex', () => {
@@ -1056,7 +1056,7 @@ describe('presets', () => {
     const dsv = getBuiltinPreset('Deep Sea Vent');
     const m = dsv!.config.interactionMatrix;
     expect(m[1][0]).not.toBeNull();
-    expect(m[1][0]!.strength).toBeGreaterThan(0);
+    expect(m[1][0]!.outerStrength).toBeGreaterThan(0);
   });
 
   it('Deep Sea Vent: Crabs chase Tube Worms (positive) and flee Octopus (negative)', () => {
@@ -1064,10 +1064,10 @@ describe('presets', () => {
     const m = dsv!.config.interactionMatrix;
     // Crabs (row 2) attracted to Worms (col 1)
     expect(m[2][1]).not.toBeNull();
-    expect(m[2][1]!.strength).toBeGreaterThan(0);
+    expect(m[2][1]!.outerStrength).toBeGreaterThan(0);
     // Crabs (row 2) flee Octopus (col 3)
     expect(m[2][3]).not.toBeNull();
-    expect(m[2][3]!.strength).toBeLessThan(0);
+    expect(m[2][3]!.outerStrength).toBeLessThan(0);
   });
 
   it('Deep Sea Vent: Octopus chases Crabs (positive)', () => {
@@ -1075,21 +1075,21 @@ describe('presets', () => {
     const m = dsv!.config.interactionMatrix;
     // Octopus (row 3) attracted to Crabs (col 2)
     expect(m[3][2]).not.toBeNull();
-    expect(m[3][2]!.strength).toBeGreaterThan(0);
+    expect(m[3][2]!.outerStrength).toBeGreaterThan(0);
   });
 
   it('Deep Sea Vent: Octopus is solitary (negative self-interaction)', () => {
     const dsv = getBuiltinPreset('Deep Sea Vent');
     const m = dsv!.config.interactionMatrix;
     expect(m[3][3]).not.toBeNull();
-    expect(m[3][3]!.strength).toBeLessThan(0);
+    expect(m[3][3]!.outerStrength).toBeLessThan(0);
   });
 
   it('Deep Sea Vent: Bacteria mildly repel each other (negative self)', () => {
     const dsv = getBuiltinPreset('Deep Sea Vent');
     const m = dsv!.config.interactionMatrix;
     expect(m[0][0]).not.toBeNull();
-    expect(m[0][0]!.strength).toBeLessThan(0);
+    expect(m[0][0]!.outerStrength).toBeLessThan(0);
   });
 
   // ── Force tests ───────────────────────────────────────────
@@ -1232,13 +1232,13 @@ describe('presets', () => {
     const m = sym!.config.interactionMatrix;
     // Algae (row 0) attracted to Coral (col 1)
     expect(m[0][1]).not.toBeNull();
-    expect(m[0][1]!.strength).toBeGreaterThan(0);
+    expect(m[0][1]!.outerStrength).toBeGreaterThan(0);
     // Coral (row 1) attracted to Algae (col 0) — symmetric
     expect(m[1][0]).not.toBeNull();
-    expect(m[1][0]!.strength).toBeGreaterThan(0);
+    expect(m[1][0]!.outerStrength).toBeGreaterThan(0);
     // Symmetric: same strength
-    expect(m[0][1]!.strength).toBe(m[1][0]!.strength);
-    expect(m[0][1]!.radius).toBe(m[1][0]!.radius);
+    expect(m[0][1]!.outerStrength).toBe(m[1][0]!.outerStrength);
+    expect(m[0][1]!.outerRadius).toBe(m[1][0]!.outerRadius);
     expect(m[0][1]!.falloff).toBe(m[1][0]!.falloff);
   });
 
@@ -1247,7 +1247,7 @@ describe('presets', () => {
     const m = sym!.config.interactionMatrix;
     // Shrimp (row 2) attracted to Coral (col 1)
     expect(m[2][1]).not.toBeNull();
-    expect(m[2][1]!.strength).toBeGreaterThan(0);
+    expect(m[2][1]!.outerStrength).toBeGreaterThan(0);
   });
 
   it('Symbiosis: all matrix entries are positive or null (no repel)', () => {
@@ -1256,7 +1256,7 @@ describe('presets', () => {
     for (let i = 0; i < m.length; i++) {
       for (let j = 0; j < m[i].length; j++) {
         if (m[i][j] !== null) {
-          expect(m[i][j]!.strength).toBeGreaterThanOrEqual(0);
+          expect(m[i][j]!.outerStrength).toBeGreaterThanOrEqual(0);
         }
       }
     }
@@ -1266,14 +1266,14 @@ describe('presets', () => {
     const sym = getBuiltinPreset('Symbiosis');
     const m = sym!.config.interactionMatrix;
     expect(m[0][0]).not.toBeNull();
-    expect(m[0][0]!.strength).toBeGreaterThan(0);
+    expect(m[0][0]!.outerStrength).toBeGreaterThan(0);
   });
 
   it('Symbiosis: Shrimp has positive self-cohesion (small groups)', () => {
     const sym = getBuiltinPreset('Symbiosis');
     const m = sym!.config.interactionMatrix;
     expect(m[2][2]).not.toBeNull();
-    expect(m[2][2]!.strength).toBeGreaterThan(0);
+    expect(m[2][2]!.outerStrength).toBeGreaterThan(0);
   });
 
   it('Symbiosis: Coral has no self-interaction (stationary, no clustering)', () => {

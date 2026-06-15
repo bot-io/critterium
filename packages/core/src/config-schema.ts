@@ -68,8 +68,10 @@ export interface JsonSpeciesConfig {
 
 /** JSON-serializable interaction matrix entry. */
 export interface JsonInteractionEntry {
-  strength: number;
-  radius: number;
+  innerStrength: number;
+  outerStrength: number;
+  innerRadius: number;
+  outerRadius: number;
   falloff: FalloffType;
 }
 
@@ -287,8 +289,10 @@ function serializeInteractionMatrix(matrix: InteractionMatrix): (JsonInteraction
       const entry = matrix.get(i, j);
       if (entry) {
         row.push({
-          strength: entry.strength,
-          radius: entry.radius,
+          innerStrength: entry.innerStrength,
+          outerStrength: entry.outerStrength,
+          innerRadius: entry.innerRadius,
+          outerRadius: entry.outerRadius,
           falloff: entry.falloff,
         });
       } else {
@@ -655,15 +659,36 @@ function validateInteractionMatrix(raw: unknown, numSpecies: number): void {
         throw new Error(`interactionMatrix[${i}][${j}] must be an object or null`);
       }
       const e = entry as Record<string, unknown>;
-      // Clamp strength: NaN/Infinity → 0
-      if (typeof e.strength !== 'number' || !Number.isFinite(e.strength)) {
-        e.strength = 0;
+      // Backward compat: migrate old { strength, radius } → new schema
+      if (!('innerStrength' in e) && 'strength' in e) {
+        e.innerStrength = e.strength;
+        e.outerStrength = e.strength;
       }
-      // Clamp radius: NaN/Infinity/negative → default 100; clamp upper bound
-      if (typeof e.radius !== 'number' || !Number.isFinite(e.radius) || e.radius < 0) {
-        e.radius = 100;
-      } else if (e.radius > 5000) {
-        e.radius = 5000;
+      if (!('outerRadius' in e) && 'radius' in e) {
+        e.innerRadius = 0;
+        e.outerRadius = e.radius;
+      }
+      // Clamp innerStrength: NaN/Infinity → 0
+      if (typeof e.innerStrength !== 'number' || !Number.isFinite(e.innerStrength)) {
+        e.innerStrength = 0;
+      }
+      // Clamp outerStrength: NaN/Infinity → 0
+      if (typeof e.outerStrength !== 'number' || !Number.isFinite(e.outerStrength)) {
+        e.outerStrength = 0;
+      }
+      // Clamp innerRadius: NaN/Infinity/negative → 0
+      if (typeof e.innerRadius !== 'number' || !Number.isFinite(e.innerRadius) || (e.innerRadius as number) < 0) {
+        e.innerRadius = 0;
+      }
+      // Clamp outerRadius: NaN/Infinity/negative → default 100; clamp upper bound
+      if (typeof e.outerRadius !== 'number' || !Number.isFinite(e.outerRadius) || (e.outerRadius as number) < 0) {
+        e.outerRadius = 100;
+      } else if ((e.outerRadius as number) > 5000) {
+        e.outerRadius = 5000;
+      }
+      // innerRadius cannot exceed outerRadius
+      if ((e.innerRadius as number) > (e.outerRadius as number)) {
+        e.innerRadius = e.outerRadius;
       }
       // Validate falloff enum
       if (typeof e.falloff !== 'string' || !VALID_FALLOFFS.has(e.falloff)) {
@@ -733,20 +758,38 @@ export function applyConfig(config: CritteriumConfig): AppliedConfig {
   return { eco, matrix, species };
 }
 
-/** Build an InteractionMatrix from the JSON 2D array. */
+/** Build an InteractionMatrix from the JSON 2D array.
+ * Supports backward compat: old format { strength, radius, falloff } auto-migrates
+ * to { innerStrength: strength, outerStrength: strength, innerRadius: 0, outerRadius: radius }.
+ */
 function buildInteractionMatrix(json: (JsonInteractionEntry | null)[][]): InteractionMatrix {
   const numTypes = json.length;
   const matrix = new InteractionMatrix(numTypes);
 
   for (let i = 0; i < numTypes; i++) {
     for (let j = 0; j < json[i].length; j++) {
-      const entry = json[i][j];
+      const entry = json[i][j] as unknown as Record<string, unknown> | null;
       if (entry) {
-        matrix.set(i, j, {
-          strength: entry.strength,
-          radius: entry.radius,
-          falloff: entry.falloff,
-        });
+        // Backward compat: old format had { strength, radius }
+        if ('strength' in entry && !('outerStrength' in entry)) {
+          const s = entry.strength as number;
+          const r = entry.radius as number;
+          matrix.set(i, j, {
+            innerStrength: s,
+            outerStrength: s,
+            innerRadius: 0,
+            outerRadius: r,
+            falloff: entry.falloff as FalloffType,
+          });
+        } else {
+          matrix.set(i, j, {
+            innerStrength: entry.innerStrength as number,
+            outerStrength: entry.outerStrength as number,
+            innerRadius: entry.innerRadius as number,
+            outerRadius: entry.outerRadius as number,
+            falloff: entry.falloff as FalloffType,
+          });
+        }
       }
     }
   }
@@ -761,13 +804,16 @@ function buildInteractionRulesFromMatrix(
   return json.map((row) =>
     row.map((entry) => {
       if (!entry) return null;
-      // For the ecosystem config, we create a simple enabledForces set
-      const isAttract = entry.strength >= 0;
+      // Backward compat: old format
+      const e = entry as unknown as Record<string, unknown>;
+      const outerStrength = ('outerStrength' in e ? e.outerStrength : e.strength) as number;
+      const outerRadius = ('outerRadius' in e ? e.outerRadius : e.radius) as number;
+      const isAttract = outerStrength >= 0;
       return {
         enabledForces: new Set([isAttract ? 'attract' : 'repel']),
-        radius: entry.radius,
-        strength: entry.strength,
-        falloff: entry.falloff as 'linear' | 'inverse' | 'constant',
+        radius: outerRadius,
+        strength: outerStrength,
+        falloff: e.falloff as 'linear' | 'inverse' | 'constant',
       };
     }),
   );

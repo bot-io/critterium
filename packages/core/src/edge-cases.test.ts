@@ -313,8 +313,10 @@ describe('Edge Case: 10 species (maximum)', () => {
     // Set up a circular chase chain: type i chases type (i+1) % 10
     for (let i = 0; i < numTypes; i++) {
       matrix.set(i, (i + 1) % numTypes, {
-        strength: 100,
-        radius: 80,
+        innerStrength: 100,
+        outerStrength: 100,
+        innerRadius: 0,
+        outerRadius: 80,
         falloff: 'linear',
       });
     }
@@ -335,7 +337,7 @@ describe('Edge Case: 10 species (maximum)', () => {
 
   it('InteractionMatrix with 10 types can set and get entries correctly', () => {
     const matrix = new InteractionMatrix(numTypes);
-    const entry: InteractionEntry = { strength: 50, radius: 100, falloff: 'linear' };
+    const entry: InteractionEntry = { innerStrength: 50, outerStrength: 50, innerRadius: 0, outerRadius: 100, falloff: 'linear' };
     matrix.set(3, 7, entry);
     expect(matrix.get(3, 7)).toBe(entry);
     // Verify symmetric pair is NOT automatically set (asymmetric by design)
@@ -350,8 +352,10 @@ describe('Edge Case: 10 species (maximum)', () => {
 describe('Edge Case: zero-radius interaction', () => {
   it('InteractionMatrix.forceAtDistance returns 0 for zero-radius entry at any distance', () => {
     const entry: InteractionEntry = {
-      strength: 100,
-      radius: 0,
+      innerStrength: 100,
+      outerStrength: 100,
+      innerRadius: 0,
+      outerRadius: 0,
       falloff: 'linear',
     };
     // dist >= radius (0) for any non-negative distance → returns 0
@@ -373,8 +377,8 @@ describe('Edge Case: zero-radius interaction', () => {
     const world = new World(config);
     const grid = new SpatialHashGrid(800, 600, 50, 50);
     const matrix = new InteractionMatrix(2);
-    matrix.set(0, 1, { strength: 200, radius: 0, falloff: 'linear' });
-    matrix.set(1, 0, { strength: 200, radius: 0, falloff: 'inverse' });
+    matrix.set(0, 1, { innerStrength: 200, outerStrength: 200, innerRadius: 0, outerRadius: 0, falloff: 'linear' });
+    matrix.set(1, 0, { innerStrength: 200, outerStrength: 200, innerRadius: 0, outerRadius: 0, falloff: 'inverse' });
 
     const pairwise = new PairwiseForce(matrix, { strength: 500, radius: 8 });
 
@@ -392,10 +396,7 @@ describe('Edge Case: zero-radius interaction', () => {
   });
 
   it('zero-radius entry with inverse falloff does not produce NaN at distance 0', () => {
-    const entry: InteractionEntry = {
-      strength: 100,
-      radius: 0,
-      falloff: 'inverse',
+    const entry: InteractionEntry = { innerStrength: 100, outerStrength: 100, innerRadius: 0, outerRadius: 0, falloff: 'inverse',
     };
     // This should not produce Infinity or NaN
     const result = InteractionMatrix.forceAtDistance(entry, 0);
@@ -408,15 +409,9 @@ describe('Edge Case: zero-radius interaction', () => {
 
 describe('Edge Case: negative strength (repulsion)', () => {
   it('negative strength produces repulsive force (reverses direction)', () => {
-    const attractEntry: InteractionEntry = {
-      strength: 100,
-      radius: 100,
-      falloff: 'constant',
+    const attractEntry: InteractionEntry = { innerStrength: 100, outerStrength: 100, innerRadius: 0, outerRadius: 100, falloff: 'constant',
     };
-    const repelEntry: InteractionEntry = {
-      strength: -100,
-      radius: 100,
-      falloff: 'constant',
+    const repelEntry: InteractionEntry = { innerStrength: -100, outerStrength: -100, innerRadius: 0, outerRadius: 100, falloff: 'constant',
     };
     // At some fixed distance within radius
     const dist = 50;
@@ -441,7 +436,7 @@ describe('Edge Case: negative strength (repulsion)', () => {
     const grid = new SpatialHashGrid(800, 600, 200, 10);
     const matrix = new InteractionMatrix(2);
     // Type 0 is repelled by type 1
-    matrix.set(0, 1, { strength: -300, radius: 200, falloff: 'constant' });
+    matrix.set(0, 1, { innerStrength: -300, outerStrength: -300, innerRadius: 0, outerRadius: 200, falloff: 'constant' });
 
     const pairwise = new PairwiseForce(matrix, { strength: 0, radius: 0 });
 
@@ -468,8 +463,10 @@ describe('Edge Case: negative strength (repulsion)', () => {
   it('negative strength with linear and inverse falloff is also repulsive', () => {
     for (const falloff of ['linear', 'inverse'] as const) {
       const entry: InteractionEntry = {
-        strength: -200,
-        radius: 100,
+        innerStrength: -200,
+        outerStrength: -200,
+        innerRadius: 0,
+        outerRadius: 100,
         falloff,
       };
       const force = InteractionMatrix.forceAtDistance(entry, 50);
@@ -697,7 +694,7 @@ describe('Edge Case: co-located particles', () => {
     const world = new World(config);
     const grid = new SpatialHashGrid(800, 600, 200, 20);
     const matrix = new InteractionMatrix(1);
-    matrix.set(0, 0, { strength: 100, radius: 50, falloff: 'linear' });
+    matrix.set(0, 0, { innerStrength: 100, outerStrength: 100, innerRadius: 0, outerRadius: 50, falloff: 'linear' });
     const pairwise = new PairwiseForce(matrix, { strength: 500, radius: 8 });
 
     // Place all particles at the exact same position
@@ -766,8 +763,8 @@ describe('Edge Case: very large interaction radius', () => {
     const grid = new SpatialHashGrid(200, 200, 500, 20);
     const matrix = new InteractionMatrix(2);
     // Radius much larger than the world
-    matrix.set(0, 1, { strength: 100, radius: 10000, falloff: 'linear' });
-    matrix.set(1, 0, { strength: 100, radius: 10000, falloff: 'linear' });
+    matrix.set(0, 1, { innerStrength: 100, outerStrength: 100, innerRadius: 0, outerRadius: 10000, falloff: 'linear' });
+    matrix.set(1, 0, { innerStrength: 100, outerStrength: 100, innerRadius: 0, outerRadius: 10000, falloff: 'linear' });
 
     const pairwise = new PairwiseForce(matrix);
 

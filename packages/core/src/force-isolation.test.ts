@@ -296,8 +296,10 @@ describe('CRT-48: VortexForce falloff modes', () => {
 
 describe('CRT-48: InteractionMatrix.forceAtDistance falloff', () => {
   const entry = (falloff: InteractionEntry['falloff']): InteractionEntry => ({
-    strength: 100,
-    radius: 100,
+    innerStrength: 100,
+    outerStrength: 100,
+    innerRadius: 0,
+    outerRadius: 100,
     falloff,
   });
 

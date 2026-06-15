@@ -34,9 +34,10 @@ export interface ControlsPanelOptions {
   onMatrixChange?: (
     i: number,
     j: number,
-    strength: number,
-    minRadius: number,
-    maxRadius: number,
+    innerStrength: number,
+    outerStrength: number,
+    innerRadius: number,
+    outerRadius: number,
     falloff: string,
   ) => void;
   onRandomizeMatrix?: () => void;
@@ -62,7 +63,7 @@ export interface ControlsPanelOptions {
   initialForceValues?: Record<string, Record<string, number>>;
   pipelineForces?: PipelineForceEntry[];
   forceTypeDescriptors?: ForceTypeDescriptor[];
-  initialMatrixValues?: Array<Array<{ strength: number; radius: number; falloff: string } | null>>;
+  initialMatrixValues?: Array<Array<{ innerStrength: number; outerStrength: number; innerRadius: number; outerRadius: number; falloff: string } | null>>;
   initialSpeciesValues?: Array<Record<string, number>>;
   maxCount?: number;
 }
@@ -1271,26 +1272,27 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
       for (let j = 0; j < n; j++) {
         const init = initMatrix?.[i]?.[j];
         const cell = el('div', 'crit-matrix-cell');
-        const initStr = init?.strength ?? 0;
+        const initStr = init?.outerStrength ?? 0;
         updateCellColor(cell, initStr);
 
         const valLabel = el('span', 'crit-matrix-val');
         valLabel.textContent = String(initStr);
         cell.appendChild(valLabel);
 
-        // Click cell to cycle: +25, -25
+        // Click cell to cycle outerStrength: +25, -25
         const ii = i,
           jj = j;
         let currentStr = initStr;
-        const currentMinR = Math.max(10, (init?.radius ?? 100) - 30);
-        const currentMaxR = init?.radius ?? 100;
         cell.addEventListener('click', () => {
           currentStr += 25;
           if (currentStr > 100) currentStr = -100;
           valLabel.textContent = String(currentStr);
           updateCellColor(cell, currentStr);
           const falloff = init?.falloff ?? 'linear';
-          opts.onMatrixChange?.(ii, jj, currentStr, currentMinR, currentMaxR, falloff);
+          const innerStr = init?.innerStrength ?? 0;
+          const innerR = init?.innerRadius ?? 0;
+          const outerR = init?.outerRadius ?? 100;
+          opts.onMatrixChange?.(ii, jj, innerStr, currentStr, innerR, outerR, falloff);
         });
         // Right-click to decrease
         cell.addEventListener('contextmenu', (e) => {
@@ -1300,7 +1302,10 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
           valLabel.textContent = String(currentStr);
           updateCellColor(cell, currentStr);
           const falloff = init?.falloff ?? 'linear';
-          opts.onMatrixChange?.(ii, jj, currentStr, currentMinR, currentMaxR, falloff);
+          const innerStr = init?.innerStrength ?? 0;
+          const innerR = init?.innerRadius ?? 0;
+          const outerR = init?.outerRadius ?? 100;
+          opts.onMatrixChange?.(ii, jj, innerStr, currentStr, innerR, outerR, falloff);
         });
 
         grid.appendChild(cell);
@@ -1309,114 +1314,132 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
 
     body.appendChild(grid);
 
-    // Per-cell radius controls with min/max sliders
-    const radiusSection = el('div');
-    radiusSection.style.cssText = 'margin-top:8px;';
+    // ─── Two-Zone Interaction Editor ─────────────────────────────
+    const zoneSection = el('div');
+    zoneSection.style.cssText = 'margin-top:8px;';
 
-    const radiusTitle = el('div', 'crit-subsection-hdr');
-    radiusTitle.textContent = '▾ Interaction Distance';
-    radiusSection.appendChild(radiusTitle);
+    const zoneTitle = el('div', 'crit-subsection-hdr');
+    zoneTitle.textContent = '▾ Inner / Outer Zones';
+    zoneSection.appendChild(zoneTitle);
 
-    const radiusLegend = el('div');
-    radiusLegend.style.cssText = 'font-size:9px; color:#777; margin:2px 0 4px 0;';
-    radiusLegend.textContent = 'Min = closest distance · Max = farthest distance affected';
-    radiusSection.appendChild(radiusLegend);
+    const zoneLegend = el('div');
+    zoneLegend.style.cssText = 'font-size:9px; color:#777; margin:2px 0 4px 0;';
+    zoneLegend.textContent = 'Inner = close range (personal space) · Outer = far range (detection/flocking)';
+    zoneSection.appendChild(zoneLegend);
 
-    const radiusBody = el('div', 'crit-section-body');
+    const zoneBody = el('div', 'crit-section-body');
 
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {
         const init = initMatrix?.[i]?.[j];
-        const baseRadius = init?.radius ?? 100;
         const rowDiv = el('div', 'crit-row');
-        rowDiv.style.cssText = 'gap:4px; flex-wrap:wrap; align-items:center;';
+        rowDiv.style.cssText = 'gap:3px; flex-wrap:wrap; align-items:center; margin-bottom:4px;';
 
         const lbl = el('span', 'crit-label');
         lbl.textContent = `${names[i].substring(0, 4)}→${names[j].substring(0, 4)}`;
         lbl.style.minWidth = '60px';
         rowDiv.appendChild(lbl);
 
-        // Min label
-        const minLbl = el('span');
-        minLbl.textContent = 'Min';
-        minLbl.style.cssText = 'font-size:9px; color:#88aaff; min-width:22px;';
-        rowDiv.appendChild(minLbl);
+        const ii = i, jj = j;
 
-        // Min value
-        const minVal = el('span', 'crit-value');
-        minVal.textContent = String(Math.max(10, baseRadius - 30));
-        minVal.style.cssText = 'min-width:22px; font-size:9px; color:#88aaff;';
-        rowDiv.appendChild(minVal);
+        // ── Inner strength slider ──
+        const innerStrVal = el('span', 'crit-value');
+        innerStrVal.textContent = String(init?.innerStrength ?? 0);
+        innerStrVal.style.cssText = 'min-width:28px; font-size:9px; color:#ff88aa; text-align:right;';
+        rowDiv.appendChild(innerStrVal);
+        const innerStrSlider = document.createElement('input');
+        innerStrSlider.type = 'range';
+        innerStrSlider.min = '-100';
+        innerStrSlider.max = '100';
+        innerStrSlider.step = '5';
+        innerStrSlider.value = String(init?.innerStrength ?? 0);
+        innerStrSlider.style.flex = '1';
+        innerStrSlider.style.minWidth = '30px';
+        innerStrSlider.title = 'Inner strength (close range)';
+        rowDiv.appendChild(innerStrSlider);
 
-        // Min slider
-        const minSlider = document.createElement('input');
-        minSlider.type = 'range';
-        minSlider.min = '10';
-        minSlider.max = '300';
-        minSlider.step = '5';
-        minSlider.value = String(Math.max(10, baseRadius - 30));
-        minSlider.style.flex = '1';
-        minSlider.style.minWidth = '40px';
-        rowDiv.appendChild(minSlider);
+        // ── Inner radius slider ──
+        const innerRSlider = document.createElement('input');
+        innerRSlider.type = 'range';
+        innerRSlider.min = '0';
+        innerRSlider.max = '200';
+        innerRSlider.step = '5';
+        innerRSlider.value = String(init?.innerRadius ?? 0);
+        innerRSlider.style.flex = '1';
+        innerRSlider.style.minWidth = '30px';
+        innerRSlider.title = 'Inner radius (boundary)';
+        rowDiv.appendChild(innerRSlider);
+        const innerRVal = el('span', 'crit-value');
+        innerRVal.textContent = String(init?.innerRadius ?? 0);
+        innerRVal.style.cssText = 'min-width:22px; font-size:9px; color:#88aaff; text-align:right;';
+        rowDiv.appendChild(innerRVal);
 
-        // Max slider
-        const maxSlider = document.createElement('input');
-        maxSlider.type = 'range';
-        maxSlider.min = '10';
-        maxSlider.max = '300';
-        maxSlider.step = '5';
-        maxSlider.value = String(baseRadius);
-        maxSlider.style.flex = '1';
-        maxSlider.style.minWidth = '40px';
-        rowDiv.appendChild(maxSlider);
+        // ── Outer radius slider ──
+        const outerRVal = el('span', 'crit-value');
+        outerRVal.textContent = String(init?.outerRadius ?? 100);
+        outerRVal.style.cssText = 'min-width:22px; font-size:9px; color:#aa88ff; text-align:right;';
+        rowDiv.appendChild(outerRVal);
+        const outerRSlider = document.createElement('input');
+        outerRSlider.type = 'range';
+        outerRSlider.min = '10';
+        outerRSlider.max = '300';
+        outerRSlider.step = '5';
+        outerRSlider.value = String(init?.outerRadius ?? 100);
+        outerRSlider.style.flex = '1';
+        outerRSlider.style.minWidth = '30px';
+        outerRSlider.title = 'Outer radius (max range)';
+        rowDiv.appendChild(outerRSlider);
 
-        // Max value
-        const maxVal = el('span', 'crit-value');
-        maxVal.textContent = String(baseRadius);
-        maxVal.style.cssText = 'min-width:22px; font-size:9px; color:#ffaa88;';
-        rowDiv.appendChild(maxVal);
+        // ── Outer strength slider ──
+        const outerStrSlider = document.createElement('input');
+        outerStrSlider.type = 'range';
+        outerStrSlider.min = '-100';
+        outerStrSlider.max = '100';
+        outerStrSlider.step = '5';
+        outerStrSlider.value = String(init?.outerStrength ?? 0);
+        outerStrSlider.style.flex = '1';
+        outerStrSlider.style.minWidth = '30px';
+        outerStrSlider.title = 'Outer strength (far range)';
+        rowDiv.appendChild(outerStrSlider);
+        const outerStrVal = el('span', 'crit-value');
+        outerStrVal.textContent = String(init?.outerStrength ?? 0);
+        outerStrVal.style.cssText = 'min-width:28px; font-size:9px; color:#88ff88; text-align:right;';
+        rowDiv.appendChild(outerStrVal);
 
-        // Max label
-        const maxLbl = el('span');
-        maxLbl.textContent = 'Max';
-        maxLbl.style.cssText = 'font-size:9px; color:#ffaa88; min-width:22px;';
-        rowDiv.appendChild(maxLbl);
-
-        const ii = i,
-          jj = j;
-        const updateRadius = (): void => {
-          // Clamp: min cannot exceed max, max cannot go below min
-          const minR = parseInt(minSlider.value);
-          const maxR = parseInt(maxSlider.value);
-          if (minR > maxR) {
-            maxSlider.value = String(minR);
+        const updateZones = (): void => {
+          // Clamp: innerRadius cannot exceed outerRadius
+          let innerR = parseInt(innerRSlider.value);
+          const outerR = parseInt(outerRSlider.value);
+          if (innerR > outerR) {
+            innerR = outerR;
+            innerRSlider.value = String(innerR);
           }
-          if (maxR < minR) {
-            minSlider.value = String(maxR);
-          }
-          minVal.textContent = minSlider.value;
-          maxVal.textContent = maxSlider.value;
+          innerRVal.textContent = String(innerR);
+          outerRVal.textContent = String(outerR);
+          innerStrVal.textContent = innerStrSlider.value;
+          outerStrVal.textContent = outerStrSlider.value;
           const falloff = init?.falloff ?? 'linear';
-          const str = initMatrix?.[ii]?.[jj]?.strength ?? 0;
           opts.onMatrixChange?.(
-            ii,
-            jj,
-            str,
-            parseInt(minSlider.value),
-            parseInt(maxSlider.value),
+            ii, jj,
+            parseInt(innerStrSlider.value),
+            parseInt(outerStrSlider.value),
+            innerR,
+            outerR,
             falloff,
           );
         };
 
-        minSlider.addEventListener('input', updateRadius);
-        maxSlider.addEventListener('input', updateRadius);
+        innerStrSlider.addEventListener('input', updateZones);
+        innerRSlider.addEventListener('input', updateZones);
+        outerRSlider.addEventListener('input', updateZones);
+        outerStrSlider.addEventListener('input', updateZones);
 
-        radiusBody.appendChild(rowDiv);
+        zoneBody.appendChild(rowDiv);
       }
     }
 
-    radiusSection.appendChild(radiusBody);
-    body.appendChild(radiusSection);
+    zoneSection.appendChild(zoneBody);
+    body.appendChild(zoneSection);
   });
 }
 

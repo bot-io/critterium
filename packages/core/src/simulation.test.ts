@@ -90,8 +90,8 @@ describe('sim: forces', () => {
     grid.rebuild(world);
 
     const matrix = new InteractionMatrix(2);
-    matrix.set(0, 1, { strength: 50, radius: 200, falloff: 'constant' });
-    matrix.set(1, 0, { strength: 50, radius: 200, falloff: 'constant' });
+    matrix.set(0, 1, { innerStrength: 50, outerStrength: 50, innerRadius: 0, outerRadius: 200, falloff: 'constant' });
+    matrix.set(1, 0, { innerStrength: 50, outerStrength: 50, innerRadius: 0, outerRadius: 200, falloff: 'constant' });
     const pf = new PairwiseForce(matrix, { strength: 0, radius: 0 });
     const d0 = dist(world.x[0], world.y[0], world.x[1], world.y[1]);
 
@@ -126,8 +126,8 @@ describe('sim: forces', () => {
     grid.rebuild(world);
 
     const matrix = new InteractionMatrix(2);
-    matrix.set(0, 1, { strength: -50, radius: 200, falloff: 'constant' });
-    matrix.set(1, 0, { strength: -50, radius: 200, falloff: 'constant' });
+    matrix.set(0, 1, { innerStrength: -50, outerStrength: -50, innerRadius: 0, outerRadius: 200, falloff: 'constant' });
+    matrix.set(1, 0, { innerStrength: -50, outerStrength: -50, innerRadius: 0, outerRadius: 200, falloff: 'constant' });
     const pf = new PairwiseForce(matrix, { strength: 0, radius: 0 });
     const d0 = dist(world.x[0], world.y[0], world.x[1], world.y[1]);
 
@@ -204,8 +204,8 @@ describe('sim: forces', () => {
     grid.rebuild(world);
 
     const matrix = new InteractionMatrix(2);
-    matrix.set(0, 1, { strength: 100, radius: 100, falloff: 'constant' });
-    matrix.set(1, 0, { strength: 100, radius: 100, falloff: 'constant' });
+    matrix.set(0, 1, { innerStrength: 100, outerStrength: 100, innerRadius: 0, outerRadius: 100, falloff: 'constant' });
+    matrix.set(1, 0, { innerStrength: 100, outerStrength: 100, innerRadius: 0, outerRadius: 100, falloff: 'constant' });
     new PairwiseForce(matrix, { strength: 0, radius: 0 }).apply(world, grid, DT);
     expect(world.vx[0]).toBe(0);
     expect(world.vy[0]).toBe(0);
@@ -610,25 +610,25 @@ describe('sim: boundaries', () => {
 
 describe('sim: InteractionMatrix.forceAtDistance', () => {
   it('linear falloff at boundary = 0', () => {
-    const e: InteractionEntry = { strength: 100, radius: 50, falloff: 'linear' };
+    const e: InteractionEntry = { innerStrength: 100, outerStrength: 100, innerRadius: 0, outerRadius: 50, falloff: 'linear' };
     expect(InteractionMatrix.forceAtDistance(e, 50)).toBe(0);
   });
   it('linear falloff at half radius', () => {
-    const e: InteractionEntry = { strength: 100, radius: 100, falloff: 'linear' };
+    const e: InteractionEntry = { innerStrength: 100, outerStrength: 100, innerRadius: 0, outerRadius: 100, falloff: 'linear' };
     expect(InteractionMatrix.forceAtDistance(e, 50)).toBeCloseTo(50, 1);
   });
   it('constant falloff same at all distances', () => {
-    const e: InteractionEntry = { strength: 80, radius: 100, falloff: 'constant' };
+    const e: InteractionEntry = { innerStrength: 80, outerStrength: 80, innerRadius: 0, outerRadius: 100, falloff: 'constant' };
     expect(InteractionMatrix.forceAtDistance(e, 10)).toBe(80);
     expect(InteractionMatrix.forceAtDistance(e, 99)).toBe(80);
   });
   it('returns 0 when distance >= radius', () => {
-    const e: InteractionEntry = { strength: 100, radius: 50, falloff: 'constant' };
+    const e: InteractionEntry = { innerStrength: 100, outerStrength: 100, innerRadius: 0, outerRadius: 50, falloff: 'constant' };
     expect(InteractionMatrix.forceAtDistance(e, 50)).toBe(0);
     expect(InteractionMatrix.forceAtDistance(e, 100)).toBe(0);
   });
   it('returns 0 when distance <= 0', () => {
-    const e: InteractionEntry = { strength: 100, radius: 50, falloff: 'linear' };
+    const e: InteractionEntry = { innerStrength: 100, outerStrength: 100, innerRadius: 0, outerRadius: 50, falloff: 'linear' };
     expect(InteractionMatrix.forceAtDistance(e, 0)).toBe(0);
     expect(InteractionMatrix.forceAtDistance(e, -10)).toBe(0);
   });
@@ -698,7 +698,7 @@ describe('sim: multi-step', () => {
 
     const grid = makeGrid(800, 600);
     const matrix = new InteractionMatrix(1);
-    matrix.set(0, 0, { strength: -30, radius: 200, falloff: 'linear' });
+    matrix.set(0, 0, { innerStrength: -30, outerStrength: -30, innerRadius: 0, outerRadius: 200, falloff: 'linear' });
     const pf = new PairwiseForce(matrix, { strength: 0, radius: 0 });
     const drag = new DragForce(0.8);
     const d0 = dist(world.x[0], world.y[0], world.x[1], world.y[1]);
@@ -746,8 +746,8 @@ describe('sim: multi-step', () => {
 
     const grid = makeGrid(400, 300);
     const matrix = new InteractionMatrix(2);
-    matrix.set(0, 1, { strength: -60, radius: 200, falloff: 'linear' });
-    matrix.set(1, 0, { strength: 80, radius: 200, falloff: 'linear' });
+    matrix.set(0, 1, { innerStrength: -60, outerStrength: -60, innerRadius: 0, outerRadius: 200, falloff: 'linear' });
+    matrix.set(1, 0, { innerStrength: 80, outerStrength: 80, innerRadius: 0, outerRadius: 200, falloff: 'linear' });
     const pf = new PairwiseForce(matrix, { strength: 0, radius: 0 });
     const drag = new DragForce(0.5);
 
@@ -776,7 +776,7 @@ describe('sim: multi-step', () => {
     const g1 = makeGrid(400, 300);
     const g2 = makeGrid(400, 300);
     const matrix = new InteractionMatrix(1);
-    matrix.set(0, 0, { strength: -20, radius: 80, falloff: 'linear' });
+    matrix.set(0, 0, { innerStrength: -20, outerStrength: -20, innerRadius: 0, outerRadius: 80, falloff: 'linear' });
     const pf1 = new PairwiseForce(matrix, { strength: 0, radius: 0 });
     const pf2 = new PairwiseForce(matrix, { strength: 0, radius: 0 });
 

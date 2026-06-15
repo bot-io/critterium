@@ -52,7 +52,7 @@ const CLASSIC: EcosystemPreset = preset(
           initialEnergy: 40,
           movementCostPerSec: 2,
           reproductionCost: 20,
-          idleDrainPerSec: -0.3,
+          idleDrainPerSec: -1.0,
           energyGainPerPrey: [0, 0],
         },
         lifecycle: {
@@ -81,14 +81,14 @@ const CLASSIC: EcosystemPreset = preset(
           maxEnergy: 150,
           initialEnergy: 80,
           movementCostPerSec: 3,
-          reproductionCost: 50,
-          idleDrainPerSec: 2,
-          energyGainPerPrey: [40, 0],
+          reproductionCost: 80,
+          idleDrainPerSec: 4.5,
+          energyGainPerPrey: [15, 0],
         },
         lifecycle: {
           maxAgeSec: 60,
-          starvationDamagePerSec: 5,
-          reproductionCooldownSec: 8,
+          starvationDamagePerSec: 6,
+          reproductionCooldownSec: 12,
         },
         diet: {
           canEat: [0],
@@ -104,12 +104,12 @@ const CLASSIC: EcosystemPreset = preset(
     interactionMatrix: [
       /*         Prey     Predator */
       /* Prey     */ [
-        { strength: 30, radius: 80, falloff: 'linear' },
-        { strength: -80, radius: 120, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 30, innerRadius: 0, outerRadius: 80, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -80, innerRadius: 0, outerRadius: 120, falloff: 'linear' },
       ],
       /* Predator */ [
-        { strength: 60, radius: 150, falloff: 'linear' },
-        { strength: -20, radius: 50, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 60, innerRadius: 0, outerRadius: 150, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -20, innerRadius: 0, outerRadius: 50, falloff: 'linear' },
       ],
     ],
     forces: [
@@ -136,7 +136,7 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
     species: [
       {
         name: 'Algae',
-        count: 360,
+        count: 400,
         color: '#22dd22',
         radius: 2,
         initialSpeed: 10,
@@ -145,14 +145,14 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
           maxEnergy: 30,
           initialEnergy: 15,
           movementCostPerSec: 0.2,
-          reproductionCost: 8,
-          idleDrainPerSec: -1.0,
+          reproductionCost: 5,
+          idleDrainPerSec: -2.0,
           energyGainPerPrey: [0, 0, 0, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 20,
           starvationDamagePerSec: 0,
-          reproductionCooldownSec: 2,
+          reproductionCooldownSec: 1.5,
         },
         diet: {
           canEat: [],
@@ -160,7 +160,7 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
       },
       {
         name: 'Zooplankton',
-        count: 225,
+        count: 200,
         color: '#4488ff',
         radius: 3,
         initialSpeed: 30,
@@ -169,14 +169,14 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
           maxEnergy: 60,
           initialEnergy: 30,
           movementCostPerSec: 1,
-          reproductionCost: 15,
-          idleDrainPerSec: 0.8,
-          energyGainPerPrey: [20, 0, 0, 0, 0],
+          reproductionCost: 20,
+          idleDrainPerSec: 1.5,
+          energyGainPerPrey: [15, 0, 0, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 30,
-          starvationDamagePerSec: 6,
-          reproductionCooldownSec: 4,
+          starvationDamagePerSec: 5,
+          reproductionCooldownSec: 6,
         },
         diet: {
           canEat: [0],
@@ -188,19 +188,19 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
         color: '#eedd44',
         radius: 4,
         initialSpeed: 50,
-        maxSpeed: 90,
+        maxSpeed: 100,
         energy: {
           maxEnergy: 100,
           initialEnergy: 50,
-          movementCostPerSec: 2,
-          reproductionCost: 25,
-          idleDrainPerSec: 1.5,
-          energyGainPerPrey: [0, 30, 0, 0, 0],
+          movementCostPerSec: 1.5,
+          reproductionCost: 30,
+          idleDrainPerSec: -0.5,
+          energyGainPerPrey: [0, 25, 0, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 50,
-          starvationDamagePerSec: 6,
-          reproductionCooldownSec: 6,
+          starvationDamagePerSec: 2,
+          reproductionCooldownSec: 3,
         },
         diet: {
           canEat: [1],
@@ -208,23 +208,23 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
       },
       {
         name: 'Big Fish',
-        count: 70,
+        count: 45,
         color: '#ff8833',
         radius: 6,
-        initialSpeed: 40,
-        maxSpeed: 80,
+        initialSpeed: 45,
+        maxSpeed: 110,
         energy: {
-          maxEnergy: 200,
-          initialEnergy: 100,
-          movementCostPerSec: 3,
-          reproductionCost: 60,
-          idleDrainPerSec: 2,
-          energyGainPerPrey: [0, 0, 50, 0, 0],
+          maxEnergy: 250,
+          initialEnergy: 120,
+          movementCostPerSec: 2.5,
+          reproductionCost: 130,
+          idleDrainPerSec: 0.5,
+          energyGainPerPrey: [0, 0, 18, 0, 0],
         },
         lifecycle: {
-          maxAgeSec: 80,
-          starvationDamagePerSec: 4,
-          reproductionCooldownSec: 12,
+          maxAgeSec: 100,
+          starvationDamagePerSec: 2,
+          reproductionCooldownSec: 25,
         },
         diet: {
           canEat: [2],
@@ -241,14 +241,14 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
           maxEnergy: 500,
           initialEnergy: 300,
           movementCostPerSec: 1.5,
-          reproductionCost: 200,
-          idleDrainPerSec: 1,
-          energyGainPerPrey: [0, 0, 0, 80, 0],
+          reproductionCost: 300,
+          idleDrainPerSec: 2,
+          energyGainPerPrey: [0, 0, 0, 30, 0],
         },
         lifecycle: {
           maxAgeSec: 200,
-          starvationDamagePerSec: 2,
-          reproductionCooldownSec: 30,
+          starvationDamagePerSec: 2.5,
+          reproductionCooldownSec: 40,
         },
         diet: {
           canEat: [3],
@@ -259,27 +259,27 @@ const PLANKTON_BLOOM: EcosystemPreset = preset(
       /*           Algae   Zoopl.  SmFish  BigFish Whale  */
       /* Algae   */ [null, null, null, null, null],
       /* Zoopl.  */ [
-        { strength: 40, radius: 100, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 40, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
         null,
-        { strength: -60, radius: 80, falloff: 'linear' },
-        { strength: -80, radius: 120, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -60, innerRadius: 0, outerRadius: 80, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -80, innerRadius: 0, outerRadius: 120, falloff: 'linear' },
         null,
       ],
       /* SmFish  */ [
         null,
-        { strength: 50, radius: 100, falloff: 'linear' },
-        { strength: 25, radius: 60, falloff: 'linear' },
-        { strength: -70, radius: 120, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 50, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 25, innerRadius: 0, outerRadius: 60, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -70, innerRadius: 0, outerRadius: 120, falloff: 'linear' },
         null,
       ],
       /* BigFish */ [
         null,
         null,
-        { strength: 60, radius: 150, falloff: 'linear' },
-        { strength: -30, radius: 80, falloff: 'linear' },
-        { strength: -50, radius: 150, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 60, innerRadius: 0, outerRadius: 150, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -30, innerRadius: 0, outerRadius: 80, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -50, innerRadius: 0, outerRadius: 150, falloff: 'linear' },
       ],
-      /* Whale   */ [null, null, null, { strength: 40, radius: 200, falloff: 'linear' }, null],
+      /* Whale   */ [null, null, null, { innerStrength: 0, outerStrength: 40, innerRadius: 0, outerRadius: 200, falloff: 'linear' }, null],
     ],
     forces: [
       { type: 'drag', enabled: true, params: { coefficient: 0.6 } },
@@ -354,8 +354,8 @@ const SWARM_INTELLIGENCE: EcosystemPreset = preset(
     ],
     interactionMatrix: [
       /*         Birds     Locusts */
-      /* Birds   */ [{ strength: 50, radius: 80, falloff: 'linear' }, null],
-      /* Locusts */ [null, { strength: 60, radius: 50, falloff: 'linear' }],
+      /* Birds   */ [{ innerStrength: 0, outerStrength: 50, innerRadius: 0, outerRadius: 80, falloff: 'linear' }, null],
+      /* Locusts */ [null, { innerStrength: 0, outerStrength: 60, innerRadius: 0, outerRadius: 50, falloff: 'linear' }],
     ],
     forces: [
       { type: 'drag', enabled: true, params: { coefficient: 1.2 } },
@@ -381,7 +381,7 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
     species: [
       {
         name: 'Lions',
-        count: 30,
+        count: 15,
         color: '#ffd700',
         radius: 6,
         initialSpeed: 55,
@@ -390,17 +390,17 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
           maxEnergy: 250,
           initialEnergy: 150,
           movementCostPerSec: 3,
-          reproductionCost: 80,
-          idleDrainPerSec: 2.5,
-          energyGainPerPrey: [0, 50, 60, 30],
+          reproductionCost: 140,
+          idleDrainPerSec: 4,
+          energyGainPerPrey: [0, 0, 6, 6],
         },
         lifecycle: {
           maxAgeSec: 100,
           starvationDamagePerSec: 4,
-          reproductionCooldownSec: 15,
+          reproductionCooldownSec: 20,
         },
         diet: {
-          canEat: [1, 2, 3],
+          canEat: [2, 3],
         },
         stamina: {
           sprintDurationSec: 3,
@@ -411,7 +411,7 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
       },
       {
         name: 'Wolves',
-        count: 40,
+        count: 25,
         color: '#c0c0c0',
         radius: 5,
         initialSpeed: 65,
@@ -420,14 +420,14 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
           maxEnergy: 200,
           initialEnergy: 100,
           movementCostPerSec: 2.5,
-          reproductionCost: 60,
-          idleDrainPerSec: 2,
-          energyGainPerPrey: [0, 0, 45, 25],
+          reproductionCost: 140,
+          idleDrainPerSec: 5,
+          energyGainPerPrey: [0, 0, 6, 6],
         },
         lifecycle: {
           maxAgeSec: 80,
-          starvationDamagePerSec: 5,
-          reproductionCooldownSec: 10,
+          starvationDamagePerSec: 4,
+          reproductionCooldownSec: 18,
         },
         diet: {
           canEat: [2, 3],
@@ -441,7 +441,7 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
       },
       {
         name: 'Deer',
-        count: 80,
+        count: 120,
         color: '#8b6914',
         radius: 4,
         initialSpeed: 60,
@@ -450,14 +450,14 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
           maxEnergy: 100,
           initialEnergy: 50,
           movementCostPerSec: 2,
-          reproductionCost: 25,
-          idleDrainPerSec: -0.3,
+          reproductionCost: 8,
+          idleDrainPerSec: -4.0,
           energyGainPerPrey: [0, 0, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 50,
           starvationDamagePerSec: 0,
-          reproductionCooldownSec: 5,
+          reproductionCooldownSec: 1,
         },
         diet: {
           canEat: [],
@@ -471,7 +471,7 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
       },
       {
         name: 'Rabbits',
-        count: 120,
+        count: 140,
         color: '#ffffff',
         radius: 3,
         initialSpeed: 50,
@@ -480,14 +480,14 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
           maxEnergy: 60,
           initialEnergy: 30,
           movementCostPerSec: 1,
-          reproductionCost: 12,
-          idleDrainPerSec: -0.3,
+          reproductionCost: 8,
+          idleDrainPerSec: -3.5,
           energyGainPerPrey: [0, 0, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 25,
           starvationDamagePerSec: 0,
-          reproductionCooldownSec: 2,
+          reproductionCooldownSec: 1,
         },
         diet: {
           canEat: [],
@@ -503,28 +503,28 @@ const PREDATOR_ARENA: EcosystemPreset = preset(
     interactionMatrix: [
       /*         Lions    Wolves   Deer     Rabbits */
       /* Lions  */ [
-        { strength: -40, radius: 60, falloff: 'linear' },
-        { strength: 30, radius: 150, falloff: 'linear' },
-        { strength: 70, radius: 180, falloff: 'linear' },
-        { strength: 50, radius: 140, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -40, innerRadius: 0, outerRadius: 60, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 30, innerRadius: 0, outerRadius: 150, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 70, innerRadius: 0, outerRadius: 130, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 50, innerRadius: 0, outerRadius: 140, falloff: 'linear' },
       ],
       /* Wolves */ [
-        { strength: -60, radius: 120, falloff: 'linear' },
-        { strength: -25, radius: 50, falloff: 'linear' },
-        { strength: 65, radius: 160, falloff: 'linear' },
-        { strength: 55, radius: 130, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -60, innerRadius: 0, outerRadius: 120, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -25, innerRadius: 0, outerRadius: 50, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 65, innerRadius: 0, outerRadius: 110, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 55, innerRadius: 0, outerRadius: 130, falloff: 'linear' },
       ],
       /* Deer   */ [
-        { strength: -90, radius: 150, falloff: 'linear' },
-        { strength: -80, radius: 130, falloff: 'linear' },
-        { strength: 30, radius: 70, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -90, innerRadius: 0, outerRadius: 150, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -80, innerRadius: 0, outerRadius: 130, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 30, innerRadius: 0, outerRadius: 70, falloff: 'linear' },
         null,
       ],
       /* Rabbits*/ [
-        { strength: -70, radius: 120, falloff: 'linear' },
-        { strength: -60, radius: 100, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -70, innerRadius: 0, outerRadius: 120, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -60, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
         null,
-        { strength: 20, radius: 40, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 20, innerRadius: 0, outerRadius: 40, falloff: 'linear' },
       ],
     ],
     forces: [
@@ -601,12 +601,12 @@ const TINY_POND: EcosystemPreset = preset(
     interactionMatrix: [
       /*         Minnows  Bass */
       /* Minnows */ [
-        { strength: 40, radius: 60, falloff: 'linear' },
-        { strength: -100, radius: 100, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 40, innerRadius: 0, outerRadius: 60, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -100, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
       ],
       /* Bass    */ [
-        { strength: 70, radius: 150, falloff: 'linear' },
-        { strength: -30, radius: 60, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 70, innerRadius: 0, outerRadius: 150, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -30, innerRadius: 0, outerRadius: 60, falloff: 'linear' },
       ],
     ],
     forces: [
@@ -706,7 +706,7 @@ const ZEN_GARDEN: EcosystemPreset = preset(
     ],
     interactionMatrix: [
       /*           Fireflies  Koi       Leaves  */
-      /* Fireflies*/ [{ strength: 15, radius: 60, falloff: 'linear' }, null, null],
+      /* Fireflies*/ [{ innerStrength: 0, outerStrength: 15, innerRadius: 0, outerRadius: 60, falloff: 'linear' }, null, null],
       /* Koi      */ [null, null, null],
       /* Leaves   */ [null, null, null],
     ],
@@ -743,14 +743,14 @@ const ROCK_PAPER_SCISSORS: EcosystemPreset = preset(
           maxEnergy: 80,
           initialEnergy: 40,
           movementCostPerSec: 2,
-          reproductionCost: 20,
-          idleDrainPerSec: 1,
-          energyGainPerPrey: [0, 0, 30],
+          reproductionCost: 50,
+          idleDrainPerSec: -1.5,
+          energyGainPerPrey: [0, 0, 5],
         },
         lifecycle: {
-          maxAgeSec: 50,
-          starvationDamagePerSec: 6,
-          reproductionCooldownSec: 4,
+          maxAgeSec: 80,
+          starvationDamagePerSec: 0.5,
+          reproductionCooldownSec: 8,
         },
         diet: {
           canEat: [2],
@@ -773,14 +773,14 @@ const ROCK_PAPER_SCISSORS: EcosystemPreset = preset(
           maxEnergy: 80,
           initialEnergy: 40,
           movementCostPerSec: 2,
-          reproductionCost: 20,
-          idleDrainPerSec: 1,
-          energyGainPerPrey: [30, 0, 0],
+          reproductionCost: 50,
+          idleDrainPerSec: -1.5,
+          energyGainPerPrey: [5, 0, 0],
         },
         lifecycle: {
-          maxAgeSec: 50,
-          starvationDamagePerSec: 6,
-          reproductionCooldownSec: 4,
+          maxAgeSec: 80,
+          starvationDamagePerSec: 0.5,
+          reproductionCooldownSec: 8,
         },
         diet: {
           canEat: [0],
@@ -803,14 +803,14 @@ const ROCK_PAPER_SCISSORS: EcosystemPreset = preset(
           maxEnergy: 80,
           initialEnergy: 40,
           movementCostPerSec: 2,
-          reproductionCost: 20,
-          idleDrainPerSec: 1,
-          energyGainPerPrey: [0, 30, 0],
+          reproductionCost: 50,
+          idleDrainPerSec: -1.5,
+          energyGainPerPrey: [0, 5, 0],
         },
         lifecycle: {
-          maxAgeSec: 50,
-          starvationDamagePerSec: 6,
-          reproductionCooldownSec: 4,
+          maxAgeSec: 80,
+          starvationDamagePerSec: 0.5,
+          reproductionCooldownSec: 8,
         },
         diet: {
           canEat: [1],
@@ -827,19 +827,19 @@ const ROCK_PAPER_SCISSORS: EcosystemPreset = preset(
     interactionMatrix: [
       /*             Rock         Paper        Scissors  */
       /* Rock     */ [
-        { strength: -20, radius: 40, falloff: 'linear' },
-        { strength: -60, radius: 100, falloff: 'linear' },
-        { strength: 50, radius: 120, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -20, innerRadius: 0, outerRadius: 40, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -60, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 50, innerRadius: 0, outerRadius: 120, falloff: 'linear' },
       ],
       /* Paper    */ [
-        { strength: 50, radius: 120, falloff: 'linear' },
-        { strength: -20, radius: 40, falloff: 'linear' },
-        { strength: -60, radius: 100, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 50, innerRadius: 0, outerRadius: 120, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -20, innerRadius: 0, outerRadius: 40, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -60, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
       ],
       /* Scissors */ [
-        { strength: -60, radius: 100, falloff: 'linear' },
-        { strength: 50, radius: 120, falloff: 'linear' },
-        { strength: -20, radius: 40, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -60, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 50, innerRadius: 0, outerRadius: 120, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -20, innerRadius: 0, outerRadius: 40, falloff: 'linear' },
       ],
     ],
     forces: [
@@ -902,13 +902,13 @@ const GRASSLANDS: EcosystemPreset = preset(
           initialEnergy: 40,
           movementCostPerSec: 1.5,
           reproductionCost: 20,
-          idleDrainPerSec: 1,
-          energyGainPerPrey: [15, 0, 0],
+          idleDrainPerSec: -0.3,
+          energyGainPerPrey: [18, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 40,
-          starvationDamagePerSec: 6,
-          reproductionCooldownSec: 3,
+          starvationDamagePerSec: 2,
+          reproductionCooldownSec: 4,
         },
         diet: {
           canEat: [0],
@@ -933,13 +933,13 @@ const GRASSLANDS: EcosystemPreset = preset(
           initialEnergy: 80,
           movementCostPerSec: 2.5,
           reproductionCost: 50,
-          idleDrainPerSec: 2,
-          energyGainPerPrey: [0, 35, 0],
+          idleDrainPerSec: 1.2,
+          energyGainPerPrey: [0, 40, 0],
         },
         lifecycle: {
           maxAgeSec: 70,
-          starvationDamagePerSec: 4,
-          reproductionCooldownSec: 10,
+          starvationDamagePerSec: 3,
+          reproductionCooldownSec: 8,
         },
         diet: {
           canEat: [1],
@@ -955,16 +955,16 @@ const GRASSLANDS: EcosystemPreset = preset(
     // src=row (how this species reacts to target col)
     //         Grass       Rabbits     Foxes
     interactionMatrix: [
-      /* Grass   */ [{ strength: -15, radius: 30, falloff: 'linear' }, null, null],
+      /* Grass   */ [{ innerStrength: 0, outerStrength: -15, innerRadius: 0, outerRadius: 30, falloff: 'linear' }, null, null],
       /* Rabbits */ [
-        { strength: 40, radius: 100, falloff: 'linear' },
-        { strength: 20, radius: 50, falloff: 'linear' },
-        { strength: -80, radius: 130, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 40, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 20, innerRadius: 0, outerRadius: 50, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -80, innerRadius: 0, outerRadius: 130, falloff: 'linear' },
       ],
       /* Foxes   */ [
         null,
-        { strength: 60, radius: 160, falloff: 'linear' },
-        { strength: -30, radius: 60, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 60, innerRadius: 0, outerRadius: 160, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -30, innerRadius: 0, outerRadius: 60, falloff: 'linear' },
       ],
     ],
     forces: [
@@ -1001,14 +1001,14 @@ const BIRDS: EcosystemPreset = preset(
           maxEnergy: 160,
           initialEnergy: 90,
           movementCostPerSec: 0.4,
-          reproductionCost: 25,
-          idleDrainPerSec: -0.3,
+          reproductionCost: 20,
+          idleDrainPerSec: -1.5,
           energyGainPerPrey: [0, 0],
         },
         lifecycle: {
           maxAgeSec: 100,
           starvationDamagePerSec: 0,
-          reproductionCooldownSec: 6,
+          reproductionCooldownSec: 3,
         },
         diet: {
           canEat: [],
@@ -1032,14 +1032,14 @@ const BIRDS: EcosystemPreset = preset(
           maxEnergy: 240,
           initialEnergy: 100,
           movementCostPerSec: 2,
-          reproductionCost: 70,
-          idleDrainPerSec: 1.5,
-          energyGainPerPrey: [35, 0],
+          reproductionCost: 150,
+          idleDrainPerSec: 4,
+          energyGainPerPrey: [8, 0],
         },
         lifecycle: {
           maxAgeSec: 90,
-          starvationDamagePerSec: 4,
-          reproductionCooldownSec: 20,
+          starvationDamagePerSec: 5,
+          reproductionCooldownSec: 40,
         },
         diet: {
           canEat: [0],
@@ -1056,12 +1056,12 @@ const BIRDS: EcosystemPreset = preset(
     //         Starlings    Hawk
     interactionMatrix: [
       /* Starlings */ [
-        { strength: 55, radius: 100, falloff: 'linear' },
-        { strength: -95, radius: 140, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 55, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -95, innerRadius: 0, outerRadius: 140, falloff: 'linear' },
       ],
       /* Hawk      */ [
-        { strength: 70, radius: 170, falloff: 'linear' },
-        { strength: -35, radius: 90, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 70, innerRadius: 0, outerRadius: 170, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -35, innerRadius: 0, outerRadius: 90, falloff: 'linear' },
       ],
     ],
     forces: [
@@ -1098,14 +1098,14 @@ const FISHES: EcosystemPreset = preset(
           maxEnergy: 120,
           initialEnergy: 60,
           movementCostPerSec: 0.8,
-          reproductionCost: 15,
-          idleDrainPerSec: -0.3,
+          reproductionCost: 10,
+          idleDrainPerSec: -1.5,
           energyGainPerPrey: [0, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 80,
           starvationDamagePerSec: 0,
-          reproductionCooldownSec: 4,
+          reproductionCooldownSec: 2,
         },
         diet: {
           canEat: [],
@@ -1123,14 +1123,14 @@ const FISHES: EcosystemPreset = preset(
           maxEnergy: 100,
           initialEnergy: 50,
           movementCostPerSec: 1,
-          reproductionCost: 30,
-          idleDrainPerSec: 0.5,
-          energyGainPerPrey: [20, 0, 0],
+          reproductionCost: 40,
+          idleDrainPerSec: 1.0,
+          energyGainPerPrey: [4, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 90,
-          starvationDamagePerSec: 4,
-          reproductionCooldownSec: 12,
+          starvationDamagePerSec: 3,
+          reproductionCooldownSec: 25,
         },
         diet: {
           canEat: [0],
@@ -1145,7 +1145,7 @@ const FISHES: EcosystemPreset = preset(
       // ── Apex predator: Barracuda ──────────────────────────────
       {
         name: 'Barracuda',
-        count: 10,
+        count: 8,
         color: '#7f8c8d',
         radius: 6,
         initialSpeed: 55,
@@ -1154,14 +1154,14 @@ const FISHES: EcosystemPreset = preset(
           maxEnergy: 200,
           initialEnergy: 100,
           movementCostPerSec: 2.5,
-          reproductionCost: 70,
-          idleDrainPerSec: 1.5,
-          energyGainPerPrey: [35, 0, 0],
+          reproductionCost: 120,
+          idleDrainPerSec: 3.5,
+          energyGainPerPrey: [10, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 100,
-          starvationDamagePerSec: 3,
-          reproductionCooldownSec: 15,
+          starvationDamagePerSec: 4,
+          reproductionCooldownSec: 35,
         },
         diet: {
           canEat: [0],
@@ -1178,15 +1178,15 @@ const FISHES: EcosystemPreset = preset(
     //         Tetras        Wrasse       Barracuda
     interactionMatrix: [
       /* Tetras    */ [
-        { strength: 40, radius: 80, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 40, innerRadius: 0, outerRadius: 80, falloff: 'linear' },
         null,
-        { strength: -85, radius: 130, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -85, innerRadius: 0, outerRadius: 130, falloff: 'linear' },
       ],
-      /* Wrasse    */ [null, null, { strength: 30, radius: 90, falloff: 'linear' }],
+      /* Wrasse    */ [null, null, { innerStrength: 0, outerStrength: 30, innerRadius: 0, outerRadius: 90, falloff: 'linear' }],
       /* Barracuda */ [
-        { strength: 60, radius: 150, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 60, innerRadius: 0, outerRadius: 150, falloff: 'linear' },
         null,
-        { strength: -25, radius: 70, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -25, innerRadius: 0, outerRadius: 70, falloff: 'linear' },
       ],
     ],
     forces: [
@@ -1228,14 +1228,14 @@ const CORAL_REEF: EcosystemPreset = preset(
           maxEnergy: 40,
           initialEnergy: 25,
           movementCostPerSec: 0.1,
-          reproductionCost: 10,
-          idleDrainPerSec: -0.3,
+          reproductionCost: 5,
+          idleDrainPerSec: -1.5,
           energyGainPerPrey: [0, 0, 0, 0, 0],
         },
         lifecycle: {
-          maxAgeSec: 200,
+          maxAgeSec: 60,
           starvationDamagePerSec: 0,
-          reproductionCooldownSec: 3,
+          reproductionCooldownSec: 2,
         },
         diet: {
           canEat: [],
@@ -1244,7 +1244,7 @@ const CORAL_REEF: EcosystemPreset = preset(
       // ── Primary consumer: Zooplankton (tiny, slow) ────────────
       {
         name: 'Zooplankton',
-        count: 120,
+        count: 140,
         color: '#74b9ff',
         radius: 2,
         initialSpeed: 15,
@@ -1253,13 +1253,13 @@ const CORAL_REEF: EcosystemPreset = preset(
           maxEnergy: 40,
           initialEnergy: 20,
           movementCostPerSec: 0.5,
-          reproductionCost: 10,
-          idleDrainPerSec: 0.4,
-          energyGainPerPrey: [12, 0, 0, 0, 0],
+          reproductionCost: 8,
+          idleDrainPerSec: 0.3,
+          energyGainPerPrey: [10, 0, 0, 0, 0],
         },
         lifecycle: {
-          maxAgeSec: 25,
-          starvationDamagePerSec: 5,
+          maxAgeSec: 30,
+          starvationDamagePerSec: 3,
           reproductionCooldownSec: 3,
         },
         diet: {
@@ -1269,7 +1269,7 @@ const CORAL_REEF: EcosystemPreset = preset(
       // ── Secondary consumer: Clownfish (schooling) ─────────────
       {
         name: 'Clownfish',
-        count: 90,
+        count: 60,
         color: '#ffa502',
         radius: 3,
         initialSpeed: 35,
@@ -1278,14 +1278,14 @@ const CORAL_REEF: EcosystemPreset = preset(
           maxEnergy: 90,
           initialEnergy: 45,
           movementCostPerSec: 1.2,
-          reproductionCost: 20,
-          idleDrainPerSec: 0.8,
-          energyGainPerPrey: [0, 25, 0, 0, 0],
+          reproductionCost: 15,
+          idleDrainPerSec: -0.5,
+          energyGainPerPrey: [0, 28, 0, 0, 0],
         },
         lifecycle: {
-          maxAgeSec: 50,
-          starvationDamagePerSec: 4,
-          reproductionCooldownSec: 6,
+          maxAgeSec: 60,
+          starvationDamagePerSec: 2,
+          reproductionCooldownSec: 3,
         },
         diet: {
           canEat: [1],
@@ -1306,20 +1306,20 @@ const CORAL_REEF: EcosystemPreset = preset(
         initialSpeed: 45,
         maxSpeed: 100,
         energy: {
-          maxEnergy: 160,
-          initialEnergy: 90,
-          movementCostPerSec: 2,
-          reproductionCost: 50,
-          idleDrainPerSec: 1.5,
-          energyGainPerPrey: [0, 0, 40, 0, 0],
+          maxEnergy: 200,
+          initialEnergy: 110,
+          movementCostPerSec: 1.0,
+          reproductionCost: 23,
+          idleDrainPerSec: -2.5,
+          energyGainPerPrey: [0, 30, 60, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 80,
-          starvationDamagePerSec: 3,
-          reproductionCooldownSec: 12,
+          starvationDamagePerSec: 0.5,
+          reproductionCooldownSec: 3,
         },
         diet: {
-          canEat: [2],
+          canEat: [1, 2],
         },
         stamina: {
           sprintDurationSec: 3,
@@ -1331,18 +1331,18 @@ const CORAL_REEF: EcosystemPreset = preset(
       // ── Apex predator: Reef Shark (solitary) ──────────────────
       {
         name: 'Reef Shark',
-        count: 8,
+        count: 5,
         color: '#636e72',
         radius: 7,
         initialSpeed: 50,
         maxSpeed: 115,
         energy: {
-          maxEnergy: 240,
+          maxEnergy: 300,
           initialEnergy: 130,
           movementCostPerSec: 2.5,
-          reproductionCost: 80,
-          idleDrainPerSec: 2,
-          energyGainPerPrey: [0, 0, 0, 55, 0],
+          reproductionCost: 100,
+          idleDrainPerSec: 2.5,
+          energyGainPerPrey: [0, 0, 0, 35, 0],
         },
         lifecycle: {
           maxAgeSec: 120,
@@ -1365,32 +1365,32 @@ const CORAL_REEF: EcosystemPreset = preset(
     interactionMatrix: [
       /* Coral   */ [null, null, null, null, null],
       /* Zoopl.  */ [
-        { strength: 35, radius: 90, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 35, innerRadius: 0, outerRadius: 90, falloff: 'linear' },
         null,
-        { strength: -50, radius: 110, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -50, innerRadius: 0, outerRadius: 110, falloff: 'linear' },
         null,
         null,
       ],
       /* Clown   */ [
         null,
-        { strength: 50, radius: 100, falloff: 'linear' },
-        { strength: 30, radius: 70, falloff: 'linear' },
-        { strength: -70, radius: 130, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 50, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 30, innerRadius: 0, outerRadius: 70, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -70, innerRadius: 0, outerRadius: 130, falloff: 'linear' },
         null,
       ],
       /* Eel     */ [
         null,
         null,
-        { strength: 55, radius: 140, falloff: 'linear' },
-        { strength: -20, radius: 60, falloff: 'linear' },
-        { strength: -40, radius: 100, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 55, innerRadius: 0, outerRadius: 140, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -20, innerRadius: 0, outerRadius: 60, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -40, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
       ],
       /* Shark   */ [
         null,
         null,
         null,
-        { strength: 45, radius: 170, falloff: 'linear' },
-        { strength: -35, radius: 80, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 45, innerRadius: 0, outerRadius: 170, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -35, innerRadius: 0, outerRadius: 80, falloff: 'linear' },
       ],
     ],
     forces: [
@@ -1500,19 +1500,19 @@ const TORNADO_ALLEY: EcosystemPreset = preset(
     //          Dust     Debris   Birds
     interactionMatrix: [
       /* Dust   */ [
-        { strength: 20, radius: 50, falloff: 'linear' },
-        { strength: -40, radius: 70, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 20, innerRadius: 0, outerRadius: 50, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -40, innerRadius: 0, outerRadius: 70, falloff: 'linear' },
         null,
       ],
       /* Debris */ [
-        { strength: -40, radius: 70, falloff: 'linear' },
-        { strength: -50, radius: 60, falloff: 'linear' },
-        { strength: -45, radius: 80, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -40, innerRadius: 0, outerRadius: 70, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -50, innerRadius: 0, outerRadius: 60, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -45, innerRadius: 0, outerRadius: 80, falloff: 'linear' },
       ],
       /* Birds  */ [
         null,
-        { strength: -45, radius: 80, falloff: 'linear' },
-        { strength: 30, radius: 90, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -45, innerRadius: 0, outerRadius: 80, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 30, innerRadius: 0, outerRadius: 90, falloff: 'linear' },
       ],
     ],
     forces: [
@@ -1594,13 +1594,13 @@ const DEEP_SEA_VENT: EcosystemPreset = preset(
           initialEnergy: 40,
           movementCostPerSec: 0.2,
           reproductionCost: 18,
-          idleDrainPerSec: 0.5,
-          energyGainPerPrey: [12, 0, 0, 0],
+          idleDrainPerSec: -0.3,
+          energyGainPerPrey: [18, 0, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 80,
-          starvationDamagePerSec: 3,
-          reproductionCooldownSec: 6,
+          starvationDamagePerSec: 2,
+          reproductionCooldownSec: 4,
         },
         diet: {
           canEat: [0],
@@ -1619,13 +1619,13 @@ const DEEP_SEA_VENT: EcosystemPreset = preset(
           initialEnergy: 60,
           movementCostPerSec: 1.2,
           reproductionCost: 30,
-          idleDrainPerSec: 1,
-          energyGainPerPrey: [0, 28, 0, 0],
+          idleDrainPerSec: -0.2,
+          energyGainPerPrey: [0, 35, 0, 0],
         },
         lifecycle: {
           maxAgeSec: 60,
-          starvationDamagePerSec: 4,
-          reproductionCooldownSec: 8,
+          starvationDamagePerSec: 2,
+          reproductionCooldownSec: 6,
         },
         diet: {
           canEat: [1],
@@ -1650,13 +1650,13 @@ const DEEP_SEA_VENT: EcosystemPreset = preset(
           initialEnergy: 100,
           movementCostPerSec: 2,
           reproductionCost: 60,
-          idleDrainPerSec: 1.5,
+          idleDrainPerSec: 1.2,
           energyGainPerPrey: [0, 0, 48, 0],
         },
         lifecycle: {
           maxAgeSec: 90,
           starvationDamagePerSec: 3,
-          reproductionCooldownSec: 15,
+          reproductionCooldownSec: 12,
         },
         diet: {
           canEat: [2],
@@ -1672,24 +1672,24 @@ const DEEP_SEA_VENT: EcosystemPreset = preset(
     // src=row (how this species reacts to target col)
     //          Bacteria  Worms     Crabs     Octopus
     interactionMatrix: [
-      /* Bacteria */ [{ strength: -10, radius: 35, falloff: 'linear' }, null, null, null],
+      /* Bacteria */ [{ innerStrength: 0, outerStrength: -10, innerRadius: 0, outerRadius: 35, falloff: 'linear' }, null, null, null],
       /* Worms    */ [
-        { strength: 35, radius: 85, falloff: 'linear' },
-        { strength: -15, radius: 45, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 35, innerRadius: 0, outerRadius: 85, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -15, innerRadius: 0, outerRadius: 45, falloff: 'linear' },
         null,
         null,
       ],
       /* Crabs    */ [
         null,
-        { strength: 45, radius: 110, falloff: 'linear' },
-        { strength: -12, radius: 40, falloff: 'linear' },
-        { strength: -55, radius: 120, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 45, innerRadius: 0, outerRadius: 110, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -12, innerRadius: 0, outerRadius: 40, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -55, innerRadius: 0, outerRadius: 120, falloff: 'linear' },
       ],
       /* Octopus  */ [
         null,
         null,
-        { strength: 55, radius: 140, falloff: 'linear' },
-        { strength: -25, radius: 70, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 55, innerRadius: 0, outerRadius: 140, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: -25, innerRadius: 0, outerRadius: 70, falloff: 'linear' },
       ],
     ],
     forces: [
@@ -1809,15 +1809,15 @@ const SYMBIOSIS: EcosystemPreset = preset(
     //          Algae    Coral    Shrimp
     interactionMatrix: [
       /* Algae   */ [
-        { strength: 12, radius: 50, falloff: 'linear' },
-        { strength: 30, radius: 90, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 12, innerRadius: 0, outerRadius: 50, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 30, innerRadius: 0, outerRadius: 90, falloff: 'linear' },
         null,
       ],
-      /* Coral   */ [{ strength: 30, radius: 90, falloff: 'linear' }, null, null],
+      /* Coral   */ [{ innerStrength: 0, outerStrength: 30, innerRadius: 0, outerRadius: 90, falloff: 'linear' }, null, null],
       /* Shrimp  */ [
         null,
-        { strength: 40, radius: 100, falloff: 'linear' },
-        { strength: 18, radius: 60, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 40, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
+        { innerStrength: 0, outerStrength: 18, innerRadius: 0, outerRadius: 60, falloff: 'linear' },
       ],
     ],
     forces: [

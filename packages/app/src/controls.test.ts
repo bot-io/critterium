@@ -70,7 +70,7 @@ const TEST_FORCE_TYPES: ForceTypeDescriptor[] = [
     type: 'vortex',
     displayName: 'Vortex',
     description: 'Swirl force around center.',
-    defaultParams: { strength: 150, radius: 300, falloff: 'linear' },
+    defaultParams: { innerStrength: 150, outerStrength: 150, innerRadius: 0, outerRadius: 300, falloff: 'linear' },
     paramSchema: [
       {
         key: 'strength',
@@ -95,7 +95,7 @@ const TEST_FORCE_TYPES: ForceTypeDescriptor[] = [
 
 const TEST_PIPELINE: PipelineForceEntry[] = [
   { type: 'drag', enabled: true, params: { coefficient: 0.8 } },
-  { type: 'vortex', enabled: false, params: { strength: 150, radius: 300, falloff: 'linear' } },
+  { type: 'vortex', enabled: false, params: { innerStrength: 150, outerStrength: 150, innerRadius: 0, outerRadius: 300, falloff: 'linear' } },
 ];
 
 describe('controls panel', () => {
@@ -272,7 +272,7 @@ describe('controls panel', () => {
     const panel = createControlsPanel(opts);
     const firstCell = panel.querySelector('.crit-matrix-cell') as HTMLElement;
     firstCell.click();
-    expect(opts.onMatrixChange).toHaveBeenCalledWith(0, 0, 25, 70, 100, 'linear');
+    expect(opts.onMatrixChange).toHaveBeenCalledWith(0, 0, 0, 25, 0, 100, 'linear');
   });
 
   it('Export button fires onExport callback', () => {

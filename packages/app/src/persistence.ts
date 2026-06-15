@@ -65,34 +65,41 @@ export async function exportConfig(config: CritteriumConfig, filename: string): 
 
 /**
  * Core share/export utility — works on Android (Capacitor) and desktop.
+ *
+ * Strategy:
+ * 1. Capacitor Share + Filesystem (Android native) — share file URI
+ * 2. Web Share API with files (mobile browser / PWA)
+ * 3. Anchor download (desktop browser)
+ * 4. Clipboard (last resort)
  */
 export async function shareContent(text: string, filename: string, title: string): Promise<void> {
-  // Try Capacitor Share plugin (Android native)
+  // ── 1. Capacitor (Android native) ──────────────────────────────
   try {
     const { Share } = await import('@capacitor/share');
     const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem');
 
-    // Write to Documents so the file persists and is findable
-    await Filesystem.writeFile({
+    // Write to Cache — Android share sheet can read file:// URIs from here
+    const writeFileResult = await Filesystem.writeFile({
       path: filename,
       data: text,
-      directory: Directory.Documents,
+      directory: Directory.Cache,
       encoding: Encoding.UTF8,
-      recursive: true,
     });
 
-    // Open share sheet with just text (most reliable on Android)
+    // Share the file URI — user sees "Save to Drive / Send to Telegram / etc."
     await Share.share({
       dialogTitle: title,
-      text: text,
+      url: writeFileResult.uri,
     });
     return;
   } catch (err) {
-    if ((err as Error)?.message?.includes('cancelled')) return; // user cancelled share
-    // Capacitor not available — fall through
+    // If user cancelled the share sheet, don't try fallbacks
+    const msg = (err as Error)?.message ?? '';
+    if (msg.includes('cancelled') || msg.includes('Cancel') || msg.includes('ABORT_ERR')) return;
+    // Otherwise Capacitor failed — fall through to web fallbacks
   }
 
-  // Desktop: try Web Share API with file
+  // ── 2. Web Share API with file ─────────────────────────────────
   try {
     const blob = new Blob([text], { type: 'text/plain' });
     const file = new File([blob], filename, { type: 'text/plain' });
@@ -104,7 +111,7 @@ export async function shareContent(text: string, filename: string, title: string
     if ((err as DOMException).name === 'AbortError') return;
   }
 
-  // Fallback: anchor download (desktop browsers)
+  // ── 3. Anchor download (desktop) ───────────────────────────────
   try {
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -115,14 +122,17 @@ export async function shareContent(text: string, filename: string, title: string
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    return;
   } catch {
-    // Last resort: clipboard
-    try {
-      await navigator.clipboard.writeText(text);
-      alert(`${title} copied to clipboard`);
-    } catch {
-      console.error(`[Critterium] Export of ${filename} failed`);
-    }
+    // ignore
+  }
+
+  // ── 4. Clipboard (last resort) ─────────────────────────────────
+  try {
+    await navigator.clipboard.writeText(text);
+    alert(`${title} copied to clipboard`);
+  } catch {
+    console.error(`[Critterium] Export of ${filename} failed — no share method available`);
   }
 }
 

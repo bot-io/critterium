@@ -607,13 +607,15 @@ export type FalloffType = 'linear' | 'inverse' | 'constant';
 
 /** A single entry in the N×N interaction matrix. */
 export interface InteractionEntry {
-  /** Force magnitude. Positive = attract, negative = repel. */
-  strength: number;
-  /** Minimum interaction radius. No effect below this distance. */
-  minRadius?: number;
-  /** Maximum interaction radius. No effect beyond this distance. */
-  radius: number;
-  /** How force decays with distance. */
+  /** Force in the inner zone [0, innerRadius). Positive = attract, negative = repel. */
+  innerStrength: number;
+  /** Force in the outer zone [innerRadius, outerRadius). Positive = attract, negative = repel. */
+  outerStrength: number;
+  /** Boundary between inner and outer zones. 0 = no inner zone. */
+  innerRadius: number;
+  /** Outer limit of interaction. No effect at or beyond this distance. */
+  outerRadius: number;
+  /** How force decays with distance within each zone. */
   falloff: FalloffType;
 }
 
@@ -653,18 +655,35 @@ export class InteractionMatrix {
 
   /**
    * Compute the force magnitude for a given entry at a given distance.
-   * Returns 0 if distance >= entry.radius.
+   * Two-zone model: [0, innerRadius) uses innerStrength, [innerRadius, outerRadius) uses outerStrength.
+   * Returns 0 if distance >= outerRadius or <= 0.
    */
   static forceAtDistance(entry: InteractionEntry, dist: number): number {
-    if (dist >= entry.radius || dist <= 0) return 0;
-    const t = dist / entry.radius; // normalized distance [0, 1)
-    switch (entry.falloff) {
-      case 'linear':
-        return entry.strength * (1 - t);
-      case 'inverse':
-        return entry.strength / (t + 0.1); // +0.1 prevents singularity at 0
-      case 'constant':
-        return entry.strength;
+    if (dist >= entry.outerRadius || dist <= 0) return 0;
+
+    if (dist < entry.innerRadius) {
+      // Inner zone
+      const t = entry.innerRadius > 0 ? dist / entry.innerRadius : 1;
+      switch (entry.falloff) {
+        case 'linear':
+          return entry.innerStrength * (1 - t);
+        case 'inverse':
+          return entry.innerStrength / (t + 0.1);
+        case 'constant':
+          return entry.innerStrength;
+      }
+    } else {
+      // Outer zone
+      const span = entry.outerRadius - entry.innerRadius;
+      const t = span > 0 ? (dist - entry.innerRadius) / span : 0;
+      switch (entry.falloff) {
+        case 'linear':
+          return entry.outerStrength * (1 - t);
+        case 'inverse':
+          return entry.outerStrength / (t + 0.1);
+        case 'constant':
+          return entry.outerStrength;
+      }
     }
   }
 }
@@ -728,8 +747,8 @@ export class PairwiseForce {
       for (let a = 0; a < matrix.numTypes; a++) {
         for (let b = 0; b < matrix.numTypes; b++) {
           const entry = matrix.get(a, b);
-          if (entry && entry.radius > maxR) {
-            maxR = entry.radius;
+          if (entry && entry.outerRadius > maxR) {
+            maxR = entry.outerRadius;
           }
         }
       }
@@ -769,7 +788,7 @@ export class PairwiseForce {
           const ny = dy / dist;
 
           const entry = matrix.get(typeI, typeJ);
-          if (entry && dist < entry.radius && dist >= (entry.minRadius ?? 0)) {
+          if (entry && dist < entry.outerRadius) {
             const force = InteractionMatrix.forceAtDistance(entry, dist);
             dvx[i] += nx * force * dt;
             dvy[i] += ny * force * dt;
@@ -804,7 +823,7 @@ export class PairwiseForce {
           const ny = dy / dist;
 
           const entry = matrix.get(typeI, typeJ);
-          if (entry && dist < entry.radius && dist >= (entry.minRadius ?? 0)) {
+          if (entry && dist < entry.outerRadius) {
             const force = InteractionMatrix.forceAtDistance(entry, dist);
             dvx[i] += nx * force * dt;
             dvy[i] += ny * force * dt;
