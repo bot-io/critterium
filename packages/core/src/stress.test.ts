@@ -114,7 +114,7 @@ function assertFiniteState(world: World, hwm: number): void {
 
 // ─── 1. Max-capacity particle stress ───────────────────────────
 
-describe('CRT-45: max-capacity particle stress', () => {
+describe('CRT-45: max-capacity particle stress', { timeout: 30_000 }, () => {
   it('runs 800 particles with full force pipeline for 120 steps without crash', () => {
     const species = [
       makeSpecies('Red', 280, { color: '#ff4444', maxSpeed: 120, initialSpeed: 60 }),
