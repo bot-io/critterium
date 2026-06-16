@@ -343,11 +343,17 @@ const STYLES = `
 
   .crit-matrix-grid { display: grid; gap: 2px; margin-top: 6px; }
   .crit-matrix-cell {
-    display: flex; flex-direction: column; align-items: center;
-    padding: 3px 2px; border-radius: 3px; min-height: 36px;
-    cursor: pointer; transition: background 0.15s;
+    display: flex; flex-direction: column;
+    border-radius: 3px; min-height: 44px; overflow: hidden;
+    cursor: pointer; border: 1px solid rgba(255,255,255,0.08);
+    transition: filter 0.15s;
   }
   .crit-matrix-cell:hover { filter: brightness(1.3); }
+  .crit-matrix-half {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    font-size: 9px; color: #ddd; padding: 1px; gap: 2px;
+  }
+  .crit-matrix-half-label { font-size: 7px; opacity: 0.5; }
   .crit-matrix-header {
     font-size: 9px; color: #666; text-align: center;
     padding: 2px; overflow: hidden; text-overflow: ellipsis;
@@ -1251,7 +1257,7 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
     // Label explaining row/col meaning
     const legend = el('div');
     legend.style.cssText = 'font-size:9px; color:#777; margin:4px 0 2px 0; line-height:1.4;';
-    legend.textContent = 'Row = source (feels force)  ·  Column = target (exerts force)';
+    legend.textContent = 'Row = source (feels force) · Col = target · Top = outer · Bottom = inner';
     body.appendChild(legend);
 
     // Grid
@@ -1270,7 +1276,184 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
       grid.appendChild(hdr);
     }
 
-    // Data rows
+    // ─── Live state store for all pairs ──────────────────────────
+    type PairState = {
+      innerStrength: number;
+      outerStrength: number;
+      innerRadius: number;
+      outerRadius: number;
+      falloff: string;
+    };
+    const matrixState: PairState[][] = [];
+    const cellEls: HTMLElement[][] = [];
+    for (let i = 0; i < n; i++) {
+      matrixState[i] = [];
+      cellEls[i] = [];
+      for (let j = 0; j < n; j++) {
+        const init = initMatrix?.[i]?.[j];
+        matrixState[i][j] = {
+          innerStrength: init?.innerStrength ?? 0,
+          outerStrength: init?.outerStrength ?? 0,
+          innerRadius: init?.innerRadius ?? 0,
+          outerRadius: init?.outerRadius ?? 100,
+          falloff: init?.falloff ?? 'linear',
+        };
+      }
+    }
+
+    let selI = 0;
+    let selJ = 0;
+
+    function fireChange(i: number, j: number): void {
+      const s = matrixState[i][j];
+      opts.onMatrixChange?.(
+        i,
+        j,
+        s.innerStrength,
+        s.outerStrength,
+        s.innerRadius,
+        s.outerRadius,
+        s.falloff,
+      );
+    }
+
+    function strengthColor(v: number): string {
+      if (v > 0) return `rgba(80,200,80,${Math.min(Math.abs(v) / 100, 0.7)})`;
+      if (v < 0) return `rgba(200,80,80,${Math.min(Math.abs(v) / 100, 0.7)})`;
+      return 'rgba(60,60,60,0.5)';
+    }
+
+    function paintCell(i: number, j: number): void {
+      const s = matrixState[i][j];
+      const cell = cellEls[i][j];
+      const outerHalf = cell.children[0] as HTMLElement;
+      const innerHalf = cell.children[1] as HTMLElement;
+      if (outerHalf) {
+        outerHalf.style.background = strengthColor(s.outerStrength);
+        const valEl = outerHalf.querySelector('.crit-matrix-half-val');
+        if (valEl) valEl.textContent = String(s.outerStrength);
+      }
+      if (innerHalf) {
+        innerHalf.style.background = strengthColor(s.innerStrength);
+        const valEl = innerHalf.querySelector('.crit-matrix-half-val');
+        if (valEl) valEl.textContent = String(s.innerStrength);
+      }
+    }
+
+    function highlightSelected(): void {
+      for (let a = 0; a < n; a++) {
+        for (let b = 0; b < n; b++) {
+          cellEls[a][b].style.outline = a === selI && b === selJ ? '2px solid #fff' : '';
+          cellEls[a][b].style.outlineOffset = '-1px';
+        }
+      }
+    }
+
+    // ─── Editor panel (single pair at a time) ────────────────────
+    const editor = el('div', 'crit-matrix-editor');
+    editor.style.cssText = 'margin-top:8px;';
+    const editorTitle = el('div', 'crit-subsection-hdr');
+    editor.appendChild(editorTitle);
+    const editorBody = el('div');
+    editor.appendChild(editorBody);
+    body.appendChild(editor);
+
+    const zoneLegend = el('div');
+    zoneLegend.style.cssText = 'font-size:9px; color:#777; margin:4px 0 2px 4px; line-height:1.4;';
+    zoneLegend.textContent = 'Inner = close range  ·  Outer = detection range';
+    body.appendChild(zoneLegend);
+
+    function makeSlider(
+      label: string,
+      min: number,
+      max: number,
+      step: number,
+      value: number,
+      color: string,
+      onChange: (v: number) => void,
+    ): void {
+      const row = el('div', 'crit-row');
+      row.style.cssText = 'gap:4px; align-items:center; margin:3px 0;';
+      const lbl = el('span', 'crit-label');
+      lbl.textContent = label;
+      lbl.style.cssText = `min-width:78px; font-size:10px; color:${color};`;
+      row.appendChild(lbl);
+      const slider = document.createElement('input');
+      slider.type = 'range';
+      slider.min = String(min);
+      slider.max = String(max);
+      slider.step = String(step);
+      slider.value = String(value);
+      slider.style.flex = '1';
+      slider.style.minWidth = '40px';
+      row.appendChild(slider);
+      const valSpan = el('span', 'crit-value');
+      valSpan.textContent = String(value);
+      valSpan.style.cssText = 'min-width:30px; font-size:10px; text-align:right;';
+      row.appendChild(valSpan);
+      slider.addEventListener('input', () => {
+        const v = parseInt(slider.value);
+        valSpan.textContent = String(v);
+        onChange(v);
+      });
+      editorBody.appendChild(row);
+    }
+
+    function buildEditor(i: number, j: number): void {
+      editorBody.innerHTML = '';
+      const s = matrixState[i][j];
+      editorTitle.textContent = `${names[i]} → ${names[j]}`;
+
+      makeSlider('↳ Inner force', -100, 100, 5, s.innerStrength, '#ff88aa', (v) => {
+        matrixState[i][j].innerStrength = v;
+        paintCell(i, j);
+        fireChange(i, j);
+      });
+
+      makeSlider('○ Inner radius', 0, 200, 5, s.innerRadius, '#88aaff', (v) => {
+        if (v > matrixState[i][j].outerRadius) v = matrixState[i][j].outerRadius;
+        matrixState[i][j].innerRadius = v;
+        fireChange(i, j);
+      });
+
+      makeSlider('◎ Outer radius', 10, 300, 5, s.outerRadius, '#aa88ff', (v) => {
+        matrixState[i][j].outerRadius = v;
+        if (matrixState[i][j].innerRadius > v) matrixState[i][j].innerRadius = v;
+        fireChange(i, j);
+      });
+
+      makeSlider('⇲ Outer force', -100, 100, 5, s.outerStrength, '#88ff88', (v) => {
+        matrixState[i][j].outerStrength = v;
+        paintCell(i, j);
+        fireChange(i, j);
+      });
+
+      // Falloff dropdown
+      const fRow = el('div', 'crit-row');
+      fRow.style.cssText = 'gap:4px; align-items:center; margin:3px 0;';
+      const fLbl = el('span', 'crit-label');
+      fLbl.textContent = 'Falloff';
+      fLbl.style.cssText = 'min-width:78px; font-size:10px; color:#ccc;';
+      fRow.appendChild(fLbl);
+      const fSelect = document.createElement('select');
+      fSelect.style.cssText =
+        'flex:1; font-size:11px; background:#333; color:#ddd; border:1px solid #555; border-radius:3px;';
+      for (const f of ['linear', 'inverse', 'constant']) {
+        const opt = document.createElement('option');
+        opt.value = f;
+        opt.textContent = f;
+        if (f === s.falloff) opt.selected = true;
+        fSelect.appendChild(opt);
+      }
+      fSelect.addEventListener('change', () => {
+        matrixState[i][j].falloff = fSelect.value;
+        fireChange(i, j);
+      });
+      fRow.appendChild(fSelect);
+      editorBody.appendChild(fRow);
+    }
+
+    // ─── Build grid cells ────────────────────────────────────────
     for (let i = 0; i < n; i++) {
       const rowLbl = el('div', 'crit-matrix-header');
       rowLbl.textContent = names[i].substring(0, 5);
@@ -1278,192 +1461,49 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
       grid.appendChild(rowLbl);
 
       for (let j = 0; j < n; j++) {
-        const init = initMatrix?.[i]?.[j];
         const cell = el('div', 'crit-matrix-cell');
-        const initStr = init?.outerStrength ?? 0;
-        updateCellColor(cell, initStr);
+        cellEls[i][j] = cell;
 
-        const valLabel = el('span', 'crit-matrix-val');
-        valLabel.textContent = String(initStr);
-        cell.appendChild(valLabel);
+        // Outer half (top)
+        const outerHalf = el('div', 'crit-matrix-half');
+        const outerLbl = el('span', 'crit-matrix-half-label');
+        outerLbl.textContent = 'O';
+        outerHalf.appendChild(outerLbl);
+        const outerVal = el('span', 'crit-matrix-half-val');
+        outerVal.textContent = '0';
+        outerHalf.appendChild(outerVal);
 
-        // Click cell to cycle outerStrength: +25, -25
+        // Inner half (bottom)
+        const innerHalf = el('div', 'crit-matrix-half');
+        const innerLbl = el('span', 'crit-matrix-half-label');
+        innerLbl.textContent = 'I';
+        innerHalf.appendChild(innerLbl);
+        const innerVal = el('span', 'crit-matrix-half-val');
+        innerVal.textContent = '0';
+        innerHalf.appendChild(innerVal);
+
+        cell.appendChild(outerHalf);
+        cell.appendChild(innerHalf);
+        paintCell(i, j);
+
         const ii = i,
           jj = j;
-        let currentStr = initStr;
         cell.addEventListener('click', () => {
-          currentStr += 25;
-          if (currentStr > 100) currentStr = -100;
-          valLabel.textContent = String(currentStr);
-          updateCellColor(cell, currentStr);
-          const falloff = init?.falloff ?? 'linear';
-          const innerStr = init?.innerStrength ?? 0;
-          const innerR = init?.innerRadius ?? 0;
-          const outerR = init?.outerRadius ?? 100;
-          opts.onMatrixChange?.(ii, jj, innerStr, currentStr, innerR, outerR, falloff);
-        });
-        // Right-click to decrease
-        cell.addEventListener('contextmenu', (e) => {
-          e.preventDefault();
-          currentStr -= 25;
-          if (currentStr < -100) currentStr = 100;
-          valLabel.textContent = String(currentStr);
-          updateCellColor(cell, currentStr);
-          const falloff = init?.falloff ?? 'linear';
-          const innerStr = init?.innerStrength ?? 0;
-          const innerR = init?.innerRadius ?? 0;
-          const outerR = init?.outerRadius ?? 100;
-          opts.onMatrixChange?.(ii, jj, innerStr, currentStr, innerR, outerR, falloff);
+          selI = ii;
+          selJ = jj;
+          highlightSelected();
+          buildEditor(ii, jj);
         });
 
         grid.appendChild(cell);
       }
     }
-
     body.appendChild(grid);
 
-    // ─── Two-Zone Interaction Editor ─────────────────────────────
-    const zoneSection = el('div');
-    zoneSection.style.cssText = 'margin-top:8px;';
-
-    const zoneTitle = el('div', 'crit-subsection-hdr');
-    zoneTitle.textContent = '▾ Inner / Outer Zones';
-    zoneSection.appendChild(zoneTitle);
-
-    const zoneLegend = el('div');
-    zoneLegend.style.cssText = 'font-size:9px; color:#777; margin:2px 0 4px 0;';
-    zoneLegend.textContent =
-      'Inner = close range (personal space) · Outer = far range (detection/flocking)';
-    zoneSection.appendChild(zoneLegend);
-
-    const zoneBody = el('div', 'crit-section-body');
-
-    for (let i = 0; i < n; i++) {
-      for (let j = 0; j < n; j++) {
-        const init = initMatrix?.[i]?.[j];
-        const rowDiv = el('div', 'crit-row');
-        rowDiv.style.cssText = 'gap:3px; flex-wrap:wrap; align-items:center; margin-bottom:4px;';
-
-        const lbl = el('span', 'crit-label');
-        lbl.textContent = `${names[i].substring(0, 4)}→${names[j].substring(0, 4)}`;
-        lbl.style.minWidth = '60px';
-        rowDiv.appendChild(lbl);
-
-        const ii = i,
-          jj = j;
-
-        // ── Inner strength slider ──
-        const innerStrVal = el('span', 'crit-value');
-        innerStrVal.textContent = String(init?.innerStrength ?? 0);
-        innerStrVal.style.cssText =
-          'min-width:28px; font-size:9px; color:#ff88aa; text-align:right;';
-        rowDiv.appendChild(innerStrVal);
-        const innerStrSlider = document.createElement('input');
-        innerStrSlider.type = 'range';
-        innerStrSlider.min = '-100';
-        innerStrSlider.max = '100';
-        innerStrSlider.step = '5';
-        innerStrSlider.value = String(init?.innerStrength ?? 0);
-        innerStrSlider.style.flex = '1';
-        innerStrSlider.style.minWidth = '30px';
-        innerStrSlider.title = 'Inner strength (close range)';
-        rowDiv.appendChild(innerStrSlider);
-
-        // ── Inner radius slider ──
-        const innerRSlider = document.createElement('input');
-        innerRSlider.type = 'range';
-        innerRSlider.min = '0';
-        innerRSlider.max = '200';
-        innerRSlider.step = '5';
-        innerRSlider.value = String(init?.innerRadius ?? 0);
-        innerRSlider.style.flex = '1';
-        innerRSlider.style.minWidth = '30px';
-        innerRSlider.title = 'Inner radius (boundary)';
-        rowDiv.appendChild(innerRSlider);
-        const innerRVal = el('span', 'crit-value');
-        innerRVal.textContent = String(init?.innerRadius ?? 0);
-        innerRVal.style.cssText = 'min-width:22px; font-size:9px; color:#88aaff; text-align:right;';
-        rowDiv.appendChild(innerRVal);
-
-        // ── Outer radius slider ──
-        const outerRVal = el('span', 'crit-value');
-        outerRVal.textContent = String(init?.outerRadius ?? 100);
-        outerRVal.style.cssText = 'min-width:22px; font-size:9px; color:#aa88ff; text-align:right;';
-        rowDiv.appendChild(outerRVal);
-        const outerRSlider = document.createElement('input');
-        outerRSlider.type = 'range';
-        outerRSlider.min = '10';
-        outerRSlider.max = '300';
-        outerRSlider.step = '5';
-        outerRSlider.value = String(init?.outerRadius ?? 100);
-        outerRSlider.style.flex = '1';
-        outerRSlider.style.minWidth = '30px';
-        outerRSlider.title = 'Outer radius (max range)';
-        rowDiv.appendChild(outerRSlider);
-
-        // ── Outer strength slider ──
-        const outerStrSlider = document.createElement('input');
-        outerStrSlider.type = 'range';
-        outerStrSlider.min = '-100';
-        outerStrSlider.max = '100';
-        outerStrSlider.step = '5';
-        outerStrSlider.value = String(init?.outerStrength ?? 0);
-        outerStrSlider.style.flex = '1';
-        outerStrSlider.style.minWidth = '30px';
-        outerStrSlider.title = 'Outer strength (far range)';
-        rowDiv.appendChild(outerStrSlider);
-        const outerStrVal = el('span', 'crit-value');
-        outerStrVal.textContent = String(init?.outerStrength ?? 0);
-        outerStrVal.style.cssText =
-          'min-width:28px; font-size:9px; color:#88ff88; text-align:right;';
-        rowDiv.appendChild(outerStrVal);
-
-        const updateZones = (): void => {
-          // Clamp: innerRadius cannot exceed outerRadius
-          let innerR = parseInt(innerRSlider.value);
-          const outerR = parseInt(outerRSlider.value);
-          if (innerR > outerR) {
-            innerR = outerR;
-            innerRSlider.value = String(innerR);
-          }
-          innerRVal.textContent = String(innerR);
-          outerRVal.textContent = String(outerR);
-          innerStrVal.textContent = innerStrSlider.value;
-          outerStrVal.textContent = outerStrSlider.value;
-          const falloff = init?.falloff ?? 'linear';
-          opts.onMatrixChange?.(
-            ii,
-            jj,
-            parseInt(innerStrSlider.value),
-            parseInt(outerStrSlider.value),
-            innerR,
-            outerR,
-            falloff,
-          );
-        };
-
-        innerStrSlider.addEventListener('input', updateZones);
-        innerRSlider.addEventListener('input', updateZones);
-        outerRSlider.addEventListener('input', updateZones);
-        outerStrSlider.addEventListener('input', updateZones);
-
-        zoneBody.appendChild(rowDiv);
-      }
-    }
-
-    zoneSection.appendChild(zoneBody);
-    body.appendChild(zoneSection);
+    // Initialize: select first cell
+    highlightSelected();
+    buildEditor(0, 0);
   });
-}
-
-function updateCellColor(cell: HTMLElement, strength: number): void {
-  if (strength > 0) {
-    cell.style.background = `rgba(80,200,80,${Math.min(Math.abs(strength) / 100, 0.6)})`;
-  } else if (strength < 0) {
-    cell.style.background = `rgba(200,80,80,${Math.min(Math.abs(strength) / 100, 0.6)})`;
-  } else {
-    cell.style.background = 'rgba(60,60,60,0.5)';
-  }
 }
 
 // ─── Actions Section ──────────────────────────────────────────

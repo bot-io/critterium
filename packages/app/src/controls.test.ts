@@ -283,12 +283,66 @@ describe('controls panel', () => {
     expect(cells.length).toBe(9);
   });
 
-  it('clicking matrix cell fires onMatrixChange', () => {
+  it('clicking a matrix cell selects it (does not fire onMatrixChange)', () => {
     const opts = makeOptions({ speciesCount: 2, speciesNames: ['A', 'B'] });
     const panel = createControlsPanel(opts);
     const firstCell = panel.querySelector('.crit-matrix-cell') as HTMLElement;
+    // New UX (CRT-69): clicking selects the cell and opens the editor — does NOT cycle strength
     firstCell.click();
-    expect(opts.onMatrixChange).toHaveBeenCalledWith(0, 0, 0, 25, 0, 100, 'linear');
+    expect(opts.onMatrixChange).not.toHaveBeenCalled();
+  });
+
+  it('matrix editor is initialized for cell (0,0) on panel creation', () => {
+    const panel = createControlsPanel(
+      makeOptions({ speciesCount: 2, speciesNames: ['Alpha', 'Beta'] }),
+    );
+    const editorTitle = panel.querySelector('.crit-matrix-editor .crit-subsection-hdr');
+    expect(editorTitle?.textContent).toContain('Alpha');
+  });
+
+  it('selecting a different cell updates the editor title', () => {
+    const panel = createControlsPanel(
+      makeOptions({ speciesCount: 2, speciesNames: ['Alpha', 'Beta'] }),
+    );
+    const cells = panel.querySelectorAll('.crit-matrix-cell');
+    // cells are row-major: [0,0], [0,1], [1,0], [1,1]
+    (cells[2] as HTMLElement).click(); // cell (1,0) = source Beta → target Alpha
+    const editorTitle = panel.querySelector('.crit-matrix-editor .crit-subsection-hdr');
+    expect(editorTitle?.textContent).toBe('Beta → Alpha');
+  });
+
+  it('outer strength slider in editor fires onMatrixChange', () => {
+    const opts = makeOptions({ speciesCount: 2, speciesNames: ['A', 'B'] });
+    const panel = createControlsPanel(opts);
+    const editor = panel.querySelector('.crit-matrix-editor');
+    // Slider order: [0]=inner force, [1]=inner radius, [2]=outer radius, [3]=outer force
+    const sliders = editor!.querySelectorAll('input[type="range"]');
+    const outerForce = sliders[3] as HTMLInputElement;
+    outerForce.value = '50';
+    outerForce.dispatchEvent(new Event('input', { bubbles: true }));
+    // (i, j, innerStrength, outerStrength, innerRadius, outerRadius, falloff)
+    expect(opts.onMatrixChange).toHaveBeenCalledWith(0, 0, 0, 50, 0, 100, 'linear');
+  });
+
+  it('inner strength slider in editor fires onMatrixChange', () => {
+    const opts = makeOptions({ speciesCount: 2, speciesNames: ['A', 'B'] });
+    const panel = createControlsPanel(opts);
+    const editor = panel.querySelector('.crit-matrix-editor');
+    const sliders = editor!.querySelectorAll('input[type="range"]');
+    const innerForce = sliders[0] as HTMLInputElement;
+    innerForce.value = '30';
+    innerForce.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(opts.onMatrixChange).toHaveBeenCalledWith(0, 0, 30, 0, 0, 100, 'linear');
+  });
+
+  it('falloff dropdown in editor fires onMatrixChange', () => {
+    const opts = makeOptions({ speciesCount: 2, speciesNames: ['A', 'B'] });
+    const panel = createControlsPanel(opts);
+    const editor = panel.querySelector('.crit-matrix-editor');
+    const select = editor!.querySelector('select') as HTMLSelectElement;
+    select.value = 'inverse';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(opts.onMatrixChange).toHaveBeenCalledWith(0, 0, 0, 0, 0, 100, 'inverse');
   });
 
   it('Export button fires onExport callback', () => {
