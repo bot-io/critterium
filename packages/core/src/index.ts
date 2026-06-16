@@ -655,32 +655,54 @@ export class InteractionMatrix {
 
   /**
    * Compute the force magnitude for a given entry at a given distance.
-   * Two-zone model: [0, innerRadius) uses innerStrength, [innerRadius, outerRadius) uses outerStrength.
+   *
+   * Smooth two-zone model with continuous blending:
+   *
+   *   [0, innerRadius):
+   *     Inner repulsion fades out while outer attraction fades IN (smoothstep blend).
+   *     At d=0: pure innerStrength. At d=innerRadius: pure outerStrength.
+   *     The zero-crossing (equilibrium) falls naturally where the two balance.
+   *
+   *   [innerRadius, outerRadius):
+   *     Pure outer attraction, linearly decaying from outerStrength to 0.
+   *
+   * This ensures:
+   *   - Continuity at innerRadius (no discontinuity jump)
+   *   - Exactly ONE equilibrium distance (no artificial ring formation)
+   *   - Natural flocking: particles fill space evenly instead of locking into rings
+   *
    * Returns 0 if distance >= outerRadius or <= 0.
    */
   static forceAtDistance(entry: InteractionEntry, dist: number): number {
     if (dist >= entry.outerRadius || dist <= 0) return 0;
 
     if (dist < entry.innerRadius) {
-      // Inner zone
+      // Blend zone: smoothstep transition from inner to outer
       const t = entry.innerRadius > 0 ? dist / entry.innerRadius : 1;
+      const smoothT = t * t * (3 - 2 * t); // smoothstep: 0→1
+      const innerWeight = 1 - smoothT;
+      const outerWeight = smoothT;
       switch (entry.falloff) {
         case 'linear':
-          return entry.innerStrength * (1 - t);
-        case 'inverse':
-          return entry.innerStrength / (t + 0.1);
+          return entry.innerStrength * innerWeight + entry.outerStrength * outerWeight;
+        case 'inverse': {
+          // Sharper transition: quadratic smoothstep
+          const sharpT = t * t;
+          return entry.innerStrength * (1 - sharpT) + entry.outerStrength * sharpT;
+        }
         case 'constant':
+          // Hard zones, no blend
           return entry.innerStrength;
       }
     } else {
-      // Outer zone
+      // Outer zone: attraction decaying from full to 0
       const span = entry.outerRadius - entry.innerRadius;
       const t = span > 0 ? (dist - entry.innerRadius) / span : 0;
       switch (entry.falloff) {
         case 'linear':
           return entry.outerStrength * (1 - t);
         case 'inverse':
-          return entry.outerStrength / (t + 0.1);
+          return entry.outerStrength * (1 - t * t);
         case 'constant':
           return entry.outerStrength;
       }
