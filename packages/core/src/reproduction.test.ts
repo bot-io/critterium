@@ -349,15 +349,17 @@ describe('CRT-59: processReproduction — pre-allocated buffers', () => {
   });
 });
 
-// ─── CRT-66: spawn child behind parent ───────────────────────────
+// ─── CRT-66: centered random spawn (reverted from behind-parent) ────
 //
-// Reproduction now spawns the child BEHIND the parent (opposite of the
-// motion direction) instead of at a random offset. This is deterministic
-// (no Math.random in the spawn offset, satisfying CRT-65) and visually
-// sensible — offspring trail behind a moving parent.
+// CRT-66 originally spawned children behind the parent (opposite motion).
+// However, even a small behind bias caused extinction cascades in fragile
+// presets (Coral Reef Moray Eel, Plankton Bloom Small Fish). The centered
+// random spawn (±10px each axis) is the only distribution verified stable
+// across all 14 presets. CRT-66's spawn mechanism remains, but without
+// directional bias — just centered random dispersal using seeded RNG (CRT-65).
 
-describe('CRT-66: tryReproduce spawns child behind parent', () => {
-  it('spawns child opposite to motion direction (moving right → child on left)', () => {
+describe('CRT-66: tryReproduce spawns child near parent (centered random)', () => {
+  it('spawns child near parent (moving right)', () => {
     const cfg = makeConfig([reproSpecies(0)], 500);
     const eco = new EcosystemWorld(cfg);
     eco.eco.reproductionCooldown[0] = 0;
@@ -368,30 +370,33 @@ describe('CRT-66: tryReproduce spawns child behind parent', () => {
 
     const childIdx = eco.tryReproduce(0, 0.016);
     expect(childIdx).toBeGreaterThanOrEqual(0);
-    // spawnDist=8, moving right → child 8 units to the left
-    expect(eco.world.x[childIdx]).toBeCloseTo(92, 5);
-    expect(eco.world.y[childIdx]).toBeCloseTo(100, 5);
+    // Child should be within spawn distance of parent (±10px each axis)
+    const dx = eco.world.x[childIdx] - 100;
+    const dy = eco.world.y[childIdx] - 100;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    expect(dist).toBeGreaterThan(2);
+    expect(dist).toBeLessThan(20);
   });
 
-  it('spawns child opposite to motion direction (diagonal)', () => {
+  it('spawns child near parent (diagonal motion)', () => {
     const cfg = makeConfig([reproSpecies(0)], 500);
     const eco = new EcosystemWorld(cfg);
     eco.eco.reproductionCooldown[0] = 0;
     eco.world.x[0] = 200;
     eco.world.y[0] = 200;
-    // velocity (-3, 4) → speed 5, normalized (-0.6, 0.8)
     eco.world.vx[0] = -3;
     eco.world.vy[0] = 4;
 
     const childIdx = eco.tryReproduce(0, 0.016);
     expect(childIdx).toBeGreaterThanOrEqual(0);
-    // child = parent - normalize(v) * 8 = (200 + 4.8, 200 - 6.4) = (204.8, 193.6)
-    // precision 3 (Float32 storage introduces ~6e-6 rounding on 193.6)
-    expect(eco.world.x[childIdx]).toBeCloseTo(204.8, 3);
-    expect(eco.world.y[childIdx]).toBeCloseTo(193.6, 3);
+    const dx = eco.world.x[childIdx] - 200;
+    const dy = eco.world.y[childIdx] - 200;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    expect(dist).toBeGreaterThan(2);
+    expect(dist).toBeLessThan(20);
   });
 
-  it('stationary parent uses fixed fallback direction (downward)', () => {
+  it('stationary parent spawns child nearby', () => {
     const cfg = makeConfig([reproSpecies(0)], 500);
     const eco = new EcosystemWorld(cfg);
     eco.eco.reproductionCooldown[0] = 0;
@@ -402,13 +407,15 @@ describe('CRT-66: tryReproduce spawns child behind parent', () => {
 
     const childIdx = eco.tryReproduce(0, 0.016);
     expect(childIdx).toBeGreaterThanOrEqual(0);
-    // fallback direction (0, 1) → child = (150, 150 - 8) = (150, 142)
-    expect(eco.world.x[childIdx]).toBeCloseTo(150, 5);
-    expect(eco.world.y[childIdx]).toBeCloseTo(142, 5);
+    const dx = eco.world.x[childIdx] - 150;
+    const dy = eco.world.y[childIdx] - 150;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    expect(dist).toBeGreaterThan(2);
+    expect(dist).toBeLessThan(20);
   });
 
-  it('child position is deterministic — no Math.random in spawn offset', () => {
-    // CRT-65 guarantee: the offset is computed from velocity, not RNG.
+  it('child position is deterministic — same seed → same position', () => {
+    // CRT-65 guarantee: the seeded RNG produces identical results for identical seeds.
     function childPos(): [number, number] {
       const cfg = makeConfig([reproSpecies(0)], 500);
       cfg.seed = 12345;
@@ -425,5 +432,35 @@ describe('CRT-66: tryReproduce spawns child behind parent', () => {
     const b = childPos();
     expect(b[0]).toBeCloseTo(a[0], 5);
     expect(b[1]).toBeCloseTo(a[1], 5);
+  });
+
+  it('spawn position is centered — no directional bias (statistical)', () => {
+    // Over 200 seeds, average child position should be ≈ parent position
+    // (no systematic behind/in-front/lateral bias). Confirms centered random spawn.
+    let sumX = 0,
+      sumY = 0;
+    let count = 0;
+    for (let seed = 1; seed <= 200; seed++) {
+      const cfg = makeConfig([reproSpecies(0)], 500);
+      cfg.seed = seed * 100 + 7;
+      const eco = new EcosystemWorld(cfg);
+      eco.eco.reproductionCooldown[0] = 0;
+      eco.world.x[0] = 500;
+      eco.world.y[0] = 500;
+      eco.world.vx[0] = 100; // moving right
+      eco.world.vy[0] = 0;
+      const idx = eco.tryReproduce(0, 0.016);
+      if (idx >= 0) {
+        sumX += eco.world.x[idx];
+        sumY += eco.world.y[idx];
+        count++;
+      }
+    }
+    expect(count).toBe(200);
+    const avgX = sumX / count;
+    const avgY = sumY / count;
+    // Average should be ≈ 500 (parent position) — no directional bias
+    expect(avgX).toBeCloseTo(500, 0);
+    expect(avgY).toBeCloseTo(500, 0);
   });
 });

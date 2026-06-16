@@ -392,22 +392,17 @@ export class EcosystemWorld {
     // Energy gate
     if (this.eco.energy[index] < species.energy.reproductionCost) return -1;
 
-    // Spawn child behind parent (opposite of motion direction)
-    const vx = this.world.vx[index];
-    const vy = this.world.vy[index];
-    const speed = Math.sqrt(vx * vx + vy * vy);
-    const spawnDist = 8; // distance behind parent
-    let nx: number, ny: number;
-    if (speed > 0.001) {
-      nx = vx / speed;
-      ny = vy / speed;
-    } else {
-      // Stationary parent: fall back to downward direction
-      nx = 0;
-      ny = 1;
-    }
-    const childX = this.world.x[index] - nx * spawnDist;
-    const childY = this.world.y[index] - ny * spawnDist;
+    // Spawn child near parent with random dispersal.
+    // CRT-66 attempted behind-parent spawning but it caused extinction cascades
+    // in fragile presets. Even a small 4px behind bias destabilized Coral Reef
+    // (Moray Eel, init=5) and Plankton Bloom (Small Fish). The original centered
+    // random spawn (±10px each axis) is restored — it's the only distribution
+    // verified stable across all 14 presets.
+    // Seeded RNG = deterministic (CRT-65). Same 2-RNG-call pattern as pre-CRT-66.
+    const offsetX = (this.rng() - 0.5) * 20;
+    const offsetY = (this.rng() - 0.5) * 20;
+    const childX = this.world.x[index] + offsetX;
+    const childY = this.world.y[index] + offsetY;
 
     const childIdx = this.spawn(speciesIdx, childX, childY);
     if (childIdx < 0) return -1; // spawn failed — don't punish parent
