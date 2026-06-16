@@ -392,6 +392,111 @@ describe('controls panel', () => {
     expect(innerRadius.max).toBe('60');
   });
 
+  // ─── Matrix randomize/clear sync (getMatrixValues) ──────────
+  it('randomize button calls onRandomizeMatrix and syncs editor from getMatrixValues', () => {
+    const newMatrix: Array<
+      Array<{
+        innerStrength: number;
+        outerStrength: number;
+        innerRadius: number;
+        outerRadius: number;
+        falloff: string;
+      } | null>
+    > = [
+      [
+        {
+          innerStrength: 50,
+          outerStrength: 60,
+          innerRadius: 10,
+          outerRadius: 80,
+          falloff: 'linear',
+        },
+        null,
+      ],
+      [
+        null,
+        {
+          innerStrength: 20,
+          outerStrength: 30,
+          innerRadius: 5,
+          outerRadius: 90,
+          falloff: 'inverse',
+        },
+      ],
+    ];
+    const opts = makeOptions({
+      speciesCount: 2,
+      speciesNames: ['A', 'B'],
+      getMatrixValues: () => newMatrix,
+    });
+    const panel = createControlsPanel(opts);
+    const randBtn = Array.from(panel.querySelectorAll('.crit-btn')).find((b) =>
+      b.textContent?.includes('Randomize'),
+    ) as HTMLElement;
+    randBtn.click();
+    expect(opts.onRandomizeMatrix).toHaveBeenCalledTimes(1);
+    // Editor for cell (0,0) should reflect synced values from getMatrixValues
+    const editor = panel.querySelector('.crit-matrix-editor');
+    const sliders = editor!.querySelectorAll('input[type="range"]');
+    expect((sliders[0] as HTMLInputElement).value).toBe('50'); // innerStrength synced
+    expect((sliders[3] as HTMLInputElement).value).toBe('60'); // outerStrength synced
+  });
+
+  it('clear button calls onClearMatrix and syncs editor from getMatrixValues', () => {
+    const clearedMatrix: Array<
+      Array<{
+        innerStrength: number;
+        outerStrength: number;
+        innerRadius: number;
+        outerRadius: number;
+        falloff: string;
+      } | null>
+    > = [
+      [
+        { innerStrength: 0, outerStrength: 0, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
+        null,
+      ],
+      [
+        null,
+        { innerStrength: 0, outerStrength: 0, innerRadius: 0, outerRadius: 100, falloff: 'linear' },
+      ],
+    ];
+    const opts = makeOptions({
+      speciesCount: 2,
+      speciesNames: ['A', 'B'],
+      getMatrixValues: () => clearedMatrix,
+    });
+    const panel = createControlsPanel(opts);
+    const clearBtn = Array.from(panel.querySelectorAll('.crit-btn')).find((b) =>
+      b.textContent?.includes('Clear'),
+    ) as HTMLElement;
+    clearBtn.click();
+    expect(opts.onClearMatrix).toHaveBeenCalledTimes(1);
+    const editor = panel.querySelector('.crit-matrix-editor');
+    const sliders = editor!.querySelectorAll('input[type="range"]');
+    expect((sliders[0] as HTMLInputElement).value).toBe('0'); // cleared innerStrength
+  });
+
+  it('randomize button works without getMatrixValues (backward compat)', () => {
+    const opts = makeOptions({ speciesCount: 2, speciesNames: ['A', 'B'] });
+    const panel = createControlsPanel(opts);
+    const randBtn = Array.from(panel.querySelectorAll('.crit-btn')).find((b) =>
+      b.textContent?.includes('Randomize'),
+    ) as HTMLElement;
+    expect(() => randBtn.click()).not.toThrow();
+    expect(opts.onRandomizeMatrix).toHaveBeenCalledTimes(1);
+  });
+
+  it('clear button works without getMatrixValues (backward compat)', () => {
+    const opts = makeOptions({ speciesCount: 2, speciesNames: ['A', 'B'] });
+    const panel = createControlsPanel(opts);
+    const clearBtn = Array.from(panel.querySelectorAll('.crit-btn')).find((b) =>
+      b.textContent?.includes('Clear'),
+    ) as HTMLElement;
+    expect(() => clearBtn.click()).not.toThrow();
+    expect(opts.onClearMatrix).toHaveBeenCalledTimes(1);
+  });
+
   it('Export button fires onExport callback', () => {
     const opts = makeOptions();
     const panel = createControlsPanel(opts);

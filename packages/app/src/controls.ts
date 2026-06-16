@@ -42,6 +42,16 @@ export interface ControlsPanelOptions {
   ) => void;
   onRandomizeMatrix?: () => void;
   onClearMatrix?: () => void;
+  /** Returns current matrix values from the simulation (for UI sync after randomize/clear) */
+  getMatrixValues?: () => Array<
+    Array<{
+      innerStrength: number;
+      outerStrength: number;
+      innerRadius: number;
+      outerRadius: number;
+      falloff: string;
+    } | null>
+  >;
   onSpeciesChange?: (speciesIndex: number, param: string, value: number | string | boolean) => void;
   onAddSpecies?: () => void;
   onDeleteSpecies?: (speciesIndex: number) => void;
@@ -1246,11 +1256,17 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
     const btnRow = el('div', 'crit-row');
     const randBtn = el('button', 'crit-btn');
     randBtn.textContent = '🎲 Randomize';
-    randBtn.addEventListener('click', () => opts.onRandomizeMatrix?.());
+    randBtn.addEventListener('click', () => {
+      opts.onRandomizeMatrix?.();
+      syncFromSim();
+    });
     btnRow.appendChild(randBtn);
     const clearBtn = el('button', 'crit-btn');
     clearBtn.textContent = '✕ Clear';
-    clearBtn.addEventListener('click', () => opts.onClearMatrix?.());
+    clearBtn.addEventListener('click', () => {
+      opts.onClearMatrix?.();
+      syncFromSim();
+    });
     btnRow.appendChild(clearBtn);
     body.appendChild(btnRow);
 
@@ -1466,6 +1482,31 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
       });
       fRow.appendChild(fSelect);
       editorBody.appendChild(fRow);
+    }
+
+    // ─── Sync local state from simulation (after randomize/clear) ─
+    function syncFromSim(): void {
+      const newVals = opts.getMatrixValues?.();
+      if (!newVals) return;
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+          const v = newVals?.[i]?.[j];
+          if (v) {
+            matrixState[i][j] = { ...v };
+          } else {
+            matrixState[i][j] = {
+              innerStrength: 0,
+              outerStrength: 0,
+              innerRadius: 0,
+              outerRadius: 100,
+              falloff: 'linear',
+            };
+          }
+          paintCell(i, j);
+        }
+      }
+      // Rebuild editor for currently selected cell
+      buildEditor(selI, selJ);
     }
 
     // ─── Build grid cells ────────────────────────────────────────

@@ -1241,6 +1241,8 @@ async function main(): Promise<void> {
       (pairwiseForce as { matrix: InteractionMatrix }).matrix = interactionMatrix;
     },
 
+    getMatrixValues: () => matrixState,
+
     onSpeciesChange: (speciesIndex: number, param: string, value: number | string | boolean) => {
       if (speciesIndex < 0 || speciesIndex >= liveConfig.species.length) return;
       const sp = liveConfig.species[speciesIndex];
