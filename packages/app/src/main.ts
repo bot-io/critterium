@@ -705,6 +705,8 @@ async function main(): Promise<void> {
 
   // Pre-allocated species counts array (avoid per-frame allocation)
   let speciesCounts = new Int32Array(liveConfig.species.length);
+  // Pre-allocated species counts for sim-logger (avoid per-step allocation)
+  let loggerCounts: number[] = new Array(liveConfig.species.length).fill(0);
 
   // ─── Matrix state tracking ──────────────────────────────────
   let nSpecies = liveConfig.species.length;
@@ -784,6 +786,7 @@ async function main(): Promise<void> {
 
       // Reallocate species counts array for current species count
       speciesCounts = new Int32Array(liveConfig.species.length);
+      loggerCounts = new Array(liveConfig.species.length).fill(0);
 
       // Update population graph colors and reset history
       popGraph.reset();
@@ -920,11 +923,10 @@ async function main(): Promise<void> {
         stepsThisFrame++;
 
         // Record population snapshot for logging (throttled internally)
-        const speciesCounts: number[] = [];
         for (let s = 0; s < eco.species.length; s++) {
-          speciesCounts.push(eco.speciesCount(s));
+          loggerCounts[s] = eco.speciesCount(s);
         }
-        recordPopulation(totalSimTime, speciesCounts);
+        recordPopulation(totalSimTime, loggerCounts);
       }
 
       // Extinction detection: if all particles died after sim has been running,
