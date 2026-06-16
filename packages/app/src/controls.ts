@@ -1371,7 +1371,7 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
       value: number,
       color: string,
       onChange: (v: number) => void,
-    ): void {
+    ): { slider: HTMLInputElement; valSpan: HTMLSpanElement } {
       const row = el('div', 'crit-row');
       row.style.cssText = 'gap:4px; align-items:center; margin:3px 0;';
       const lbl = el('span', 'crit-label');
@@ -1397,6 +1397,7 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
         onChange(v);
       });
       editorBody.appendChild(row);
+      return { slider, valSpan };
     }
 
     function buildEditor(i: number, j: number): void {
@@ -1410,17 +1411,31 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
         fireChange(i, j);
       });
 
-      makeSlider('○ Inner radius', 0, 200, 5, s.innerRadius, '#88aaff', (v) => {
+      const innerR = makeSlider('○ Inner radius', 0, 200, 5, s.innerRadius, '#88aaff', (v) => {
         if (v > matrixState[i][j].outerRadius) v = matrixState[i][j].outerRadius;
         matrixState[i][j].innerRadius = v;
+        // Prevent outer from going below this inner value
+        outerR.slider.min = String(v);
+        innerR.valSpan.textContent = String(v);
         fireChange(i, j);
       });
 
-      makeSlider('◎ Outer radius', 10, 300, 5, s.outerRadius, '#aa88ff', (v) => {
-        matrixState[i][j].outerRadius = v;
-        if (matrixState[i][j].innerRadius > v) matrixState[i][j].innerRadius = v;
-        fireChange(i, j);
-      });
+      const outerR = makeSlider(
+        '◎ Outer radius',
+        Math.max(s.innerRadius, 10),
+        300,
+        5,
+        s.outerRadius,
+        '#aa88ff',
+        (v) => {
+          if (v < matrixState[i][j].innerRadius) v = matrixState[i][j].innerRadius;
+          matrixState[i][j].outerRadius = v;
+          // Prevent inner from exceeding this outer value
+          innerR.slider.max = String(v);
+          outerR.valSpan.textContent = String(v);
+          fireChange(i, j);
+        },
+      );
 
       makeSlider('⇲ Outer force', -100, 100, 5, s.outerStrength, '#88ff88', (v) => {
         matrixState[i][j].outerStrength = v;

@@ -345,6 +345,53 @@ describe('controls panel', () => {
     expect(opts.onMatrixChange).toHaveBeenCalledWith(0, 0, 0, 0, 0, 100, 'inverse');
   });
 
+  it('inner radius slider constrains outer radius slider min', () => {
+    const opts = makeOptions({ speciesCount: 2, speciesNames: ['A', 'B'] });
+    const panel = createControlsPanel(opts);
+    const editor = panel.querySelector('.crit-matrix-editor');
+    // Slider order: [0]=inner force, [1]=inner radius, [2]=outer radius, [3]=outer force
+    const sliders = editor!.querySelectorAll('input[type="range"]');
+    const innerRadius = sliders[1] as HTMLInputElement;
+    const outerRadius = sliders[2] as HTMLInputElement;
+    innerRadius.value = '40';
+    innerRadius.dispatchEvent(new Event('input', { bubbles: true }));
+    // outer slider min should now track the inner value so outer can't dip below it
+    expect(outerRadius.min).toBe('40');
+    // (i, j, innerStrength, outerStrength, innerRadius, outerRadius, falloff)
+    expect(opts.onMatrixChange).toHaveBeenCalledWith(0, 0, 0, 0, 40, 100, 'linear');
+  });
+
+  it('outer radius slider constrains inner radius slider max', () => {
+    const opts = makeOptions({ speciesCount: 2, speciesNames: ['A', 'B'] });
+    const panel = createControlsPanel(opts);
+    const editor = panel.querySelector('.crit-matrix-editor');
+    const sliders = editor!.querySelectorAll('input[type="range"]');
+    const innerRadius = sliders[1] as HTMLInputElement;
+    const outerRadius = sliders[2] as HTMLInputElement;
+    outerRadius.value = '50';
+    outerRadius.dispatchEvent(new Event('input', { bubbles: true }));
+    // inner slider max should now track the outer value so inner can't exceed it
+    expect(innerRadius.max).toBe('50');
+    expect(opts.onMatrixChange).toHaveBeenCalledWith(0, 0, 0, 0, 0, 50, 'linear');
+  });
+
+  it('outer radius cannot be set below inner radius (clamped)', () => {
+    const opts = makeOptions({ speciesCount: 2, speciesNames: ['A', 'B'] });
+    const panel = createControlsPanel(opts);
+    const editor = panel.querySelector('.crit-matrix-editor');
+    const sliders = editor!.querySelectorAll('input[type="range"]');
+    const innerRadius = sliders[1] as HTMLInputElement;
+    const outerRadius = sliders[2] as HTMLInputElement;
+    // Push inner up to 60 first
+    innerRadius.value = '60';
+    innerRadius.dispatchEvent(new Event('input', { bubbles: true }));
+    // Now try to drag outer below inner — it should clamp to 60
+    outerRadius.value = '20';
+    outerRadius.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(opts.onMatrixChange).toHaveBeenLastCalledWith(0, 0, 0, 0, 60, 60, 'linear');
+    expect(innerRadius.max).toBe('60');
+  });
+
   it('Export button fires onExport callback', () => {
     const opts = makeOptions();
     const panel = createControlsPanel(opts);
