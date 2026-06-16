@@ -13,6 +13,7 @@
 import {
   SpatialHashGrid,
   InteractionMatrix,
+  createRng,
   PairwiseForce,
   PointerForce,
   createForce,
@@ -445,6 +446,10 @@ async function main(): Promise<void> {
 
   // Live config that all control changes update
   let liveConfig = deepCloneConfig(CONFIG);
+
+  // Deterministic seed counter: incrementing instead of Math.random()
+  // Each reset/reseed produces a unique but deterministic seed.
+  let seedCounter = liveConfig.seed;
 
   // Check for pending preset from a species-count-changing preset load
   let hasPendingPreset = false;
@@ -1078,9 +1083,9 @@ async function main(): Promise<void> {
     },
 
     onReset: () => {
-      // Reset particle positions/velocities with a fresh seed,
-      // keeping the current config (species, matrix, forces).
-      liveConfig.seed = Math.floor(Math.random() * 2147483647);
+      // Reset with next deterministic seed (keeps same config, new positions)
+      seedCounter = (seedCounter + 1) | 0;
+      liveConfig.seed = seedCounter;
       rebuildSimulation();
       // Sync all UI sliders to current values (read from pipeline)
       resetAllSliders({
@@ -1110,8 +1115,9 @@ async function main(): Promise<void> {
           liveConfig.species[i].count = counts[i]!;
         }
       }
-      // New random seed + full rebuild
-      liveConfig.seed = Math.floor(Math.random() * 2147483647);
+      // Deterministic seed increment + full rebuild
+      seedCounter = (seedCounter + 1) | 0;
+      liveConfig.seed = seedCounter;
       rebuildSimulation();
     },
 
@@ -1196,13 +1202,16 @@ async function main(): Promise<void> {
     onRandomizeMatrix: () => {
       const n = interactionMatrix.numTypes;
       interactionMatrix = new InteractionMatrix(n);
+      // Use seeded PRNG for deterministic randomization
+      seedCounter = (seedCounter + 1) | 0;
+      const rng = createRng(seedCounter);
       for (let i = 0; i < n; i++) {
         for (let j = 0; j < n; j++) {
-          const innerStr = Math.round((Math.random() - 0.5) * 200);
-          const outerStr = Math.round((Math.random() - 0.5) * 200);
+          const innerStr = Math.round((rng() - 0.5) * 200);
+          const outerStr = Math.round((rng() - 0.5) * 200);
           if (Math.abs(outerStr) > 10 || Math.abs(innerStr) > 10) {
-            const innerR = Math.round(10 + Math.random() * 30);
-            const outerR = Math.round(innerR + 30 + Math.random() * 100);
+            const innerR = Math.round(10 + rng() * 30);
+            const outerR = Math.round(innerR + 30 + rng() * 100);
             const entry = {
               innerStrength: innerStr,
               outerStrength: outerStr,

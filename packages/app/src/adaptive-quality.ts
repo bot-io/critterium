@@ -64,7 +64,10 @@ type QualityLevel = 'high' | 'medium' | 'low';
 // ─── Adaptive Quality Manager ────────────────────────────────
 
 export class AdaptiveQuality {
-  private fpsHistory: number[];
+  private fpsBuffer: number[];
+  private fpsBufIdx: number;
+  private fpsBufCount: number;
+  private readonly fpsBufSize = 8;
   private currentQuality: QualitySettings;
   private currentLevel: QualityLevel;
   private consecutiveSamples: number;
@@ -72,7 +75,9 @@ export class AdaptiveQuality {
   private onChangeCallback?: (level: QualityLevel, settings: QualitySettings) => void;
 
   constructor() {
-    this.fpsHistory = [];
+    this.fpsBuffer = new Array(8).fill(0);
+    this.fpsBufIdx = 0;
+    this.fpsBufCount = 0;
     this.currentLevel = 'high';
     this.consecutiveSamples = 0;
     this.lastUpgradeTime = 0;
@@ -90,21 +95,20 @@ export class AdaptiveQuality {
    * based on rolling average with hysteresis.
    */
   update(fps: number): void {
-    // Push sample, maintain rolling window of 8
-    this.fpsHistory.push(fps);
-    if (this.fpsHistory.length > 8) {
-      this.fpsHistory.shift();
-    }
+    // Ring buffer: O(1) write, zero allocations
+    this.fpsBuffer[this.fpsBufIdx] = fps;
+    this.fpsBufIdx = (this.fpsBufIdx + 1) % this.fpsBufSize;
+    if (this.fpsBufCount < this.fpsBufSize) this.fpsBufCount++;
 
     // Need at least a few samples to make decisions
-    if (this.fpsHistory.length < 3) return;
+    if (this.fpsBufCount < 3) return;
 
-    // Compute rolling average (no allocation — simple loop)
+    // Compute rolling average from ring buffer
     let sum = 0;
-    for (let i = 0; i < this.fpsHistory.length; i++) {
-      sum += this.fpsHistory[i];
+    for (let i = 0; i < this.fpsBufCount; i++) {
+      sum += this.fpsBuffer[i];
     }
-    const avg = sum / this.fpsHistory.length;
+    const avg = sum / this.fpsBufCount;
 
     // Determine target tier from average
     let targetLevel: QualityLevel;

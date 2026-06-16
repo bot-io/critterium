@@ -321,3 +321,47 @@ describe('eating + lifecycle integration', () => {
     expect(eco.aliveCount).toBe(2);
   });
 });
+
+// ─── CRT-67 #1: instance-scoped eaten buffer ─────────────────────
+//
+// The eaten buffer was previously a module-level singleton shared across
+// all processEating calls — two concurrent simulations could corrupt each
+// other's state. It is now instance-scoped on EcosystemWorld via
+// getEatenBuffer(), eliminating the cross-instance hazard.
+
+describe('CRT-67: eaten buffer is instance-scoped', () => {
+  it('two EcosystemWorld instances have independent eaten buffers', () => {
+    const ecoA = new EcosystemWorld(predatorPreyConfig(1, 1, 100));
+    const ecoB = new EcosystemWorld(predatorPreyConfig(1, 1, 100));
+    const bufA = ecoA.getEatenBuffer();
+    const bufB = ecoB.getEatenBuffer();
+    expect(bufA).not.toBe(bufB); // distinct instances
+  });
+
+  it('getEatenBuffer returns a buffer sized to populationCap', () => {
+    const eco = new EcosystemWorld(predatorPreyConfig(1, 1, 50));
+    const buf = eco.getEatenBuffer();
+    expect(buf.length).toBeGreaterThanOrEqual(50);
+  });
+
+  it('processing one sim does not corrupt another sim buffer', () => {
+    const ecoA = new EcosystemWorld(predatorPreyConfig(1, 1, 100));
+    const ecoB = new EcosystemWorld(predatorPreyConfig(1, 1, 100));
+
+    // Set up overlaps in ecoA only
+    for (let i = 0; i < 2; i++) {
+      ecoA.world.x[i] = 100;
+      ecoA.world.y[i] = 100;
+      ecoA.world.vx[i] = 0;
+      ecoA.world.vy[i] = 0;
+    }
+
+    const gridA = makeGrid(ecoA);
+    const resultA = processEating(ecoA, gridA);
+    expect(resultA.killed).toBe(1);
+
+    // ecoB untouched — its buffer must still be all zeros
+    const bufB = ecoB.getEatenBuffer();
+    expect(bufB.every((v) => v === 0)).toBe(true);
+  });
+});

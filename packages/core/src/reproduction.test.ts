@@ -288,6 +288,23 @@ describe('CRT-59: processReproduction — pre-allocated buffers', () => {
     expect(next).not.toBe(-1);
   });
 
+  it('child spawned behind parent is opposite to motion direction (multi-step)', () => {
+    // Repeated reproduction over time should keep spawning children behind the
+    // moving parent — verify positions are consistent with the behind-parent rule.
+    const cfg = makeConfig([reproSpecies(0)], 500);
+    const eco = new EcosystemWorld(cfg);
+    eco.eco.reproductionCooldown[0] = 0;
+    eco.world.x[0] = 400;
+    eco.world.y[0] = 400;
+    eco.world.vx[0] = 60; // moving right
+    eco.world.vy[0] = 0;
+
+    // First child
+    const child = eco.tryReproduce(0, 0.016);
+    expect(child).toBeGreaterThanOrEqual(0);
+    expect(eco.world.x[child]).toBeLessThan(400); // behind = left of parent
+  });
+
   it('processReproduction is allocation-free in steady state (heap growth check)', () => {
     const species = [
       { ...reproSpecies(0), name: 'A', color: '#ff4444', count: 100 },
@@ -329,5 +346,84 @@ describe('CRT-59: processReproduction — pre-allocated buffers', () => {
     const growth = after - before;
     // No significant heap growth from 300 steady-state reproduction passes.
     expect(growth).toBeLessThan(1_000_000);
+  });
+});
+
+// ─── CRT-66: spawn child behind parent ───────────────────────────
+//
+// Reproduction now spawns the child BEHIND the parent (opposite of the
+// motion direction) instead of at a random offset. This is deterministic
+// (no Math.random in the spawn offset, satisfying CRT-65) and visually
+// sensible — offspring trail behind a moving parent.
+
+describe('CRT-66: tryReproduce spawns child behind parent', () => {
+  it('spawns child opposite to motion direction (moving right → child on left)', () => {
+    const cfg = makeConfig([reproSpecies(0)], 500);
+    const eco = new EcosystemWorld(cfg);
+    eco.eco.reproductionCooldown[0] = 0;
+    eco.world.x[0] = 100;
+    eco.world.y[0] = 100;
+    eco.world.vx[0] = 50; // moving right
+    eco.world.vy[0] = 0;
+
+    const childIdx = eco.tryReproduce(0, 0.016);
+    expect(childIdx).toBeGreaterThanOrEqual(0);
+    // spawnDist=8, moving right → child 8 units to the left
+    expect(eco.world.x[childIdx]).toBeCloseTo(92, 5);
+    expect(eco.world.y[childIdx]).toBeCloseTo(100, 5);
+  });
+
+  it('spawns child opposite to motion direction (diagonal)', () => {
+    const cfg = makeConfig([reproSpecies(0)], 500);
+    const eco = new EcosystemWorld(cfg);
+    eco.eco.reproductionCooldown[0] = 0;
+    eco.world.x[0] = 200;
+    eco.world.y[0] = 200;
+    // velocity (-3, 4) → speed 5, normalized (-0.6, 0.8)
+    eco.world.vx[0] = -3;
+    eco.world.vy[0] = 4;
+
+    const childIdx = eco.tryReproduce(0, 0.016);
+    expect(childIdx).toBeGreaterThanOrEqual(0);
+    // child = parent - normalize(v) * 8 = (200 + 4.8, 200 - 6.4) = (204.8, 193.6)
+    // precision 3 (Float32 storage introduces ~6e-6 rounding on 193.6)
+    expect(eco.world.x[childIdx]).toBeCloseTo(204.8, 3);
+    expect(eco.world.y[childIdx]).toBeCloseTo(193.6, 3);
+  });
+
+  it('stationary parent uses fixed fallback direction (downward)', () => {
+    const cfg = makeConfig([reproSpecies(0)], 500);
+    const eco = new EcosystemWorld(cfg);
+    eco.eco.reproductionCooldown[0] = 0;
+    eco.world.x[0] = 150;
+    eco.world.y[0] = 150;
+    eco.world.vx[0] = 0;
+    eco.world.vy[0] = 0;
+
+    const childIdx = eco.tryReproduce(0, 0.016);
+    expect(childIdx).toBeGreaterThanOrEqual(0);
+    // fallback direction (0, 1) → child = (150, 150 - 8) = (150, 142)
+    expect(eco.world.x[childIdx]).toBeCloseTo(150, 5);
+    expect(eco.world.y[childIdx]).toBeCloseTo(142, 5);
+  });
+
+  it('child position is deterministic — no Math.random in spawn offset', () => {
+    // CRT-65 guarantee: the offset is computed from velocity, not RNG.
+    function childPos(): [number, number] {
+      const cfg = makeConfig([reproSpecies(0)], 500);
+      cfg.seed = 12345;
+      const eco = new EcosystemWorld(cfg);
+      eco.eco.reproductionCooldown[0] = 0;
+      eco.world.x[0] = 300;
+      eco.world.y[0] = 300;
+      eco.world.vx[0] = 10;
+      eco.world.vy[0] = 10;
+      const idx = eco.tryReproduce(0, 0.016);
+      return [eco.world.x[idx], eco.world.y[idx]];
+    }
+    const a = childPos();
+    const b = childPos();
+    expect(b[0]).toBeCloseTo(a[0], 5);
+    expect(b[1]).toBeCloseTo(a[1], 5);
   });
 });

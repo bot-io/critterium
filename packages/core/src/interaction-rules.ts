@@ -8,6 +8,17 @@
  *
  * Force pipeline reads the matrix to decide which interactions
  * to compute for each (source, target) pair.
+ *
+ * NOTE (CRT-67 #2): This system uses a simpler single-zone schema
+ * `{ radius, strength }` — intentionally distinct from the two-zone
+ * `{ innerStrength, outerStrength, innerRadius, outerRadius }` model
+ * used by InteractionMatrix/PairwiseForce in index.ts. InteractionRuleMatrix
+ * is a higher-level toggle system (which force TYPES are active per pair),
+ * while InteractionMatrix is the lower-level force evaluator (how strong
+ * each force is, with two-zone falloff). They serve different layers of the
+ * configuration model and are not redundant. Migrating this to two-zone would
+ * add complexity without current benefit since the rule matrix does not
+ * evaluate force profiles — it only gates which forces are computed.
  */
 
 // ─── Force types ─────────────────────────────────────────────────

@@ -18,6 +18,16 @@ import {
   type SpeciesConfig,
 } from './ecosystem.js';
 
+// Default stamina config for species without explicit stamina settings (CRT-67 #5).
+// Hoisted to module scope — avoids creating a new object literal for every particle
+// on every processStamina() iteration when species.stamina is undefined.
+const DEFAULT_STAMINA = {
+  sprintDurationSec: 5,
+  sprintCooldownSec: 3,
+  sprintSpeedMultiplier: 1.0,
+  tiredSpeedMultiplier: 0.5,
+};
+
 // ─── EcosystemWorld ──────────────────────────────────────────────
 
 /**
@@ -42,6 +52,9 @@ export class EcosystemWorld {
 
   // Per-species alive count (for logging & round-robin reproduction)
   private _speciesCounts: number[] = [];
+
+  // Pre-allocated eaten buffer for processEating (instance-scoped, not module-level)
+  private _eatenBuffer: Uint8Array;
 
   // Reusable buffers for round-robin reproduction — pre-allocated once in the
   // constructor and cleared each frame by beginReproductionPass(). Eliminates
@@ -118,6 +131,9 @@ export class EcosystemWorld {
     // sized to populationCap so a single species can never overflow its queue
     // (alive count ≤ populationCap). Reused every frame — zero per-step alloc.
     this._readyQueues = new Array(numSpecies);
+
+    // Pre-allocate eaten buffer for processEating (instance-scoped)
+    this._eatenBuffer = new Uint8Array(config.populationCap);
     for (let s = 0; s < numSpecies; s++) {
       this._readyQueues[s] = new Int32Array(config.populationCap);
     }
@@ -146,6 +162,17 @@ export class EcosystemWorld {
   /** Per-species alive count. */
   speciesCount(speciesIdx: number): number {
     return this._speciesCounts[speciesIdx] ?? 0;
+  }
+
+  /**
+   * Get the pre-allocated eaten buffer for processEating.
+   * Grows if capacity has increased. Always zeroed by caller before use.
+   */
+  getEatenBuffer(): Uint8Array {
+    if (this._eatenBuffer.length < this.config.populationCap) {
+      this._eatenBuffer = new Uint8Array(this.config.populationCap);
+    }
+    return this._eatenBuffer;
   }
 
   // ─── Reproduction buffers (zero per-frame allocation, CRT-59) ───
@@ -365,11 +392,22 @@ export class EcosystemWorld {
     // Energy gate
     if (this.eco.energy[index] < species.energy.reproductionCost) return -1;
 
-    // Spawn child near parent
-    const offsetX = (this.rng() - 0.5) * 20;
-    const offsetY = (this.rng() - 0.5) * 20;
-    const childX = this.world.x[index] + offsetX;
-    const childY = this.world.y[index] + offsetY;
+    // Spawn child behind parent (opposite of motion direction)
+    const vx = this.world.vx[index];
+    const vy = this.world.vy[index];
+    const speed = Math.sqrt(vx * vx + vy * vy);
+    const spawnDist = 8; // distance behind parent
+    let nx: number, ny: number;
+    if (speed > 0.001) {
+      nx = vx / speed;
+      ny = vy / speed;
+    } else {
+      // Stationary parent: fall back to downward direction
+      nx = 0;
+      ny = 1;
+    }
+    const childX = this.world.x[index] - nx * spawnDist;
+    const childY = this.world.y[index] - ny * spawnDist;
 
     const childIdx = this.spawn(speciesIdx, childX, childY);
     if (childIdx < 0) return -1; // spawn failed — don't punish parent
@@ -401,12 +439,7 @@ export class EcosystemWorld {
 
       const speciesIdx = this.world.type[i];
       const species = this.species[speciesIdx];
-      const stamina = species.stamina ?? {
-        sprintDurationSec: 5,
-        sprintCooldownSec: 3,
-        sprintSpeedMultiplier: 1.0,
-        tiredSpeedMultiplier: 0.5,
-      };
+      const stamina = species.stamina ?? DEFAULT_STAMINA;
       const baseMaxSpeed = species.maxSpeed;
 
       const speed = Math.sqrt(this.world.vx[i] ** 2 + this.world.vy[i] ** 2);

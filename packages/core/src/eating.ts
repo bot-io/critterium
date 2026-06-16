@@ -16,16 +16,6 @@ export interface EatingResult {
   energyGained: number; // total energy gained by predators
 }
 
-// Pre-allocated buffer for tracking eaten particles — reused across calls
-let eatenBuffer: Uint8Array | null = null;
-
-function getEatenBuffer(size: number): Uint8Array {
-  if (!eatenBuffer || eatenBuffer.length < size) {
-    eatenBuffer = new Uint8Array(size);
-  }
-  return eatenBuffer;
-}
-
 /**
  * Process eating for one simulation step.
  *
@@ -56,8 +46,8 @@ export function processEating(eco: EcosystemWorld, grid: SpatialHashGrid): Eatin
   // No predator species — skip entirely
   if (maxEatRadius === 0) return result;
 
-  // Reuse pre-allocated eaten buffer (zero per-step allocation)
-  const eaten = getEatenBuffer(state.alive.length);
+  // Get per-instance eaten buffer from EcosystemWorld (zero per-step allocation)
+  const eaten = eco.getEatenBuffer();
   eaten.fill(0);
 
   const { x, y, type, count } = world;
