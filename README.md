@@ -4,7 +4,7 @@ A living world in your pocket. A fast 2D particle sandbox where multiple particl
 
 [![CI](https://github.com/bot-io/critterium/actions/workflows/ci.yml/badge.svg)](https://github.com/bot-io/critterium/actions/workflows/ci.yml)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Tests](https://img.shields.io/badge/tests-1195%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-1199%20passing-brightgreen)
 
 ## Features
 
@@ -86,7 +86,7 @@ Web application built with Vite. Controls UI, autosave/persistence, preset manag
 npm install        # Install all workspace dependencies
 npm run dev        # Start Vite dev server
 npm run build      # Build all packages
-npm test           # Run all tests (1195 across 3 packages)
+npm test           # Run all tests (1199 across 3 packages)
 npm run typecheck  # TypeScript strict type checking
 npm run lint       # ESLint (flat config, typescript-eslint)
 npm run format     # Prettier formatting (write)
