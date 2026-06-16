@@ -941,7 +941,7 @@ describe('InteractionMatrix', () => {
       expect(InteractionMatrix.forceAtDistance(entry, 75)).toBeCloseTo(25, 3);
     });
 
-    it('inverse falloff: force = strength * (1 - t²)', () => {
+    it('inverse falloff: force = strength / (d/r + 0.1)', () => {
       const entry: InteractionEntry = {
         innerStrength: 100,
         outerStrength: 100,
@@ -950,7 +950,7 @@ describe('InteractionMatrix', () => {
         falloff: 'inverse',
       };
       const d = 50;
-      const expected = 100 * (1 - 0.5 * 0.5); // 75
+      const expected = 100 / (0.5 + 0.1); // 100/0.6 ≈ 166.67
       expect(InteractionMatrix.forceAtDistance(entry, d)).toBeCloseTo(expected, 2);
     });
 

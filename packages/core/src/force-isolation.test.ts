@@ -309,10 +309,10 @@ describe('CRT-48: InteractionMatrix.forceAtDistance falloff', () => {
     expect(InteractionMatrix.forceAtDistance(e, 50)).toBeCloseTo(50, 6); // 100*(1-0.5)
   });
 
-  it('inverse: strength * (1 - t²) — quadratic decay', () => {
+  it('inverse: strength/(dist/radius + 0.1) — stronger when closer', () => {
     const e = entry('inverse');
-    expect(InteractionMatrix.forceAtDistance(e, 25)).toBeCloseTo(100 * (1 - 0.25 * 0.25), 4); // 93.75
-    expect(InteractionMatrix.forceAtDistance(e, 50)).toBeCloseTo(100 * (1 - 0.5 * 0.5), 4); // 75
+    expect(InteractionMatrix.forceAtDistance(e, 25)).toBeCloseTo(100 / 0.35, 4);
+    expect(InteractionMatrix.forceAtDistance(e, 50)).toBeCloseTo(100 / 0.6, 4);
   });
 
   it('constant: strength regardless of distance', () => {
