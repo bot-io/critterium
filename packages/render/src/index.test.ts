@@ -106,3 +106,44 @@ describe('Species visuals', () => {
     expect(visuals[2].color).toBe(0x0000ff);
   });
 });
+
+describe('No dead sickness/infection code', () => {
+  // Regression guard: infection/sickness rendering was removed but
+  // vestigial fields and per-frame computations lingered. These tests
+  // ensure the dead code does not silently return.
+  it('CritteriumRenderer does not expose sicknessRingsEnabled property', () => {
+    const proto = CritteriumRenderer.prototype as unknown as Record<string, unknown>;
+    expect(proto.sicknessRingsEnabled).toBeUndefined();
+  });
+
+  it('CritteriumRenderer does not expose sicknessContainer property', () => {
+    const proto = CritteriumRenderer.prototype as unknown as Record<string, unknown>;
+    expect(proto.sicknessContainer).toBeUndefined();
+  });
+
+  it('CritteriumRenderer does not expose pulsePhase property', () => {
+    const proto = CritteriumRenderer.prototype as unknown as Record<string, unknown>;
+    expect(proto.pulsePhase).toBeUndefined();
+  });
+
+  it('CritteriumRenderer does not expose sicknessGfx property', () => {
+    const proto = CritteriumRenderer.prototype as unknown as Record<string, unknown>;
+    expect(proto.sicknessGfx).toBeUndefined();
+  });
+});
+
+// ─── Regression: resetState must accept new capacity ───────────────
+// Bug: increasing populationCap crashed the renderer because prevAlive
+// array was never resized. resetState now accepts optional maxParticles.
+
+describe('resetState capacity resize (regression)', () => {
+  it('CritteriumRenderer.prototype.resetState is defined', () => {
+    expect(CritteriumRenderer.prototype.resetState).toBeDefined();
+    expect(typeof CritteriumRenderer.prototype.resetState).toBe('function');
+  });
+
+  it('resetState accepts a maxParticles parameter (arity >= 1)', () => {
+    // The function should accept at least 1 argument (maxParticles)
+    expect(CritteriumRenderer.prototype.resetState.length).toBeGreaterThanOrEqual(1);
+  });
+});

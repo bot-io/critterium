@@ -18,6 +18,16 @@ import {
   type SpeciesConfig,
 } from './ecosystem.js';
 
+// Default stamina config for species without explicit stamina settings (CRT-67 #5).
+// Hoisted to module scope — avoids creating a new object literal for every particle
+// on every processStamina() iteration when species.stamina is undefined.
+const DEFAULT_STAMINA = {
+  sprintDurationSec: 5,
+  sprintCooldownSec: 3,
+  sprintSpeedMultiplier: 1.0,
+  tiredSpeedMultiplier: 0.5,
+};
+
 // ─── EcosystemWorld ──────────────────────────────────────────────
 
 /**
@@ -39,6 +49,21 @@ export class EcosystemWorld {
 
   // Current alive count
   private _aliveCount: number = 0;
+
+  // Per-species alive count (for logging & round-robin reproduction)
+  private _speciesCounts: number[] = [];
+
+  // Pre-allocated eaten buffer for processEating (instance-scoped, not module-level)
+  private _eatenBuffer: Uint8Array;
+
+  // Reusable buffers for round-robin reproduction — pre-allocated once in the
+  // constructor and cleared each frame by beginReproductionPass(). Eliminates
+  // the per-step `readyBySpecies` array + `new Int32Array(numSpecies)` + `.push()`
+  // allocations that processReproduction previously made every call
+  // (zero hot-loop allocation constraint, CRT-59).
+  private _readyQueues: Int32Array[] = [];
+  private _readyCounts: Int32Array = new Int32Array(0);
+  private _reproCursors: Int32Array = new Int32Array(0);
 
   // Current highest used index
   private _highWaterMark: number = 0;
@@ -94,6 +119,29 @@ export class EcosystemWorld {
 
     this._aliveCount = totalCount;
     this._highWaterMark = totalCount;
+
+    // Per-species counts for logging & round-robin reproduction
+    const numSpecies = config.species.length;
+    this._speciesCounts = new Array(numSpecies).fill(0);
+    for (let i = 0; i < totalCount; i++) {
+      this._speciesCounts[this.world.type[i]]++;
+    }
+
+    // Pre-allocate reproduction buffers (CRT-59). One queue per species,
+    // sized to populationCap so a single species can never overflow its queue
+    // (alive count ≤ populationCap). Reused every frame — zero per-step alloc.
+    this._readyQueues = new Array(numSpecies);
+
+    // Pre-allocate eaten buffer for processEating (instance-scoped)
+    this._eatenBuffer = new Uint8Array(config.populationCap);
+    for (let s = 0; s < numSpecies; s++) {
+      this._readyQueues[s] = new Int32Array(config.populationCap);
+    }
+    this._readyCounts = new Int32Array(numSpecies);
+    this._reproCursors = new Int32Array(numSpecies);
+
+    // Limit World iteration to active range (avoids processing dead/unused slots)
+    this.world.effectiveCount = totalCount;
   }
 
   /** Current highest used particle index (may have gaps from kills). */
@@ -111,7 +159,82 @@ export class EcosystemWorld {
     return this.config.populationCap;
   }
 
-  /** Is the population at cap? */
+  /** Per-species alive count. */
+  speciesCount(speciesIdx: number): number {
+    return this._speciesCounts[speciesIdx] ?? 0;
+  }
+
+  /**
+   * Get the pre-allocated eaten buffer for processEating.
+   * Grows if capacity has increased. Always zeroed by caller before use.
+   */
+  getEatenBuffer(): Uint8Array {
+    if (this._eatenBuffer.length < this.config.populationCap) {
+      this._eatenBuffer = new Uint8Array(this.config.populationCap);
+    }
+    return this._eatenBuffer;
+  }
+
+  // ─── Reproduction buffers (zero per-frame allocation, CRT-59) ───
+  //
+  // processReproduction() in lifecycle.ts collects ready individuals per
+  // species then processes them round-robin. The three buffers below are
+  // pre-allocated once and reused every frame; beginReproductionPass() resets
+  // counts/cursors in place. This removes the old per-call allocations
+  // (`readyBySpecies: number[][]`, `new Int32Array(numSpecies)`, `.push()`).
+
+  /**
+   * Begin a new reproduction pass: zero the per-species ready counts and
+   * round-robin cursors. Grows the buffers if species were added at runtime
+   * (a rare, amortized reallocation — not a per-frame allocation).
+   */
+  beginReproductionPass(): void {
+    const numSpecies = this.species.length;
+    if (numSpecies > this._readyCounts.length) {
+      // Species added at runtime — grow buffers (rare, amortized, not hot).
+      this._readyCounts = new Int32Array(numSpecies);
+      this._reproCursors = new Int32Array(numSpecies);
+      this._readyQueues = new Array(numSpecies);
+      for (let s = 0; s < numSpecies; s++) {
+        this._readyQueues[s] = new Int32Array(this.config.populationCap);
+      }
+    } else {
+      // Steady state: in-place zeroing (zero allocation).
+      this._readyCounts.fill(0);
+      this._reproCursors.fill(0);
+    }
+  }
+
+  /**
+   * Record a particle as ready to reproduce this pass.
+   * Safe no-op if the per-species queue is full (cannot exceed populationCap).
+   */
+  collectReadyReproducer(speciesIdx: number, particleIdx: number): void {
+    const count = this._readyCounts[speciesIdx];
+    if (count < this._readyQueues[speciesIdx].length) {
+      this._readyQueues[speciesIdx][count] = particleIdx;
+      this._readyCounts[speciesIdx] = count + 1;
+    }
+  }
+
+  /**
+   * Advance the round-robin cursor and return the next ready particle for the
+   * given species, or -1 when the queue is exhausted. Each call consumes one
+   * candidate (skipping dead ones is the caller's responsibility).
+   */
+  nextReproducer(speciesIdx: number): number {
+    const cursor = this._reproCursors[speciesIdx];
+    if (cursor >= this._readyCounts[speciesIdx]) return -1;
+    this._reproCursors[speciesIdx] = cursor + 1;
+    return this._readyQueues[speciesIdx][cursor];
+  }
+
+  /** Number of ready reproducers collected for a species this pass. */
+  readyReproducerCount(speciesIdx: number): number {
+    return this._readyCounts[speciesIdx];
+  }
+
+  /** Is the population at global cap? */
   get isAtCap(): boolean {
     return this._aliveCount >= this.config.populationCap;
   }
@@ -124,8 +247,6 @@ export class EcosystemWorld {
     if (this.isAtCap) return -1;
 
     const species = this.species[speciesIndex];
-
-    // Try to reuse a free slot
     let idx = this.freeList.pop();
 
     if (idx === -1) {
@@ -133,6 +254,7 @@ export class EcosystemWorld {
       if (this._highWaterMark >= this.config.populationCap) return -1;
       idx = this._highWaterMark;
       this._highWaterMark++;
+      this.world.effectiveCount = this._highWaterMark;
     }
 
     // Set position
@@ -154,6 +276,7 @@ export class EcosystemWorld {
     // Initialize ecosystem state
     this.eco.initParticle(idx, speciesIndex, species, this.rng);
     this._aliveCount++;
+    this._speciesCounts[speciesIndex]++;
 
     return idx;
   }
@@ -165,9 +288,13 @@ export class EcosystemWorld {
     if (index < 0 || index >= this._highWaterMark) return;
     if (this.eco.alive[index] === DEAD) return; // already dead
 
+    const speciesIdx = this.world.type[index];
     this.eco.kill(index);
     this.freeList.push(index);
     this._aliveCount--;
+    if (speciesIdx < this._speciesCounts.length) {
+      this._speciesCounts[speciesIdx]--;
+    }
 
     // Zero out velocity to prevent ghost movement
     this.world.vx[index] = 0;
@@ -196,7 +323,10 @@ export class EcosystemWorld {
 
       // Energy drain: idle + movement cost
       const speed = Math.sqrt(this.world.vx[i] ** 2 + this.world.vy[i] ** 2);
-      const movementCost = species.energy.movementCostPerSec * (speed / species.maxSpeed) * dt;
+      // Clamp speed ratio to [0, 1] — sprint/forces can push beyond maxSpeed,
+      // but movement cost shouldn't exceed the nominal rate
+      const speedRatio = Math.min(1, speed / species.maxSpeed);
+      const movementCost = species.energy.movementCostPerSec * speedRatio * dt;
       const idleCost = species.energy.idleDrainPerSec * dt;
       this.eco.energy[i] -= movementCost + idleCost;
 
@@ -238,31 +368,51 @@ export class EcosystemWorld {
   /**
    * Attempt reproduction for a particle.
    * Returns child index if successful, -1 if not.
+   *
+   * Reproduction is cooldown-gated: after the cooldown expires, the particle
+   * reproduces immediately if it has enough energy. No probabilistic gate —
+   * the cooldown alone controls the rate.
+   *
+   * Fairness is enforced by processReproduction(), which calls this in a
+   * round-robin order across species.
    */
-  tryReproduce(index: number): number {
+  tryReproduce(index: number, _dt: number = 0.016): number {
     if (this.eco.alive[index] === DEAD) return -1;
-    if (this.isAtCap) return -1;
 
     const speciesIdx = this.world.type[index];
+
+    // Global cap: total population safety valve.
+    // Fairness across species is enforced by processReproduction()'s round-robin queue.
+    if (this.isAtCap) return -1;
+
     const species = this.species[speciesIdx];
 
-    // Check conditions
+    // Hard gate: cooldown must be expired
     if (this.eco.reproductionCooldown[index] > 0) return -1;
+    // Energy gate
     if (this.eco.energy[index] < species.energy.reproductionCost) return -1;
 
-    // Deduct energy
-    this.eco.energy[index] -= species.energy.reproductionCost;
-
-    // Reset cooldown (minimum 1s to prevent infinite reproduction)
-    this.eco.reproductionCooldown[index] = Math.max(1, species.lifecycle.reproductionCooldownSec);
-
-    // Spawn child near parent
+    // Spawn child near parent with random dispersal.
+    // CRT-66 attempted behind-parent spawning but it caused extinction cascades
+    // in fragile presets. Even a small 4px behind bias destabilized Coral Reef
+    // (Moray Eel, init=5) and Plankton Bloom (Small Fish). The original centered
+    // random spawn (±10px each axis) is restored — it's the only distribution
+    // verified stable across all 14 presets.
+    // Seeded RNG = deterministic (CRT-65). Same 2-RNG-call pattern as pre-CRT-66.
     const offsetX = (this.rng() - 0.5) * 20;
     const offsetY = (this.rng() - 0.5) * 20;
     const childX = this.world.x[index] + offsetX;
     const childY = this.world.y[index] + offsetY;
 
     const childIdx = this.spawn(speciesIdx, childX, childY);
+    if (childIdx < 0) return -1; // spawn failed — don't punish parent
+
+    // Deduct energy after successful spawn
+    this.eco.energy[index] -= species.energy.reproductionCost;
+
+    // Reset cooldown
+    this.eco.reproductionCooldown[index] = species.lifecycle.reproductionCooldownSec;
+
     return childIdx;
   }
 
@@ -284,12 +434,7 @@ export class EcosystemWorld {
 
       const speciesIdx = this.world.type[i];
       const species = this.species[speciesIdx];
-      const stamina = species.stamina ?? {
-        sprintDurationSec: 5,
-        sprintCooldownSec: 3,
-        sprintSpeedMultiplier: 1.0,
-        tiredSpeedMultiplier: 0.5,
-      };
+      const stamina = species.stamina ?? DEFAULT_STAMINA;
       const baseMaxSpeed = species.maxSpeed;
 
       const speed = Math.sqrt(this.world.vx[i] ** 2 + this.world.vy[i] ** 2);

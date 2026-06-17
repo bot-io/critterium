@@ -67,8 +67,20 @@ function makeTestEcoConfig(): EcosystemConfig {
 
 function makeTestMatrix(): InteractionMatrix {
   const m = new InteractionMatrix(2);
-  m.set(0, 1, { strength: 30, radius: 100, falloff: 'linear' });
-  m.set(1, 0, { strength: -50, radius: 80, falloff: 'inverse' });
+  m.set(0, 1, {
+    innerStrength: 30,
+    outerStrength: 30,
+    innerRadius: 0,
+    outerRadius: 100,
+    falloff: 'linear',
+  });
+  m.set(1, 0, {
+    innerStrength: -50,
+    outerStrength: -50,
+    innerRadius: 0,
+    outerRadius: 80,
+    falloff: 'inverse',
+  });
   return m;
 }
 
@@ -117,19 +129,23 @@ describe('serializeConfig', () => {
     expect(config.interactionMatrix).toHaveLength(2);
     expect(config.interactionMatrix[0][0]).toBeNull();
     expect(config.interactionMatrix[0][1]).toEqual({
-      strength: 30,
-      radius: 100,
+      innerStrength: 30,
+      outerStrength: 30,
+      innerRadius: 0,
+      outerRadius: 100,
       falloff: 'linear',
     });
     expect(config.interactionMatrix[1][0]).toEqual({
-      strength: -50,
-      radius: 80,
+      innerStrength: -50,
+      outerStrength: -50,
+      innerRadius: 0,
+      outerRadius: 80,
       falloff: 'inverse',
     });
     expect(config.interactionMatrix[1][1]).toBeNull();
   });
 
-  it('serializes forces', () => {
+  it('serializes forces in dynamic array format', () => {
     const eco = new EcosystemWorld(makeTestEcoConfig());
     const matrix = makeTestMatrix();
     const forces = [
@@ -142,22 +158,41 @@ describe('serializeConfig', () => {
 
     const config = serializeConfig(eco, matrix, forces);
 
-    expect(config.forces.drag).toEqual({ coefficient: 1.5 });
-    expect(config.forces.wander).toEqual({ strength: 60, rate: 4 });
-    expect(config.forces.gravity).toEqual({ acceleration: 200 });
-    expect(config.forces.flowField).toEqual({
-      strength: 50,
-      mode: 'turbulence',
-      angle: 0,
-      turbulenceScale: 0.02,
+    expect(Array.isArray(config.forces)).toBe(true);
+    expect(config.forces).toHaveLength(5);
+
+    // Each entry has type, enabled, params
+    expect(config.forces[0]).toEqual({
+      type: 'drag',
+      enabled: true,
+      params: { coefficient: 1.5 },
     });
-    expect(config.forces.vortex).toEqual({
-      cx: 200,
-      cy: 150,
-      strength: 100,
-      radialStrength: -30,
-      radius: 250,
-      falloff: 'linear',
+    expect(config.forces[1]).toEqual({
+      type: 'wander',
+      enabled: true,
+      params: { strength: 60, rate: 4 },
+    });
+    expect(config.forces[2]).toEqual({
+      type: 'gravity',
+      enabled: true,
+      params: { acceleration: 200 },
+    });
+    expect(config.forces[3]).toEqual({
+      type: 'flow-field',
+      enabled: true,
+      params: { strength: 50, mode: 'turbulence', angle: 0, turbulenceScale: 0.02 },
+    });
+    expect(config.forces[4]).toEqual({
+      type: 'vortex',
+      enabled: true,
+      params: {
+        cx: 200,
+        cy: 150,
+        strength: 100,
+        radialStrength: -30,
+        radius: 250,
+        falloff: 'linear',
+      },
     });
   });
 
@@ -183,7 +218,7 @@ describe('serializeConfig', () => {
     const matrix = makeTestMatrix();
     const config = serializeConfig(eco, matrix, []);
 
-    expect(config.forces).toEqual({});
+    expect(config.forces).toEqual([]);
   });
 });
 
@@ -207,7 +242,7 @@ describe('deserializeConfig', () => {
     expect(result.simulation.populationCap).toBe(200);
     expect(result.species).toHaveLength(2);
     expect(result.species[0].name).toBe('Red');
-    expect(result.interactionMatrix[0][1]?.strength).toBe(30);
+    expect(result.interactionMatrix[0][1]?.outerStrength).toBe(30);
   });
 
   it('throws on non-object input', () => {
@@ -235,7 +270,7 @@ describe('deserializeConfig', () => {
       version: 1,
       simulation: { width: 100, height: 100, boundaryMode: 'bounce', seed: 1, populationCap: 100 },
       interactionMatrix: [],
-      forces: {},
+      forces: [],
     };
     expect(() => deserializeConfig(config)).toThrow('species must be an array');
   });
@@ -246,7 +281,7 @@ describe('deserializeConfig', () => {
       simulation: { width: 100, height: 100, boundaryMode: 'bounce', seed: 1, populationCap: 100 },
       species: [{ name: 'Test' }], // missing many fields
       interactionMatrix: [],
-      forces: {},
+      forces: [],
     };
     expect(() => deserializeConfig(config)).toThrow('species[0].count');
   });
@@ -333,8 +368,8 @@ describe('round-trip serialization', () => {
           expect(rest).toBeNull();
         } else {
           expect(rest).not.toBeNull();
-          expect(rest!.strength).toBe(orig.strength);
-          expect(rest!.radius).toBe(orig.radius);
+          expect(rest!.outerStrength).toBe(orig.outerStrength);
+          expect(rest!.outerRadius).toBe(orig.outerRadius);
           expect(rest!.falloff).toBe(orig.falloff);
         }
       }
@@ -350,9 +385,95 @@ describe('round-trip serialization', () => {
     const json = JSON.parse(JSON.stringify(config));
     const restored = deserializeConfig(json);
 
-    expect(restored.forces.drag?.coefficient).toBe(1.2);
-    expect(restored.forces.wander?.strength).toBe(55);
-    expect(restored.forces.wander?.rate).toBe(3.5);
+    const dragEntry = restored.forces.find((f) => f.type === 'drag');
+    const wanderEntry = restored.forces.find((f) => f.type === 'wander');
+    expect(dragEntry?.params.coefficient).toBe(1.2);
+    expect(wanderEntry?.params.strength).toBe(55);
+    expect(wanderEntry?.params.rate).toBe(3.5);
+  });
+
+  it('deserializes new array format forces', () => {
+    const config = makeMinimalConfig();
+    config.forces = [
+      { type: 'drag', enabled: true, params: { coefficient: 0.7 } },
+      { type: 'wander', enabled: true, params: { strength: 30, rate: 2 } },
+      { type: 'gravity', enabled: false, params: { acceleration: 150 } },
+    ];
+    const restored = deserializeConfig(JSON.parse(JSON.stringify(config)));
+    expect(restored.forces).toHaveLength(3);
+    expect(restored.forces[0]).toEqual({
+      type: 'drag',
+      enabled: true,
+      params: { coefficient: 0.7 },
+    });
+    expect(restored.forces[1]).toEqual({
+      type: 'wander',
+      enabled: true,
+      params: { strength: 30, rate: 2 },
+    });
+    expect(restored.forces[2]).toEqual({
+      type: 'gravity',
+      enabled: false,
+      params: { acceleration: 150 },
+    });
+  });
+
+  it('migrates old object-slot format forces to array', () => {
+    const config = makeMinimalConfig();
+    // Old format: named slots
+    config.forces = {
+      drag: { coefficient: 0.9 },
+      wander: { strength: 40, rate: 3 },
+    } as unknown as typeof config.forces;
+    const restored = deserializeConfig(JSON.parse(JSON.stringify(config)));
+    expect(Array.isArray(restored.forces)).toBe(true);
+    expect(restored.forces).toHaveLength(2);
+    expect(restored.forces[0]).toEqual({
+      type: 'drag',
+      enabled: true,
+      params: { coefficient: 0.9 },
+    });
+    expect(restored.forces[1]).toEqual({
+      type: 'wander',
+      enabled: true,
+      params: { strength: 40, rate: 3 },
+    });
+  });
+
+  it('migrates old flowField/vortex slot names to canonical type IDs', () => {
+    const config = makeMinimalConfig();
+    config.forces = {
+      flowField: { strength: 50, mode: 'turbulence' },
+      vortex: { cx: 100, cy: 200, strength: 80 },
+    } as unknown as typeof config.forces;
+    const restored = deserializeConfig(JSON.parse(JSON.stringify(config)));
+    expect(restored.forces).toHaveLength(2);
+    expect(restored.forces[0].type).toBe('flow-field');
+    expect(restored.forces[1].type).toBe('vortex');
+  });
+
+  it('defaults undefined/null forces to empty array', () => {
+    const config1 = makeMinimalConfig();
+    config1.forces = undefined as unknown as typeof config1.forces;
+    expect(deserializeConfig(JSON.parse(JSON.stringify(config1))).forces).toEqual([]);
+
+    const config2 = makeMinimalConfig();
+    config2.forces = null as unknown as typeof config2.forces;
+    expect(deserializeConfig(JSON.parse(JSON.stringify(config2))).forces).toEqual([]);
+  });
+
+  it('filters out invalid force entries', () => {
+    const config = makeMinimalConfig();
+    config.forces = [
+      { type: 'drag', enabled: true, params: { coefficient: 1 } },
+      { enabled: true, params: {} } as any, // missing type
+      { type: 'wander', params: { strength: 10 } } as any, // missing enabled (defaults to true)
+    ];
+    const restored = deserializeConfig(JSON.parse(JSON.stringify(config)));
+    expect(restored.forces).toHaveLength(2);
+    expect(restored.forces[0].type).toBe('drag');
+    expect(restored.forces[1].type).toBe('wander');
+    expect(restored.forces[1].enabled).toBe(true);
   });
 
   it('preserves snapshot data through round-trip', () => {
@@ -408,14 +529,14 @@ describe('applyConfig', () => {
 
     const e01 = applied.matrix.get(0, 1);
     expect(e01).not.toBeNull();
-    expect(e01!.strength).toBe(30);
-    expect(e01!.radius).toBe(100);
+    expect(e01!.outerStrength).toBe(30);
+    expect(e01!.outerRadius).toBe(100);
     expect(e01!.falloff).toBe('linear');
 
     const e10 = applied.matrix.get(1, 0);
     expect(e10).not.toBeNull();
-    expect(e10!.strength).toBe(-50);
-    expect(e10!.radius).toBe(80);
+    expect(e10!.outerStrength).toBe(-50);
+    expect(e10!.outerRadius).toBe(80);
 
     const e00 = applied.matrix.get(0, 0);
     expect(e00).toBeNull();
@@ -476,8 +597,474 @@ describe('applyConfig', () => {
     // Matrix should match
     const e01 = config2.interactionMatrix[0][1];
     const orig01 = config1.interactionMatrix[0][1];
-    expect(e01?.strength).toBe(orig01?.strength);
-    expect(e01?.radius).toBe(orig01?.radius);
+    expect(e01?.outerStrength).toBe(orig01?.outerStrength);
+    expect(e01?.outerRadius).toBe(orig01?.outerRadius);
+  });
+});
+
+// ─── CRT-47: Config Validation Hardening ─────────────────────
+
+describe('CRT-47: Config Validation Hardening', () => {
+  /** Deep-clone the minimal config for mutation in each test. */
+  function cloneConfig(): unknown {
+    return JSON.parse(JSON.stringify(makeMinimalConfig()));
+  }
+
+  // ── NaN clamping ──────────────────────────────────────────
+
+  describe('NaN clamping in species fields', () => {
+    it('clamps NaN maxSpeed to fallback 100', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].maxSpeed = NaN;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].maxSpeed).toBe(100);
+    });
+
+    it('clamps NaN radius to fallback 3', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].radius = NaN;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].radius).toBe(3);
+    });
+
+    it('clamps NaN count to fallback 1', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].count = NaN;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].count).toBe(1);
+    });
+
+    it('clamps NaN simulation.seed to 0', () => {
+      const cfg = cloneConfig() as any;
+      cfg.simulation.seed = NaN;
+      const result = deserializeConfig(cfg);
+      expect(result.simulation.seed).toBe(0);
+    });
+
+    it('clamps NaN initialSpeed to fallback 50', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].initialSpeed = NaN;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].initialSpeed).toBe(50);
+    });
+  });
+
+  // ── Infinity clamping ────────────────────────────────────
+
+  describe('Infinity clamping', () => {
+    it('clamps +Infinity initialSpeed to fallback 50', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].initialSpeed = Infinity;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].initialSpeed).toBe(50);
+    });
+
+    it('clamps -Infinity maxSpeed to fallback 100', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].maxSpeed = -Infinity;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].maxSpeed).toBe(100);
+    });
+
+    it('clamps +Infinity simulation.width to default 800', () => {
+      const cfg = cloneConfig() as any;
+      cfg.simulation.width = Infinity;
+      const result = deserializeConfig(cfg);
+      expect(result.simulation.width).toBe(800);
+    });
+
+    it('clamps +Infinity simulation.seed to 0', () => {
+      const cfg = cloneConfig() as any;
+      cfg.simulation.seed = Infinity;
+      const result = deserializeConfig(cfg);
+      expect(result.simulation.seed).toBe(0);
+    });
+  });
+
+  // ── Negative value clamping ──────────────────────────────
+
+  describe('negative value clamping', () => {
+    it('clamps negative count to 0', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].count = -5;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].count).toBe(0);
+    });
+
+    it('clamps negative radius to minimum 0.5', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].radius = -3;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].radius).toBe(0.5);
+    });
+  });
+
+  // ── Range clamping ───────────────────────────────────────
+
+  describe('range clamping', () => {
+    it('clamps maxSpeed 99999 to maximum 1000', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].maxSpeed = 99999;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].maxSpeed).toBe(1000);
+    });
+
+    it('clamps radius 999 to maximum 50', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].radius = 999;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].radius).toBe(50);
+    });
+
+    it('clamps populationCap 99999 to maximum 5000', () => {
+      const cfg = cloneConfig() as any;
+      cfg.simulation.populationCap = 99999;
+      const result = deserializeConfig(cfg);
+      expect(result.simulation.populationCap).toBe(5000);
+    });
+
+    it('clamps populationCap 0 to default 600', () => {
+      const cfg = cloneConfig() as any;
+      cfg.simulation.populationCap = 0;
+      const result = deserializeConfig(cfg);
+      expect(result.simulation.populationCap).toBe(600);
+    });
+
+    it('clamps maxSpeed below minimum to 1', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].maxSpeed = 0.001;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].maxSpeed).toBe(1);
+    });
+  });
+
+  // ── Wrong types ──────────────────────────────────────────
+
+  describe('wrong type handling', () => {
+    it('treats string count as invalid → fallback 1', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].count = 'twenty';
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].count).toBe(1);
+    });
+
+    it('treats boolean maxSpeed as invalid → fallback 100', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species[0].maxSpeed = true;
+      const result = deserializeConfig(cfg);
+      expect(result.species[0].maxSpeed).toBe(100);
+    });
+
+    it('throws on string simulation.width', () => {
+      const cfg = cloneConfig() as any;
+      cfg.simulation.width = 'wide';
+      expect(() => deserializeConfig(cfg)).toThrow('must be numbers');
+    });
+
+    it('throws on string simulation.seed', () => {
+      const cfg = cloneConfig() as any;
+      cfg.simulation.seed = 'abc';
+      expect(() => deserializeConfig(cfg)).toThrow('simulation.seed must be a number');
+    });
+  });
+
+  // ── Missing required fields ──────────────────────────────
+
+  describe('missing required fields', () => {
+    it('throws when version is missing', () => {
+      const cfg = cloneConfig() as any;
+      delete cfg.version;
+      expect(() => deserializeConfig(cfg)).toThrow('Unsupported config version');
+    });
+
+    it('throws when interactionMatrix is missing', () => {
+      const cfg = cloneConfig() as any;
+      delete cfg.interactionMatrix;
+      expect(() => deserializeConfig(cfg)).toThrow('interactionMatrix must be a 2D array');
+    });
+
+    it('defaults forces to empty array when missing', () => {
+      const cfg = cloneConfig() as any;
+      delete cfg.forces;
+      const result = deserializeConfig(cfg);
+      expect(result.forces).toEqual([]);
+    });
+
+    it('throws when simulation is missing', () => {
+      const cfg: unknown = { version: 1 };
+      expect(() => deserializeConfig(cfg)).toThrow('Missing or invalid simulation');
+    });
+  });
+
+  // ── Interaction matrix dimension validation ──────────────
+
+  describe('interaction matrix dimension validation', () => {
+    it('throws when matrix rows do not match species count (3 species, 2×2 matrix)', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species.push({
+        name: 'B',
+        count: 10,
+        color: '#00ff00',
+        radius: 3,
+        initialSpeed: 40,
+        maxSpeed: 80,
+        energy: {
+          maxEnergy: 100,
+          initialEnergy: 50,
+          movementCostPerSec: 2,
+          reproductionCost: 40,
+          idleDrainPerSec: 1,
+          energyGainPerPrey: [],
+        },
+        lifecycle: { maxAgeSec: 30, starvationDamagePerSec: 10, reproductionCooldownSec: 5 },
+        diet: { canEat: [] },
+      });
+      cfg.species.push({
+        name: 'C',
+        count: 10,
+        color: '#0000ff',
+        radius: 3,
+        initialSpeed: 40,
+        maxSpeed: 80,
+        energy: {
+          maxEnergy: 100,
+          initialEnergy: 50,
+          movementCostPerSec: 2,
+          reproductionCost: 40,
+          idleDrainPerSec: 1,
+          energyGainPerPrey: [],
+        },
+        lifecycle: { maxAgeSec: 30, starvationDamagePerSec: 10, reproductionCooldownSec: 5 },
+        diet: { canEat: [] },
+      });
+      // 3 species but only 2×2 matrix
+      expect(() => deserializeConfig(cfg)).toThrow('do not match species count');
+    });
+
+    it('throws on jagged matrix (row lengths differ)', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = [[null, null], [null]]; // 2 rows, jagged
+      // Also need 2 species for this to be dimensionally consistent in row count
+      cfg.species.push({
+        name: 'B',
+        count: 10,
+        color: '#00ff00',
+        radius: 3,
+        initialSpeed: 40,
+        maxSpeed: 80,
+        energy: {
+          maxEnergy: 100,
+          initialEnergy: 50,
+          movementCostPerSec: 2,
+          reproductionCost: 40,
+          idleDrainPerSec: 1,
+          energyGainPerPrey: [],
+        },
+        lifecycle: { maxAgeSec: 30, starvationDamagePerSec: 10, reproductionCooldownSec: 5 },
+        diet: { canEat: [] },
+      });
+      expect(() => deserializeConfig(cfg)).toThrow('not square');
+    });
+
+    it('throws when matrix row is not an array', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = ['not-array'];
+      expect(() => deserializeConfig(cfg)).toThrow('must be an array');
+    });
+
+    it('accepts empty matrix with empty species', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species = [];
+      cfg.interactionMatrix = [];
+      const result = deserializeConfig(cfg);
+      expect(result.species).toHaveLength(0);
+      expect(result.interactionMatrix).toHaveLength(0);
+    });
+  });
+
+  // ── Interaction matrix entry clamping ────────────────────
+
+  describe('interaction matrix entry clamping', () => {
+    it('clamps NaN outerStrength in matrix entry to 0', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = [
+        [
+          {
+            innerStrength: NaN,
+            outerStrength: NaN,
+            innerRadius: 0,
+            outerRadius: 50,
+            falloff: 'linear',
+          },
+        ],
+      ];
+      const result = deserializeConfig(cfg);
+      expect(result.interactionMatrix[0][0]?.outerStrength).toBe(0);
+    });
+
+    it('clamps Infinity outerRadius in matrix entry to default 100', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = [
+        [
+          {
+            innerStrength: 30,
+            outerStrength: 30,
+            innerRadius: 0,
+            outerRadius: Infinity,
+            falloff: 'linear',
+          },
+        ],
+      ];
+      const result = deserializeConfig(cfg);
+      expect(result.interactionMatrix[0][0]?.outerRadius).toBe(100);
+    });
+
+    it('clamps negative outerRadius in matrix entry to default 100', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = [
+        [
+          {
+            innerStrength: 30,
+            outerStrength: 30,
+            innerRadius: 0,
+            outerRadius: -10,
+            falloff: 'linear',
+          },
+        ],
+      ];
+      const result = deserializeConfig(cfg);
+      expect(result.interactionMatrix[0][0]?.outerRadius).toBe(100);
+    });
+
+    it('clamps oversized outerRadius (>5000) to 5000', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = [
+        [
+          {
+            innerStrength: 30,
+            outerStrength: 30,
+            innerRadius: 0,
+            outerRadius: 99999,
+            falloff: 'linear',
+          },
+        ],
+      ];
+      const result = deserializeConfig(cfg);
+      expect(result.interactionMatrix[0][0]?.outerRadius).toBe(5000);
+    });
+
+    it('defaults invalid falloff to linear', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = [
+        [
+          {
+            innerStrength: 30,
+            outerStrength: 30,
+            innerRadius: 0,
+            outerRadius: 50,
+            falloff: 'invalid-mode',
+          },
+        ],
+      ];
+      const result = deserializeConfig(cfg);
+      expect(result.interactionMatrix[0][0]?.falloff).toBe('linear');
+    });
+
+    it('defaults missing falloff to linear', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = [
+        [{ innerStrength: 30, outerStrength: 30, innerRadius: 0, outerRadius: 50 }],
+      ]; // no falloff field
+      const result = deserializeConfig(cfg);
+      expect(result.interactionMatrix[0][0]?.falloff).toBe('linear');
+    });
+
+    it('clamps Infinity outerStrength to 0', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = [
+        [
+          {
+            innerStrength: Infinity,
+            outerStrength: Infinity,
+            innerRadius: 0,
+            outerRadius: 50,
+            falloff: 'linear',
+          },
+        ],
+      ];
+      const result = deserializeConfig(cfg);
+      expect(result.interactionMatrix[0][0]?.outerStrength).toBe(0);
+    });
+
+    it('preserves valid negative outerStrength (repel)', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = [
+        [
+          {
+            innerStrength: -50,
+            outerStrength: -50,
+            innerRadius: 0,
+            outerRadius: 50,
+            falloff: 'inverse',
+          },
+        ],
+      ];
+      const result = deserializeConfig(cfg);
+      expect(result.interactionMatrix[0][0]?.outerStrength).toBe(-50);
+    });
+
+    it('throws on non-object matrix entry', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = [[42]];
+      expect(() => deserializeConfig(cfg)).toThrow('must be an object or null');
+    });
+
+    it('allows null entries without modification', () => {
+      const cfg = cloneConfig() as any;
+      cfg.interactionMatrix = [[null]];
+      const result = deserializeConfig(cfg);
+      expect(result.interactionMatrix[0][0]).toBeNull();
+    });
+
+    it('migrates legacy { strength, radius } entries to two-zone format on deserialize', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species = [cfg.species[0], { ...cfg.species[0], name: 'Other' }];
+      cfg.interactionMatrix = [
+        [null, { strength: 30, radius: 100, falloff: 'linear' }],
+        [{ strength: -50, radius: 80, falloff: 'inverse' }, null],
+      ];
+      const result = deserializeConfig(cfg);
+      const e01 = result.interactionMatrix[0][1];
+      expect(e01?.innerStrength).toBe(30);
+      expect(e01?.outerStrength).toBe(30);
+      expect(e01?.innerRadius).toBe(0);
+      expect(e01?.outerRadius).toBe(100);
+      expect(e01?.falloff).toBe('linear');
+      const e10 = result.interactionMatrix[1][0];
+      expect(e10?.innerStrength).toBe(-50);
+      expect(e10?.outerStrength).toBe(-50);
+      expect(e10?.innerRadius).toBe(0);
+      expect(e10?.outerRadius).toBe(80);
+      expect(e10?.falloff).toBe('inverse');
+    });
+
+    it('legacy { strength, radius } migration preserves force behavior via applyConfig', () => {
+      const cfg = cloneConfig() as any;
+      cfg.species = [cfg.species[0], { ...cfg.species[0], name: 'Other' }];
+      cfg.interactionMatrix = [
+        [null, { strength: 30, radius: 100, falloff: 'linear' }],
+        [null, null],
+      ];
+      const applied = applyConfig(deserializeConfig(cfg));
+      const entry = applied.matrix.get(0, 1);
+      expect(entry).not.toBeNull();
+      expect(entry!.outerStrength).toBe(30);
+      expect(entry!.outerRadius).toBe(100);
+      // Behavior-preserving: dist=50 (half radius), linear falloff → strength*(1-0.5)=15
+      expect(InteractionMatrix.forceAtDistance(entry!, 50)).toBe(15);
+      // No force at or beyond outerRadius
+      expect(InteractionMatrix.forceAtDistance(entry!, 100)).toBe(0);
+    });
   });
 });
 
@@ -520,6 +1107,6 @@ function makeMinimalConfig(): CritteriumConfig {
       },
     ],
     interactionMatrix: [[null]],
-    forces: {},
+    forces: [],
   };
 }

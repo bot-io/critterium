@@ -6,10 +6,17 @@
  * Dark semi-transparent panel, monospace font, mobile-friendly.
  */
 
-import type { CritteriumConfig } from '@critterium/core';
+import type { CritteriumConfig, ForceTypeDescriptor } from '@critterium/core';
 import { BUILTIN_PRESET_NAMES } from './presets.js';
 
 // ─── Options Interface ────────────────────────────────────────
+
+/** A force entry in the runtime pipeline (mirrors JsonForceEntry from core). */
+export interface PipelineForceEntry {
+  type: string;
+  enabled: boolean;
+  params: Record<string, unknown>;
+}
 
 export interface ControlsPanelOptions {
   onTogglePause?: (paused: boolean) => void;
@@ -19,22 +26,39 @@ export interface ControlsPanelOptions {
   onPopulationCapChange?: (cap: number) => void;
   onForceToggle?: (forceId: string, enabled: boolean) => void;
   onForceChange?: (forceId: string, param: string, value: number) => void;
+  // ─── Dynamic Force Pipeline (CRT-38) ──────────────────────────
+  onAddForce?: (typeId: string) => void;
+  onRemoveForce?: (index: number) => void;
+  onSetForceEnabled?: (index: number, enabled: boolean) => void;
+  onSetForceParam?: (index: number, param: string, value: number) => void;
   onMatrixChange?: (
     i: number,
     j: number,
-    strength: number,
-    minRadius: number,
-    maxRadius: number,
+    innerStrength: number,
+    outerStrength: number,
+    innerRadius: number,
+    outerRadius: number,
     falloff: string,
   ) => void;
   onRandomizeMatrix?: () => void;
   onClearMatrix?: () => void;
+  /** Returns current matrix values from the simulation (for UI sync after randomize/clear) */
+  getMatrixValues?: () => Array<
+    Array<{
+      innerStrength: number;
+      outerStrength: number;
+      innerRadius: number;
+      outerRadius: number;
+      falloff: string;
+    } | null>
+  >;
   onSpeciesChange?: (speciesIndex: number, param: string, value: number | string | boolean) => void;
   onAddSpecies?: () => void;
   onDeleteSpecies?: (speciesIndex: number) => void;
   onShowErrorLog?: () => void;
   onClearErrorLog?: () => void;
   onExport?: () => void;
+  onExportLog?: () => void;
   onImport?: () => void;
   onSavePreset?: (name: string) => void;
   onLoadPreset?: (name: string) => void;
@@ -47,7 +71,17 @@ export interface ControlsPanelOptions {
   speciesNames?: string[];
   speciesColors?: string[];
   initialForceValues?: Record<string, Record<string, number>>;
-  initialMatrixValues?: Array<Array<{ strength: number; radius: number; falloff: string } | null>>;
+  pipelineForces?: PipelineForceEntry[];
+  forceTypeDescriptors?: ForceTypeDescriptor[];
+  initialMatrixValues?: Array<
+    Array<{
+      innerStrength: number;
+      outerStrength: number;
+      innerRadius: number;
+      outerRadius: number;
+      falloff: string;
+    } | null>
+  >;
   initialSpeciesValues?: Array<Record<string, number>>;
   maxCount?: number;
 }
@@ -295,13 +329,41 @@ const STYLES = `
     padding: 3px 0; cursor: pointer; user-select: none; -webkit-user-select: none;
   }
 
+  /* ─── Dynamic Force Management (CRT-38) ────────────────────── */
+  .crit-force-row {
+    border-left: 2px solid rgba(100,180,255,0.25);
+    padding: 4px 0 4px 8px; margin: 4px 0;
+    border-radius: 0 4px 4px 0;
+  }
+  .crit-force-hdr {
+    display: flex; align-items: center; gap: 6px; margin-bottom: 2px;
+  }
+  .crit-force-name {
+    font-size: 11px; font-weight: 600; color: #bbb; flex: 1;
+  }
+  .crit-force-add-row {
+    display: flex; gap: 4px; align-items: center; margin: 6px 0;
+  }
+  .crit-force-add-select {
+    flex: 1; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 3px; color: #eee; font: 11px 'Consolas', monospace;
+    padding: 4px 6px; outline: none; cursor: pointer;
+  }
+  .crit-force-add-select option { background: #1a1a1e; color: #eee; }
+
   .crit-matrix-grid { display: grid; gap: 2px; margin-top: 6px; }
   .crit-matrix-cell {
-    display: flex; flex-direction: column; align-items: center;
-    padding: 3px 2px; border-radius: 3px; min-height: 36px;
-    cursor: pointer; transition: background 0.15s;
+    display: flex; flex-direction: column;
+    border-radius: 3px; min-height: 44px; overflow: hidden;
+    cursor: pointer; border: 1px solid rgba(255,255,255,0.08);
+    transition: filter 0.15s;
   }
   .crit-matrix-cell:hover { filter: brightness(1.3); }
+  .crit-matrix-half {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    font-size: 9px; color: #ddd; padding: 1px; gap: 2px;
+  }
+  .crit-matrix-half-label { font-size: 7px; opacity: 0.5; }
   .crit-matrix-header {
     font-size: 9px; color: #666; text-align: center;
     padding: 2px; overflow: hidden; text-overflow: ellipsis;
@@ -403,6 +465,121 @@ function makeFalloffSelect(initial: string, onChange: (v: string) => void): HTML
   sel.addEventListener('change', () => onChange(sel.value));
   row.appendChild(lbl);
   row.appendChild(sel);
+  return row;
+}
+
+// ─── Dynamic Force Management Helpers (CRT-38) ──────────────
+
+/**
+ * Create a parameter control (slider or select dropdown) from a paramSchema entry.
+ * For 'number' type: creates a slider row.
+ * For 'select' type: creates a dropdown row.
+ */
+function makeParamControl(
+  schema: {
+    key: string;
+    label: string;
+    type: string;
+    min?: number;
+    max?: number;
+    step?: number;
+    default: number | string;
+    options?: string[];
+  },
+  currentValue: unknown,
+  onParamChange: (param: string, value: number) => void,
+): HTMLElement {
+  if (schema.type === 'select' && schema.options) {
+    const row = el('div', 'crit-row');
+    const lbl = el('span', 'crit-label');
+    lbl.textContent = schema.label;
+    lbl.title = schema.label;
+    const sel = document.createElement('select');
+    sel.className = 'crit-select';
+    for (const opt of schema.options) {
+      const o = document.createElement('option');
+      o.value = opt;
+      o.textContent = opt;
+      const curVal = String(currentValue ?? schema.default);
+      if (opt === curVal) o.selected = true;
+      sel.appendChild(o);
+    }
+    sel.addEventListener('change', () => {
+      // Encode select choice as a number for compatibility with onSetForceParam signature.
+      // The actual string value is stored in main.ts via onForceChange-style handling.
+      const idx = schema.options!.indexOf(sel.value);
+      onParamChange(schema.key, idx);
+    });
+    row.appendChild(lbl);
+    row.appendChild(sel);
+    return row;
+  }
+
+  // Number slider
+  const min = schema.min ?? 0;
+  const max = schema.max ?? 100;
+  const step = schema.step ?? 1;
+  const initial = typeof currentValue === 'number' ? currentValue : (schema.default as number);
+  return makeSlider(schema.label, min, max, step, initial, (v) => onParamChange(schema.key, v));
+}
+
+/**
+ * Build a single force row with toggle, type label, delete button, and parameter sliders.
+ */
+function makeForceRow(
+  index: number,
+  entry: PipelineForceEntry,
+  descriptor: ForceTypeDescriptor | undefined,
+  opts: ControlsPanelOptions,
+): HTMLElement {
+  const row = el('div', 'crit-force-row');
+  row.dataset.forceIndex = String(index);
+  row.dataset.forceType = entry.type;
+
+  // Header: toggle + name + delete
+  const hdr = el('div', 'crit-force-hdr');
+
+  // Enable/disable toggle
+  const toggleBtn = el('button', 'crit-toggle' + (entry.enabled ? ' on' : ''));
+  toggleBtn.title = 'Enable/Disable';
+  let toggleState = entry.enabled;
+  toggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleState = !toggleState;
+    toggleBtn.classList.toggle('on', toggleState);
+    opts.onSetForceEnabled?.(index, toggleState);
+  });
+  hdr.appendChild(toggleBtn);
+
+  // Name label
+  const nameEl = el('span', 'crit-force-name');
+  nameEl.textContent = descriptor?.displayName ?? entry.type;
+  nameEl.title = descriptor?.description ?? entry.type;
+  hdr.appendChild(nameEl);
+
+  // Delete button
+  const delBtn = el('button', 'crit-btn crit-btn-small crit-btn-danger');
+  delBtn.textContent = '✕';
+  delBtn.title = 'Remove force';
+  delBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    opts.onRemoveForce?.(index);
+  });
+  hdr.appendChild(delBtn);
+
+  row.appendChild(hdr);
+
+  // Parameter sliders (only for number/select params)
+  if (descriptor) {
+    for (const paramSchema of descriptor.paramSchema) {
+      const paramVal = entry.params[paramSchema.key];
+      const paramRow = makeParamControl(paramSchema, paramVal, (param, value) => {
+        opts.onSetForceParam?.(index, param, value);
+      });
+      row.appendChild(paramRow);
+    }
+  }
+
   return row;
 }
 
@@ -744,7 +921,7 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
           sub.appendChild(
             makeSlider(
               'Idle Drain/s',
-              0,
+              -10,
               10,
               0.1,
               iv['idleDrainPerSec'] ?? 1,
@@ -782,7 +959,7 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
           );
           sub.appendChild(
             makeSlider(
-              'Repro Timeout',
+              'Repro Interval (avg)',
               1,
               30,
               0.5,
@@ -798,7 +975,6 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
       panel.appendChild(
         buildSubSection('Diet', (sub) => {
           for (let j = 0; j < n; j++) {
-            if (j === si) continue;
             const canEatInitial = !!iv['canEat_' + j];
             const checkboxRow = el('div', 'crit-row');
             const checkbox = document.createElement('input');
@@ -811,7 +987,7 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
             });
             checkboxRow.appendChild(checkbox);
             const lbl = el('span', 'crit-label');
-            lbl.textContent = `Eat ${names[j]}`;
+            lbl.textContent = j === si ? `Eat ${names[j]} (cannibalism)` : `Eat ${names[j]}`;
             lbl.style.cursor = 'pointer';
             lbl.addEventListener('click', () => {
               checkbox.checked = !checkbox.checked;
@@ -911,6 +1087,35 @@ function buildSubSection(title: string, buildBody: (body: HTMLElement) => void):
 // ─── Forces Section ───────────────────────────────────────────
 
 function buildForcesSection(opts: ControlsPanelOptions): HTMLElement {
+  // CRT-38: Dynamic force pipeline rendering.
+  // If pipelineForces is provided, render dynamic force rows + "Add Force" button.
+  // Otherwise, fall back to the legacy hardcoded sliders.
+  const pipeline = opts.pipelineForces;
+  const descriptors = opts.forceTypeDescriptors ?? [];
+  const descriptorMap = new Map(descriptors.map((d) => [d.type, d]));
+
+  if (pipeline && pipeline.length > 0) {
+    return makeSection('Forces', (body) => {
+      // Render one row per pipeline force
+      for (let i = 0; i < pipeline.length; i++) {
+        const entry = pipeline[i];
+        const descriptor = descriptorMap.get(entry.type);
+        body.appendChild(makeForceRow(i, entry, descriptor, opts));
+      }
+
+      // "+ Add Force" dropdown + button
+      body.appendChild(buildAddForceControl(opts, descriptors));
+    });
+  }
+
+  if (pipeline && pipeline.length === 0) {
+    // Pipeline exists but is empty — show Add button only
+    return makeSection('Forces', (body) => {
+      body.appendChild(buildAddForceControl(opts, descriptors));
+    });
+  }
+
+  // Legacy: hardcoded sliders (backward compatibility)
   const fv = opts.initialForceValues ?? {};
 
   return makeSection('Forces', (body) => {
@@ -994,6 +1199,51 @@ function buildForcesSection(opts: ControlsPanelOptions): HTMLElement {
   });
 }
 
+/**
+ * Build the "+ Add Force" control: a dropdown of available force types
+ * and an "Add" button that triggers onAddForce with the selected type.
+ */
+function buildAddForceControl(
+  opts: ControlsPanelOptions,
+  descriptors: ForceTypeDescriptor[],
+): HTMLElement {
+  const addRow = el('div', 'crit-force-add-row');
+
+  const sel = document.createElement('select');
+  sel.className = 'crit-force-add-select';
+
+  // Placeholder option
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = '+ Add Force…';
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  sel.appendChild(placeholder);
+
+  // One option per registered force type
+  for (const desc of descriptors) {
+    const o = document.createElement('option');
+    o.value = desc.type;
+    o.textContent = desc.displayName + ' (' + desc.type + ')';
+    sel.appendChild(o);
+  }
+
+  addRow.appendChild(sel);
+
+  const addBtn = el('button', 'crit-btn crit-btn-small crit-btn-add-species');
+  addBtn.textContent = '+ Add';
+  addBtn.addEventListener('click', () => {
+    if (sel.value) {
+      opts.onAddForce?.(sel.value);
+      // Reset to placeholder
+      sel.selectedIndex = 0;
+    }
+  });
+  addRow.appendChild(addBtn);
+
+  return addRow;
+}
+
 // ─── Interaction Matrix Section ───────────────────────────────
 
 function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
@@ -1006,18 +1256,24 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
     const btnRow = el('div', 'crit-row');
     const randBtn = el('button', 'crit-btn');
     randBtn.textContent = '🎲 Randomize';
-    randBtn.addEventListener('click', () => opts.onRandomizeMatrix?.());
+    randBtn.addEventListener('click', () => {
+      opts.onRandomizeMatrix?.();
+      syncFromSim();
+    });
     btnRow.appendChild(randBtn);
     const clearBtn = el('button', 'crit-btn');
     clearBtn.textContent = '✕ Clear';
-    clearBtn.addEventListener('click', () => opts.onClearMatrix?.());
+    clearBtn.addEventListener('click', () => {
+      opts.onClearMatrix?.();
+      syncFromSim();
+    });
     btnRow.appendChild(clearBtn);
     body.appendChild(btnRow);
 
     // Label explaining row/col meaning
     const legend = el('div');
     legend.style.cssText = 'font-size:9px; color:#777; margin:4px 0 2px 0; line-height:1.4;';
-    legend.textContent = 'Row = source (feels force)  ·  Column = target (exerts force)';
+    legend.textContent = 'Row = source (feels force) · Col = target · Top = outer · Bottom = inner';
     body.appendChild(legend);
 
     // Grid
@@ -1036,7 +1292,224 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
       grid.appendChild(hdr);
     }
 
-    // Data rows
+    // ─── Live state store for all pairs ──────────────────────────
+    type PairState = {
+      innerStrength: number;
+      outerStrength: number;
+      innerRadius: number;
+      outerRadius: number;
+      falloff: string;
+    };
+    const matrixState: PairState[][] = [];
+    const cellEls: HTMLElement[][] = [];
+    for (let i = 0; i < n; i++) {
+      matrixState[i] = [];
+      cellEls[i] = [];
+      for (let j = 0; j < n; j++) {
+        const init = initMatrix?.[i]?.[j];
+        matrixState[i][j] = {
+          innerStrength: init?.innerStrength ?? 0,
+          outerStrength: init?.outerStrength ?? 0,
+          innerRadius: init?.innerRadius ?? 0,
+          outerRadius: init?.outerRadius ?? 100,
+          falloff: init?.falloff ?? 'linear',
+        };
+      }
+    }
+
+    let selI = 0;
+    let selJ = 0;
+
+    function fireChange(i: number, j: number): void {
+      const s = matrixState[i][j];
+      opts.onMatrixChange?.(
+        i,
+        j,
+        s.innerStrength,
+        s.outerStrength,
+        s.innerRadius,
+        s.outerRadius,
+        s.falloff,
+      );
+    }
+
+    function strengthColor(v: number): string {
+      if (v > 0) return `rgba(80,200,80,${Math.min(Math.abs(v) / 100, 0.7)})`;
+      if (v < 0) return `rgba(200,80,80,${Math.min(Math.abs(v) / 100, 0.7)})`;
+      return 'rgba(60,60,60,0.5)';
+    }
+
+    function paintCell(i: number, j: number): void {
+      const s = matrixState[i][j];
+      const cell = cellEls[i][j];
+      const outerHalf = cell.children[0] as HTMLElement;
+      const innerHalf = cell.children[1] as HTMLElement;
+      if (outerHalf) {
+        outerHalf.style.background = strengthColor(s.outerStrength);
+        const valEl = outerHalf.querySelector('.crit-matrix-half-val');
+        if (valEl) valEl.textContent = String(s.outerStrength);
+      }
+      if (innerHalf) {
+        innerHalf.style.background = strengthColor(s.innerStrength);
+        const valEl = innerHalf.querySelector('.crit-matrix-half-val');
+        if (valEl) valEl.textContent = String(s.innerStrength);
+      }
+    }
+
+    function highlightSelected(): void {
+      for (let a = 0; a < n; a++) {
+        for (let b = 0; b < n; b++) {
+          cellEls[a][b].style.outline = a === selI && b === selJ ? '2px solid #fff' : '';
+          cellEls[a][b].style.outlineOffset = '-1px';
+        }
+      }
+    }
+
+    // ─── Editor panel (single pair at a time) ────────────────────
+    const editor = el('div', 'crit-matrix-editor');
+    editor.style.cssText = 'margin-top:8px;';
+    const editorTitle = el('div', 'crit-subsection-hdr');
+    editor.appendChild(editorTitle);
+    const editorBody = el('div');
+    editor.appendChild(editorBody);
+    body.appendChild(editor);
+
+    const zoneLegend = el('div');
+    zoneLegend.style.cssText = 'font-size:9px; color:#777; margin:4px 0 2px 4px; line-height:1.4;';
+    zoneLegend.textContent = 'Inner = close range  ·  Outer = detection range';
+    body.appendChild(zoneLegend);
+
+    function makeSlider(
+      label: string,
+      min: number,
+      max: number,
+      step: number,
+      value: number,
+      color: string,
+      onChange: (v: number) => void,
+    ): { slider: HTMLInputElement; valSpan: HTMLSpanElement } {
+      const row = el('div', 'crit-row');
+      row.style.cssText = 'gap:4px; align-items:center; margin:3px 0;';
+      const lbl = el('span', 'crit-label');
+      lbl.textContent = label;
+      lbl.style.cssText = `min-width:78px; font-size:10px; color:${color};`;
+      row.appendChild(lbl);
+      const slider = document.createElement('input');
+      slider.type = 'range';
+      slider.min = String(min);
+      slider.max = String(max);
+      slider.step = String(step);
+      slider.value = String(value);
+      slider.style.flex = '1';
+      slider.style.minWidth = '40px';
+      row.appendChild(slider);
+      const valSpan = el('span', 'crit-value');
+      valSpan.textContent = String(value);
+      valSpan.style.cssText = 'min-width:30px; font-size:10px; text-align:right;';
+      row.appendChild(valSpan);
+      slider.addEventListener('input', () => {
+        const v = parseInt(slider.value);
+        valSpan.textContent = String(v);
+        onChange(v);
+      });
+      editorBody.appendChild(row);
+      return { slider, valSpan };
+    }
+
+    function buildEditor(i: number, j: number): void {
+      editorBody.innerHTML = '';
+      const s = matrixState[i][j];
+      editorTitle.textContent = `${names[i]} → ${names[j]}`;
+
+      makeSlider('↳ Inner force', -100, 100, 5, s.innerStrength, '#ff88aa', (v) => {
+        matrixState[i][j].innerStrength = v;
+        paintCell(i, j);
+        fireChange(i, j);
+      });
+
+      const innerR = makeSlider('○ Inner radius', 0, 200, 5, s.innerRadius, '#88aaff', (v) => {
+        if (v > matrixState[i][j].outerRadius) v = matrixState[i][j].outerRadius;
+        matrixState[i][j].innerRadius = v;
+        // Prevent outer from going below this inner value
+        outerR.slider.min = String(v);
+        innerR.valSpan.textContent = String(v);
+        fireChange(i, j);
+      });
+
+      const outerR = makeSlider(
+        '◎ Outer radius',
+        Math.max(s.innerRadius, 10),
+        300,
+        5,
+        s.outerRadius,
+        '#aa88ff',
+        (v) => {
+          if (v < matrixState[i][j].innerRadius) v = matrixState[i][j].innerRadius;
+          matrixState[i][j].outerRadius = v;
+          // Prevent inner from exceeding this outer value
+          innerR.slider.max = String(v);
+          outerR.valSpan.textContent = String(v);
+          fireChange(i, j);
+        },
+      );
+
+      makeSlider('⇲ Outer force', -100, 100, 5, s.outerStrength, '#88ff88', (v) => {
+        matrixState[i][j].outerStrength = v;
+        paintCell(i, j);
+        fireChange(i, j);
+      });
+
+      // Falloff dropdown
+      const fRow = el('div', 'crit-row');
+      fRow.style.cssText = 'gap:4px; align-items:center; margin:3px 0;';
+      const fLbl = el('span', 'crit-label');
+      fLbl.textContent = 'Falloff';
+      fLbl.style.cssText = 'min-width:78px; font-size:10px; color:#ccc;';
+      fRow.appendChild(fLbl);
+      const fSelect = document.createElement('select');
+      fSelect.style.cssText =
+        'flex:1; font-size:11px; background:#333; color:#ddd; border:1px solid #555; border-radius:3px;';
+      for (const f of ['linear', 'inverse', 'constant']) {
+        const opt = document.createElement('option');
+        opt.value = f;
+        opt.textContent = f;
+        if (f === s.falloff) opt.selected = true;
+        fSelect.appendChild(opt);
+      }
+      fSelect.addEventListener('change', () => {
+        matrixState[i][j].falloff = fSelect.value;
+        fireChange(i, j);
+      });
+      fRow.appendChild(fSelect);
+      editorBody.appendChild(fRow);
+    }
+
+    // ─── Sync local state from simulation (after randomize/clear) ─
+    function syncFromSim(): void {
+      const newVals = opts.getMatrixValues?.();
+      if (!newVals) return;
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+          const v = newVals?.[i]?.[j];
+          if (v) {
+            matrixState[i][j] = { ...v };
+          } else {
+            matrixState[i][j] = {
+              innerStrength: 0,
+              outerStrength: 0,
+              innerRadius: 0,
+              outerRadius: 100,
+              falloff: 'linear',
+            };
+          }
+          paintCell(i, j);
+        }
+      }
+      // Rebuild editor for currently selected cell
+      buildEditor(selI, selJ);
+    }
+
+    // ─── Build grid cells ────────────────────────────────────────
     for (let i = 0; i < n; i++) {
       const rowLbl = el('div', 'crit-matrix-header');
       rowLbl.textContent = names[i].substring(0, 5);
@@ -1044,165 +1517,49 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
       grid.appendChild(rowLbl);
 
       for (let j = 0; j < n; j++) {
-        const init = initMatrix?.[i]?.[j];
         const cell = el('div', 'crit-matrix-cell');
-        const initStr = init?.strength ?? 0;
-        updateCellColor(cell, initStr);
+        cellEls[i][j] = cell;
 
-        const valLabel = el('span', 'crit-matrix-val');
-        valLabel.textContent = String(initStr);
-        cell.appendChild(valLabel);
+        // Outer half (top)
+        const outerHalf = el('div', 'crit-matrix-half');
+        const outerLbl = el('span', 'crit-matrix-half-label');
+        outerLbl.textContent = 'O';
+        outerHalf.appendChild(outerLbl);
+        const outerVal = el('span', 'crit-matrix-half-val');
+        outerVal.textContent = '0';
+        outerHalf.appendChild(outerVal);
 
-        // Click cell to cycle: +25, -25
+        // Inner half (bottom)
+        const innerHalf = el('div', 'crit-matrix-half');
+        const innerLbl = el('span', 'crit-matrix-half-label');
+        innerLbl.textContent = 'I';
+        innerHalf.appendChild(innerLbl);
+        const innerVal = el('span', 'crit-matrix-half-val');
+        innerVal.textContent = '0';
+        innerHalf.appendChild(innerVal);
+
+        cell.appendChild(outerHalf);
+        cell.appendChild(innerHalf);
+        paintCell(i, j);
+
         const ii = i,
           jj = j;
-        let currentStr = initStr;
-        const currentMinR = Math.max(10, (init?.radius ?? 100) - 30);
-        const currentMaxR = init?.radius ?? 100;
         cell.addEventListener('click', () => {
-          currentStr += 25;
-          if (currentStr > 100) currentStr = -100;
-          valLabel.textContent = String(currentStr);
-          updateCellColor(cell, currentStr);
-          const falloff = init?.falloff ?? 'linear';
-          opts.onMatrixChange?.(ii, jj, currentStr, currentMinR, currentMaxR, falloff);
-        });
-        // Right-click to decrease
-        cell.addEventListener('contextmenu', (e) => {
-          e.preventDefault();
-          currentStr -= 25;
-          if (currentStr < -100) currentStr = 100;
-          valLabel.textContent = String(currentStr);
-          updateCellColor(cell, currentStr);
-          const falloff = init?.falloff ?? 'linear';
-          opts.onMatrixChange?.(ii, jj, currentStr, currentMinR, currentMaxR, falloff);
+          selI = ii;
+          selJ = jj;
+          highlightSelected();
+          buildEditor(ii, jj);
         });
 
         grid.appendChild(cell);
       }
     }
-
     body.appendChild(grid);
 
-    // Per-cell radius controls with min/max sliders
-    const radiusSection = el('div');
-    radiusSection.style.cssText = 'margin-top:8px;';
-
-    const radiusTitle = el('div', 'crit-subsection-hdr');
-    radiusTitle.textContent = '▾ Interaction Distance';
-    radiusSection.appendChild(radiusTitle);
-
-    const radiusLegend = el('div');
-    radiusLegend.style.cssText = 'font-size:9px; color:#777; margin:2px 0 4px 0;';
-    radiusLegend.textContent = 'Min = closest distance · Max = farthest distance affected';
-    radiusSection.appendChild(radiusLegend);
-
-    const radiusBody = el('div', 'crit-section-body');
-
-    for (let i = 0; i < n; i++) {
-      for (let j = 0; j < n; j++) {
-        const init = initMatrix?.[i]?.[j];
-        const baseRadius = init?.radius ?? 100;
-        const rowDiv = el('div', 'crit-row');
-        rowDiv.style.cssText = 'gap:4px; flex-wrap:wrap; align-items:center;';
-
-        const lbl = el('span', 'crit-label');
-        lbl.textContent = `${names[i].substring(0, 4)}→${names[j].substring(0, 4)}`;
-        lbl.style.minWidth = '60px';
-        rowDiv.appendChild(lbl);
-
-        // Min label
-        const minLbl = el('span');
-        minLbl.textContent = 'Min';
-        minLbl.style.cssText = 'font-size:9px; color:#88aaff; min-width:22px;';
-        rowDiv.appendChild(minLbl);
-
-        // Min value
-        const minVal = el('span', 'crit-value');
-        minVal.textContent = String(Math.max(10, baseRadius - 30));
-        minVal.style.cssText = 'min-width:22px; font-size:9px; color:#88aaff;';
-        rowDiv.appendChild(minVal);
-
-        // Min slider
-        const minSlider = document.createElement('input');
-        minSlider.type = 'range';
-        minSlider.min = '10';
-        minSlider.max = '300';
-        minSlider.step = '5';
-        minSlider.value = String(Math.max(10, baseRadius - 30));
-        minSlider.style.flex = '1';
-        minSlider.style.minWidth = '40px';
-        rowDiv.appendChild(minSlider);
-
-        // Max slider
-        const maxSlider = document.createElement('input');
-        maxSlider.type = 'range';
-        maxSlider.min = '10';
-        maxSlider.max = '300';
-        maxSlider.step = '5';
-        maxSlider.value = String(baseRadius);
-        maxSlider.style.flex = '1';
-        maxSlider.style.minWidth = '40px';
-        rowDiv.appendChild(maxSlider);
-
-        // Max value
-        const maxVal = el('span', 'crit-value');
-        maxVal.textContent = String(baseRadius);
-        maxVal.style.cssText = 'min-width:22px; font-size:9px; color:#ffaa88;';
-        rowDiv.appendChild(maxVal);
-
-        // Max label
-        const maxLbl = el('span');
-        maxLbl.textContent = 'Max';
-        maxLbl.style.cssText = 'font-size:9px; color:#ffaa88; min-width:22px;';
-        rowDiv.appendChild(maxLbl);
-
-        const ii = i,
-          jj = j;
-        const updateRadius = (): void => {
-          // Clamp: min cannot exceed max, max cannot go below min
-          const minR = parseInt(minSlider.value);
-          const maxR = parseInt(maxSlider.value);
-          if (minR > maxR) {
-            maxSlider.value = String(minR);
-          }
-          if (maxR < minR) {
-            minSlider.value = String(maxR);
-          }
-          minVal.textContent = minSlider.value;
-          maxVal.textContent = maxSlider.value;
-          const falloff = init?.falloff ?? 'linear';
-          const str = initMatrix?.[ii]?.[jj]?.strength ?? 0;
-          opts.onMatrixChange?.(
-            ii,
-            jj,
-            str,
-            parseInt(minSlider.value),
-            parseInt(maxSlider.value),
-            falloff,
-          );
-        };
-
-        minSlider.addEventListener('input', updateRadius);
-        maxSlider.addEventListener('input', updateRadius);
-
-        radiusBody.appendChild(rowDiv);
-      }
-    }
-
-    radiusSection.appendChild(radiusBody);
-    body.appendChild(radiusSection);
+    // Initialize: select first cell
+    highlightSelected();
+    buildEditor(0, 0);
   });
-}
-
-function updateCellColor(cell: HTMLElement, strength: number): void {
-  if (strength > 0) {
-    cell.style.background = `rgba(80,200,80,${Math.min(Math.abs(strength) / 100, 0.6)})`;
-  } else if (strength < 0) {
-    cell.style.background = `rgba(200,80,80,${Math.min(Math.abs(strength) / 100, 0.6)})`;
-  } else {
-    cell.style.background = 'rgba(60,60,60,0.5)';
-  }
 }
 
 // ─── Actions Section ──────────────────────────────────────────
@@ -1220,6 +1577,20 @@ function buildActionsSection(opts: ControlsPanelOptions): HTMLElement {
     importBtn.addEventListener('click', () => opts.onImport?.());
     ioRow.appendChild(importBtn);
     body.appendChild(ioRow);
+
+    // Log export row — Sim Log export + Error viewer
+    const logRow = el('div', 'crit-row');
+    const logBtn = el('button', 'crit-btn');
+    logBtn.textContent = '📋 Sim Log';
+    logBtn.title = 'Export simulation log';
+    logBtn.addEventListener('click', () => opts.onExportLog?.());
+    logRow.appendChild(logBtn);
+    const errBtn = el('button', 'crit-btn');
+    errBtn.textContent = '🪲 Errors';
+    errBtn.title = 'View captured errors';
+    errBtn.addEventListener('click', () => opts.onShowErrorLog?.());
+    logRow.appendChild(errBtn);
+    body.appendChild(logRow);
 
     // Built-in Presets dropdown
     const builtinRow = el('div', 'crit-preset-row');
@@ -1306,22 +1677,6 @@ function buildActionsSection(opts: ControlsPanelOptions): HTMLElement {
     presetRow.appendChild(loadBtn);
     presetRow.appendChild(delBtn);
     body.appendChild(presetRow);
-
-    // Error Log section
-    const errorDivider = el('div');
-    errorDivider.style.cssText = 'border-top:1px solid rgba(255,255,255,0.08); margin:6px 0;';
-    body.appendChild(errorDivider);
-
-    const errorRow = el('div', 'crit-row');
-    const errorLogBtn = el('button', 'crit-btn');
-    errorLogBtn.textContent = '📋 Error Log';
-    errorLogBtn.addEventListener('click', () => opts.onShowErrorLog?.());
-    errorRow.appendChild(errorLogBtn);
-    const clearLogBtn = el('button', 'crit-btn crit-btn-small');
-    clearLogBtn.textContent = '🗑 Clear';
-    clearLogBtn.addEventListener('click', () => opts.onClearErrorLog?.());
-    errorRow.appendChild(clearLogBtn);
-    body.appendChild(errorRow);
   });
 }
 

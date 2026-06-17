@@ -59,11 +59,12 @@ describe('PopulationGraph', () => {
     expect(canvas.style.zIndex).toBe('10');
   });
 
-  it('update calls draw even with small dt', () => {
+  it('update does NOT draw when dt is small (no sample yet)', () => {
     const pg = new PopulationGraph(canvas, options);
     const ctx = canvas.getContext('2d') as any;
     pg.update([10, 20, 30], 0.1);
-    expect(ctx.clearRect).toHaveBeenCalledWith(0, 0, 200, 80);
+    // Optimization: draw only happens on sample (every 0.5s), not every frame
+    expect(ctx.clearRect).not.toHaveBeenCalled();
   });
 
   it('update samples when accumulated dt >= 0.5', () => {
@@ -80,9 +81,11 @@ describe('PopulationGraph', () => {
     const ctx = canvas.getContext('2d') as any;
     // Two 0.3s updates = 0.6s → one sample triggered on second update
     pg.update([10, 20, 30], 0.3);
+    // First update: 0.3s accumulated, no sample yet → no draw
+    expect(ctx.clearRect).not.toHaveBeenCalled();
     pg.update([10, 20, 30], 0.3);
-    // draw called twice (once per update)
-    expect(ctx.clearRect).toHaveBeenCalledTimes(2);
+    // Second update: 0.6s accumulated → sample triggers draw
+    expect(ctx.clearRect).toHaveBeenCalledTimes(1);
   });
 
   it('accepts Int32Array species counts', () => {

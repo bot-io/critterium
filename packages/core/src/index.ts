@@ -103,12 +103,26 @@ export class World {
   // Simulation time accumulator
   simTime: number = 0;
 
+  /**
+   * Effective particle count for iteration. Set by EcosystemWorld to
+   * highWaterMark so that dead slots beyond it are never processed.
+   * When 0 (default), falls back to `count`.
+   */
+  effectiveCount: number = 0;
+
   // Future: scalar channels (ecosystem mode)
   // Pattern reserved — forces can add channels without redesign
   readonly scalarChannels: ScalarChannel[] = [];
 
   // Per-type max speed lookup
   private readonly maxSpeeds: Float32Array;
+
+  /** Update max speed for a specific type (live, no rebuild). */
+  updateMaxSpeed(typeIdx: number, maxSpeed: number): void {
+    if (typeIdx >= 0 && typeIdx < this.maxSpeeds.length) {
+      this.maxSpeeds[typeIdx] = maxSpeed;
+    }
+  }
 
   constructor(config: SimulationConfig) {
     this.width = config.width;
@@ -159,7 +173,8 @@ export class World {
 
   /** Clamp all particle velocities to their per-type maxSpeed. */
   clampVelocities(): void {
-    for (let i = 0; i < this.count; i++) {
+    const n = this.effectiveCount || this.count;
+    for (let i = 0; i < n; i++) {
       const maxSpd = this.maxSpeeds[this.type[i]];
       const vx = this.vx[i];
       const vy = this.vy[i];
@@ -190,8 +205,9 @@ export class World {
   applyBoundaries(): void {
     const margin = World.BOUNCE_MARGIN;
     const strength = World.BOUNCE_REPULSION;
+    const n = this.effectiveCount || this.count;
 
-    for (let i = 0; i < this.count; i++) {
+    for (let i = 0; i < n; i++) {
       if (this.boundaryMode === 'bounce') {
         // Hard bounce: reflect position and velocity at boundaries
         if (this.x[i] < 0) {
@@ -237,16 +253,19 @@ export class World {
           this.vy[i] -= t * t * strength;
         }
       } else {
-        // wrap
-        this.x[i] = ((this.x[i] % this.width) + this.width) % this.width;
-        this.y[i] = ((this.y[i] % this.height) + this.height) % this.height;
+        // wrap — branch is ~4× faster than modulo for single-width wrap
+        if (this.x[i] < 0) this.x[i] += this.width;
+        else if (this.x[i] >= this.width) this.x[i] -= this.width;
+        if (this.y[i] < 0) this.y[i] += this.height;
+        else if (this.y[i] >= this.height) this.y[i] -= this.height;
       }
     }
   }
 
   /** Integrate positions forward by dt (Euler). */
   integrate(dt: number): void {
-    for (let i = 0; i < this.count; i++) {
+    const n = this.effectiveCount || this.count;
+    for (let i = 0; i < n; i++) {
       this.x[i] += this.vx[i] * dt;
       this.y[i] += this.vy[i] * dt;
     }
@@ -351,17 +370,24 @@ export class SpatialHashGrid {
   readonly invCellSize: number;
   readonly cols: number;
   readonly rows: number;
+  readonly maxParticles: number;
 
   // head[cellIndex] = first particle index in linked list for that cell, or -1
   private head: Int32Array;
   // next[particleIndex] = next particle in the same cell's linked list, or -1
   private next: Int32Array;
 
+  /** Alive array from last rebuild (null if no alive filter was used). */
+  private _rebuildAlive: Uint8Array | null = null;
+  /** High-water mark from last rebuild (particles [0, hwm) are valid). */
+  private _rebuildHwm: number = 0;
+
   constructor(width: number, height: number, cellSize: number, maxParticles: number) {
     this.cellSize = cellSize;
     this.invCellSize = 1 / cellSize;
     this.cols = Math.ceil(width / cellSize);
     this.rows = Math.ceil(height / cellSize);
+    this.maxParticles = maxParticles;
 
     const numCells = this.cols * this.rows;
     this.head = new Int32Array(numCells);
@@ -401,6 +427,8 @@ export class SpatialHashGrid {
   rebuild(world: World, alive?: Uint8Array, hwm?: number): void {
     this.clear();
     const limit = hwm ?? world.count;
+    this._rebuildAlive = alive ?? null;
+    this._rebuildHwm = limit;
     if (alive) {
       for (let i = 0; i < limit; i++) {
         if (alive[i] === 0) continue;
@@ -512,6 +540,16 @@ export class SpatialHashGrid {
     return this.cols * this.rows;
   }
 
+  /** Alive array from last rebuild (null if no alive filter was used). */
+  get rebuildAlive(): Uint8Array | null {
+    return this._rebuildAlive;
+  }
+
+  /** High-water mark from last rebuild — valid particle range is [0, hwm). */
+  get rebuildHwm(): number {
+    return this._rebuildHwm;
+  }
+
   /** Get cell index for a position. Returns -1 if out of bounds. */
   cellAt(px: number, py: number): number {
     const col = Math.floor(px * this.invCellSize);
@@ -569,13 +607,15 @@ export type FalloffType = 'linear' | 'inverse' | 'constant';
 
 /** A single entry in the N×N interaction matrix. */
 export interface InteractionEntry {
-  /** Force magnitude. Positive = attract, negative = repel. */
-  strength: number;
-  /** Minimum interaction radius. No effect below this distance. */
-  minRadius?: number;
-  /** Maximum interaction radius. No effect beyond this distance. */
-  radius: number;
-  /** How force decays with distance. */
+  /** Force in the inner zone [0, innerRadius). Positive = attract, negative = repel. */
+  innerStrength: number;
+  /** Force in the outer zone [innerRadius, outerRadius). Positive = attract, negative = repel. */
+  outerStrength: number;
+  /** Boundary between inner and outer zones. 0 = no inner zone. */
+  innerRadius: number;
+  /** Outer limit of interaction. No effect at or beyond this distance. */
+  outerRadius: number;
+  /** How force decays with distance within each zone. */
   falloff: FalloffType;
 }
 
@@ -583,6 +623,8 @@ export interface InteractionEntry {
 export class InteractionMatrix {
   readonly numTypes: number;
   private readonly entries: (InteractionEntry | null)[][];
+  /** Incremented on every mutation (set). Used for maxRadius caching. */
+  private _version: number = 0;
 
   constructor(numTypes: number) {
     this.numTypes = numTypes;
@@ -598,6 +640,12 @@ export class InteractionMatrix {
   /** Set the interaction for (typeA, typeB): how typeB affects typeA. */
   set(typeA: number, typeB: number, entry: InteractionEntry): void {
     this.entries[typeA][typeB] = entry;
+    this._version++;
+  }
+
+  /** Current version (incremented on every mutation). */
+  get version(): number {
+    return this._version;
   }
 
   /** Get the interaction entry for (typeA, typeB). Returns null if not set. */
@@ -607,19 +655,64 @@ export class InteractionMatrix {
 
   /**
    * Compute the force magnitude for a given entry at a given distance.
-   * Returns 0 if distance >= entry.radius.
+   *
+   * Additive two-force model (boids-style separation + cohesion):
+   *   - Inner force: active in (0, innerRadius) when innerRadius > 0.
+   *   - Outer force: active in (0, outerRadius).
+   *   Both use the entry's `falloff` mode and are computed independently then
+   *   ADDED together (so opposing-sign inner/outer forces — e.g. inner
+   *   repulsion + outer attraction — can balance at one stable distance).
+   *
+   * Falloff shapes (t = dist / zoneRadius, applied within each active zone):
+   *   linear   → strength*(1-t): reaches exactly 0 at the zone boundary
+   *              (continuous — no force jump at the cutoff).
+   *   inverse  → strength/(t+0.1): peaks ~10x strength as d→0, retains ~0.91x
+   *              strength at the boundary, then hard-drops to 0 (discontinuous).
+   *   constant → strength: flat across the zone, hard-drops to 0 at the boundary
+   *              (discontinuous).
+   *
+   * Only `linear` is continuous at the zone boundaries; `inverse` and
+   * `constant` have a force discontinuity where the zone ends.
+   *
+   * Returns 0 when dist >= outerRadius or dist <= 0. The dist <= 0 guard skips
+   * self-interaction, so the additive profile is NOT evaluated at d = 0.
    */
   static forceAtDistance(entry: InteractionEntry, dist: number): number {
-    if (dist >= entry.radius || dist <= 0) return 0;
-    const t = dist / entry.radius; // normalized distance [0, 1)
+    if (dist >= entry.outerRadius || dist <= 0) return 0;
+
+    let force = 0;
+
+    // Inner force: fades from innerStrength to 0 across [0, innerRadius)
+    if (entry.innerRadius > 0 && dist < entry.innerRadius) {
+      const t = dist / entry.innerRadius;
+      switch (entry.falloff) {
+        case 'linear':
+          force += entry.innerStrength * (1 - t);
+          break;
+        case 'inverse':
+          force += entry.innerStrength / (t + 0.1);
+          break;
+        case 'constant':
+          force += entry.innerStrength;
+          break;
+      }
+    }
+
+    // Outer force: fades from outerStrength to 0 across [0, outerRadius)
+    const tOuter = dist / entry.outerRadius;
     switch (entry.falloff) {
       case 'linear':
-        return entry.strength * (1 - t);
+        force += entry.outerStrength * (1 - tOuter);
+        break;
       case 'inverse':
-        return entry.strength / (t + 0.1); // +0.1 prevents singularity at 0
+        force += entry.outerStrength / (tOuter + 0.1);
+        break;
       case 'constant':
-        return entry.strength;
+        force += entry.outerStrength;
+        break;
     }
+
+    return force;
   }
 }
 
@@ -655,6 +748,10 @@ export class PairwiseForce {
   private dvx: Float32Array = new Float32Array(0);
   private dvy: Float32Array = new Float32Array(0);
 
+  // Cached maxRadius — recomputed only when matrix version changes
+  private cachedMaxRadius: number = 0;
+  private cachedMatrixVersion: number = -1;
+
   constructor(matrix: InteractionMatrix, repulsion: RepulsionConfig = DEFAULT_REPULSION) {
     this.matrix = matrix;
     this.repulsion = repulsion;
@@ -672,16 +769,25 @@ export class PairwiseForce {
     const { x, y, vx, vy, type, count } = world;
     const { matrix, repulsion } = this;
 
-    // Pre-compute max interaction radius from matrix entries
-    let maxRadius = repulsion.radius;
-    for (let a = 0; a < matrix.numTypes; a++) {
-      for (let b = 0; b < matrix.numTypes; b++) {
-        const entry = matrix.get(a, b);
-        if (entry && entry.radius > maxRadius) {
-          maxRadius = entry.radius;
+    // Cache maxRadius — only recompute when matrix has changed
+    if (this.cachedMatrixVersion !== matrix.version) {
+      let maxR = repulsion.radius;
+      for (let a = 0; a < matrix.numTypes; a++) {
+        for (let b = 0; b < matrix.numTypes; b++) {
+          const entry = matrix.get(a, b);
+          if (entry && entry.outerRadius > maxR) {
+            maxR = entry.outerRadius;
+          }
         }
       }
+      this.cachedMaxRadius = maxR;
+      this.cachedMatrixVersion = matrix.version;
     }
+    const maxRadius = this.cachedMaxRadius;
+
+    // Determine iteration range — use grid's alive/hwm if available to skip dead particles
+    const alive = grid.rebuildAlive;
+    const hwm = grid.rebuildHwm || count;
 
     // Ensure velocity delta buffers are large enough (grow only, never shrink)
     if (this.dvx.length < count) {
@@ -689,48 +795,81 @@ export class PairwiseForce {
       this.dvy = new Float32Array(count);
     } else {
       // Zero-fill only the active range
-      this.dvx.fill(0, 0, count);
-      this.dvy.fill(0, 0, count);
+      this.dvx.fill(0, 0, hwm);
+      this.dvy.fill(0, 0, hwm);
     }
     const dvx = this.dvx;
     const dvy = this.dvy;
 
-    for (let i = 0; i < count; i++) {
-      const xi = x[i];
-      const yi = y[i];
-      const typeI = type[i];
+    if (alive) {
+      // Ecosystem mode: skip dead particles in outer loop
+      for (let i = 0; i < hwm; i++) {
+        if (alive[i] === 0) continue;
+        const xi = x[i];
+        const yi = y[i];
+        const typeI = type[i];
 
-      grid.queryRadius(xi, yi, maxRadius, x, y, count, (j, dx, dy, distSq) => {
-        const dist = Math.sqrt(distSq);
-        const typeJ = type[j];
-        const nx = dx / dist; // unit normal from i to j
-        const ny = dy / dist;
+        grid.queryRadius(xi, yi, maxRadius, x, y, count, (j, dx, dy, distSq) => {
+          const dist = Math.sqrt(distSq);
+          const typeJ = type[j];
+          const nx = dx / dist;
+          const ny = dy / dist;
 
-        // 1. Interaction matrix force: how typeJ affects typeI
-        const entry = matrix.get(typeI, typeJ);
-        if (entry && dist < entry.radius && dist >= (entry.minRadius ?? 0)) {
-          const force = InteractionMatrix.forceAtDistance(entry, dist);
-          // Positive strength = attract (toward j), negative = repel (away from j)
-          dvx[i] += nx * force * dt;
-          dvy[i] += ny * force * dt;
-        }
+          const entry = matrix.get(typeI, typeJ);
+          if (entry && dist < entry.outerRadius) {
+            const force = InteractionMatrix.forceAtDistance(entry, dist);
+            dvx[i] += nx * force * dt;
+            dvy[i] += ny * force * dt;
+          }
 
-        // 2. Universal short-range repulsion (always repulsive, symmetric)
-        if (dist < repulsion.radius) {
-          // Linear falloff: strongest at dist=0, zero at repulsion.radius
-          const t = dist / repulsion.radius;
-          const repForce = repulsion.strength * (1 - t);
-          // Repel: push i away from j (opposite direction of normal)
-          dvx[i] -= nx * repForce * dt;
-          dvy[i] -= ny * repForce * dt;
-        }
-      });
-    }
+          if (dist < repulsion.radius) {
+            const t = dist / repulsion.radius;
+            const repForce = repulsion.strength * (1 - t);
+            dvx[i] -= nx * repForce * dt;
+            dvy[i] -= ny * repForce * dt;
+          }
+        });
+      }
 
-    // Apply accumulated velocity changes
-    for (let i = 0; i < count; i++) {
-      vx[i] += dvx[i];
-      vy[i] += dvy[i];
+      // Apply accumulated velocity changes (only active range)
+      for (let i = 0; i < hwm; i++) {
+        if (alive[i] === 0) continue;
+        vx[i] += dvx[i];
+        vy[i] += dvy[i];
+      }
+    } else {
+      // Classic mode: no alive array, iterate all
+      for (let i = 0; i < count; i++) {
+        const xi = x[i];
+        const yi = y[i];
+        const typeI = type[i];
+
+        grid.queryRadius(xi, yi, maxRadius, x, y, count, (j, dx, dy, distSq) => {
+          const dist = Math.sqrt(distSq);
+          const typeJ = type[j];
+          const nx = dx / dist;
+          const ny = dy / dist;
+
+          const entry = matrix.get(typeI, typeJ);
+          if (entry && dist < entry.outerRadius) {
+            const force = InteractionMatrix.forceAtDistance(entry, dist);
+            dvx[i] += nx * force * dt;
+            dvy[i] += ny * force * dt;
+          }
+
+          if (dist < repulsion.radius) {
+            const t = dist / repulsion.radius;
+            const repForce = repulsion.strength * (1 - t);
+            dvx[i] -= nx * repForce * dt;
+            dvy[i] -= ny * repForce * dt;
+          }
+        });
+      }
+
+      for (let i = 0; i < count; i++) {
+        vx[i] += dvx[i];
+        vy[i] += dvy[i];
+      }
     }
   }
 }
@@ -822,14 +961,25 @@ export class DragForce implements Force {
     this.params = { coefficient };
   }
 
-  apply(world: World, _grid: SpatialHashGrid, dt: number): void {
+  apply(world: World, grid: SpatialHashGrid, dt: number): void {
     const factor = 1 - this.params.coefficient * dt;
     // Clamp to prevent velocity inversion (if dt is very large)
     const safeFactor = Math.max(0, factor);
     const { vx, vy, count } = world;
-    for (let i = 0; i < count; i++) {
-      vx[i] *= safeFactor;
-      vy[i] *= safeFactor;
+    // Skip dead particles when alive info is available
+    const alive = grid.rebuildAlive;
+    const hwm = grid.rebuildHwm || count;
+    if (alive) {
+      for (let i = 0; i < hwm; i++) {
+        if (alive[i] === 0) continue;
+        vx[i] *= safeFactor;
+        vy[i] *= safeFactor;
+      }
+    } else {
+      for (let i = 0; i < count; i++) {
+        vx[i] *= safeFactor;
+        vy[i] *= safeFactor;
+      }
     }
   }
 }
@@ -862,11 +1012,21 @@ export class GravityForce implements Force {
     this.params = { acceleration };
   }
 
-  apply(world: World, _grid: SpatialHashGrid, dt: number): void {
+  apply(world: World, grid: SpatialHashGrid, dt: number): void {
     const { vy, count } = world;
     const dv = this.params.acceleration * dt;
-    for (let i = 0; i < count; i++) {
-      vy[i] += dv;
+    // Skip dead particles when alive info is available
+    const alive = grid.rebuildAlive;
+    const hwm = grid.rebuildHwm || count;
+    if (alive) {
+      for (let i = 0; i < hwm; i++) {
+        if (alive[i] === 0) continue;
+        vy[i] += dv;
+      }
+    } else {
+      for (let i = 0; i < count; i++) {
+        vy[i] += dv;
+      }
     }
   }
 }
@@ -1198,7 +1358,420 @@ export class VortexForce implements Force {
   }
 }
 
-// ─── Re-exports for barrel import ────────────────────────────────
+// ─── Alignment (Flocking) Force ────────────────────────────────
+
+/** Alignment force parameters. */
+export interface AlignmentParams {
+  [key: string]: unknown;
+  /**
+   * Neighborhood query radius. Particles within this distance are
+   * considered neighbors whose heading is averaged.
+   * Typical range: 30–150.
+   */
+  radius: number;
+  /**
+   * Alignment strength. How strongly each particle steers toward the
+   * average heading of its neighbors.
+   * Typical range: 10–200.
+   */
+  strength: number;
+  /**
+   * When false (default), particles only align with neighbors of the
+   * SAME type. When true, heading is averaged across all types.
+   */
+  crossType: boolean;
+}
+
+/**
+ * AlignmentForce: steer toward the average heading of neighbors.
+ *
+ * Implements the classic Reynolds "alignment" flocking behavior as a
+ * standalone Force. For each particle, neighbors within `radius` are
+ * queried via the spatial hash grid (O(n)), their velocity vectors are
+ * averaged, and the particle is nudged toward the normalized average
+ * heading scaled by `strength`.
+ *
+ * By default only same-type neighbors contribute (`crossType: false`).
+ * Set `crossType: true` to align across all species.
+ *
+ * Zero allocations per step.
+ */
+export class AlignmentForce implements Force {
+  readonly id = 'alignment';
+  readonly params: AlignmentParams;
+
+  constructor(radius: number = 60, strength: number = 40, crossType: boolean = false) {
+    this.params = { radius, strength, crossType };
+  }
+
+  apply(world: World, grid: SpatialHashGrid, dt: number): void {
+    const { x, y, vx, vy, type, count } = world;
+    const { radius, strength, crossType } = this.params;
+
+    for (let i = 0; i < count; i++) {
+      const xi = x[i];
+      const yi = y[i];
+      const typeI = type[i];
+
+      let sumVx = 0;
+      let sumVy = 0;
+      let neighborCount = 0;
+
+      // selfIdx=i so co-located particles can still be neighbors
+      grid.queryRadius(
+        xi,
+        yi,
+        radius,
+        x,
+        y,
+        count,
+        (j, _dx, _dy, _distSq) => {
+          if (crossType || type[j] === typeI) {
+            sumVx += vx[j];
+            sumVy += vy[j];
+            neighborCount++;
+          }
+        },
+        i,
+      );
+
+      if (neighborCount > 0) {
+        const avgVx = sumVx / neighborCount;
+        const avgVy = sumVy / neighborCount;
+        const mag = Math.sqrt(avgVx * avgVx + avgVy * avgVy);
+        if (mag > 0.001) {
+          vx[i] += (avgVx / mag) * strength * dt;
+          vy[i] += (avgVy / mag) * strength * dt;
+        }
+      }
+    }
+  }
+}
+
+// ─── Boids Flocking Force ───────────────────────────────────────
+
+/** Boids force parameters (Reynolds flocking). */
+export interface BoidsParams {
+  [key: string]: unknown;
+  /**
+   * Separation radius. Particles closer than this are pushed apart.
+   * Typically the smallest of the three radii.
+   * Range: 5–100.
+   */
+  separationRadius: number;
+  /**
+   * Separation strength. How strongly close particles are pushed apart.
+   * Range: 0–500.
+   */
+  separationStrength: number;
+  /**
+   * Alignment radius. Particles within this distance contribute their
+   * heading to the average.
+   * Range: 10–300.
+   */
+  alignmentRadius: number;
+  /**
+   * Alignment strength. How strongly each particle steers toward the
+   * average heading of neighbors.
+   * Range: 0–500.
+   */
+  alignmentStrength: number;
+  /**
+   * Cohesion radius. Particles within this distance contribute their
+   * position to the group centroid.
+   * Range: 10–300.
+   */
+  cohesionRadius: number;
+  /**
+   * Cohesion strength. How strongly each particle steers toward the
+   * group centroid.
+   * Range: 0–500.
+   */
+  cohesionStrength: number;
+  /**
+   * When false (default), particles only flock with neighbors of the
+   * SAME type. When true, all three behaviors consider all species.
+   */
+  crossType: boolean;
+}
+
+/**
+ * BoidsForce: classic Reynolds flocking with three sub-behaviors.
+ *
+ * Combines separation (short-range repulsion), alignment (match neighbor
+ * heading), and cohesion (steer toward group center) into a single force.
+ * Each sub-behavior has independent radius and strength parameters.
+ *
+ * Uses the spatial hash grid for O(n) neighbor queries. For each particle,
+ * a single queryRadius call with the maximum of the three radii is issued,
+ * and neighbors are dispatched to the appropriate sub-behavior based on
+ * distance.
+ *
+ * Uses a velocity-delta buffer (like PairwiseForce) to ensure all three
+ * behaviors see the same state snapshot — velocity changes from one particle
+ * don't affect another's alignment calculation within the same step.
+ *
+ * By default only same-type neighbors contribute (`crossType: false`).
+ *
+ * Zero allocations per step.
+ */
+export class BoidsForce implements Force {
+  readonly id = 'boids';
+  readonly params: BoidsParams;
+
+  // Pre-allocated velocity delta buffers — grow on demand, never per-step
+  private dvx: Float32Array = new Float32Array(0);
+  private dvy: Float32Array = new Float32Array(0);
+
+  constructor(
+    separationRadius: number = 25,
+    separationStrength: number = 50,
+    alignmentRadius: number = 60,
+    alignmentStrength: number = 30,
+    cohesionRadius: number = 60,
+    cohesionStrength: number = 20,
+    crossType: boolean = false,
+  ) {
+    this.params = {
+      separationRadius,
+      separationStrength,
+      alignmentRadius,
+      alignmentStrength,
+      cohesionRadius,
+      cohesionStrength,
+      crossType,
+    };
+  }
+
+  apply(world: World, grid: SpatialHashGrid, dt: number): void {
+    const { x, y, vx, vy, type, count } = world;
+    const {
+      separationRadius,
+      separationStrength,
+      alignmentRadius,
+      alignmentStrength,
+      cohesionRadius,
+      cohesionStrength,
+      crossType,
+    } = this.params;
+
+    if (count === 0) return;
+
+    // Ensure velocity delta buffers are large enough (grow only)
+    if (this.dvx.length < count) {
+      this.dvx = new Float32Array(count);
+      this.dvy = new Float32Array(count);
+    } else {
+      this.dvx.fill(0, 0, count);
+      this.dvy.fill(0, 0, count);
+    }
+    const dvx = this.dvx;
+    const dvy = this.dvy;
+
+    // Single query radius = max of all three
+    const maxRadius = Math.max(separationRadius, alignmentRadius, cohesionRadius);
+    const sepRSq = separationRadius * separationRadius;
+    const alignRSq = alignmentRadius * alignmentRadius;
+    const cohRSq = cohesionRadius * cohesionRadius;
+
+    for (let i = 0; i < count; i++) {
+      const xi = x[i];
+      const yi = y[i];
+      const typeI = type[i];
+
+      // Accumulators for each sub-behavior
+      let sepVx = 0;
+      let sepVy = 0;
+      let alignSumVx = 0;
+      let alignSumVy = 0;
+      let alignCount = 0;
+      let cohSumX = 0;
+      let cohSumY = 0;
+      let cohCount = 0;
+
+      // selfIdx = i so co-located particles can still be neighbors
+      grid.queryRadius(
+        xi,
+        yi,
+        maxRadius,
+        x,
+        y,
+        count,
+        (j, dx, dy, distSq) => {
+          if (!crossType && type[j] !== typeI) return;
+
+          // Separation: accumulate away-vectors weighted by closeness
+          if (distSq < sepRSq && distSq > 0) {
+            const dist = Math.sqrt(distSq);
+            // Linear falloff: weight = 1 at dist=0, 0 at separationRadius
+            const weight = 1 - dist / separationRadius;
+            // Direction away from neighbor (-dx, -dy normalized)
+            sepVx -= (dx / dist) * weight;
+            sepVy -= (dy / dist) * weight;
+          }
+
+          // Alignment: accumulate neighbor velocities
+          if (distSq <= alignRSq) {
+            alignSumVx += vx[j];
+            alignSumVy += vy[j];
+            alignCount++;
+          }
+
+          // Cohesion: accumulate neighbor positions
+          if (distSq <= cohRSq) {
+            cohSumX += x[j];
+            cohSumY += y[j];
+            cohCount++;
+          }
+        },
+        i,
+      );
+
+      // ── Apply separation steering ──
+      const sepMag = Math.sqrt(sepVx * sepVx + sepVy * sepVy);
+      if (sepMag > 0.001) {
+        dvx[i] += (sepVx / sepMag) * separationStrength * dt;
+        dvy[i] += (sepVy / sepMag) * separationStrength * dt;
+      }
+
+      // ── Apply alignment steering ──
+      if (alignCount > 0) {
+        const avgVx = alignSumVx / alignCount;
+        const avgVy = alignSumVy / alignCount;
+        const mag = Math.sqrt(avgVx * avgVx + avgVy * avgVy);
+        if (mag > 0.001) {
+          dvx[i] += (avgVx / mag) * alignmentStrength * dt;
+          dvy[i] += (avgVy / mag) * alignmentStrength * dt;
+        }
+      }
+
+      // ── Apply cohesion steering ──
+      if (cohCount > 0) {
+        const avgX = cohSumX / cohCount;
+        const avgY = cohSumY / cohCount;
+        const toCx = avgX - xi;
+        const toCy = avgY - yi;
+        const dist = Math.sqrt(toCx * toCx + toCy * toCy);
+        if (dist > 0.001) {
+          dvx[i] += (toCx / dist) * cohesionStrength * dt;
+          dvy[i] += (toCy / dist) * cohesionStrength * dt;
+        }
+      }
+    }
+
+    // Apply accumulated velocity changes
+    for (let i = 0; i < count; i++) {
+      vx[i] += dvx[i];
+      vy[i] += dvy[i];
+    }
+  }
+}
+
+// ─── Attractor Point Force ─────────────────────────────────────
+
+/** Attractor force parameters. */
+export interface AttractorParams {
+  [key: string]: unknown;
+  /** X position of the attractor / repeller point. */
+  x: number;
+  /** Y position of the attractor / repeller point. */
+  y: number;
+  /**
+   * Force strength. Positive = attract particles toward the point (gravity well),
+   * negative = repel particles away from the point (like charges).
+   * Typical range: −500 to 500.
+   */
+  strength: number;
+  /**
+   * Maximum radius of influence. Particles farther than this from the point
+   * receive zero force.
+   */
+  radius: number;
+  /**
+   * Falloff curve:
+   * - 'linear': strongest near the point, zero at radius (`1 − dist/radius`)
+   * - 'inverse': strong near the point, gradual decay (`1 / (dist/radius + 0.1)`)
+   * - 'constant': uniform strength within radius
+   */
+  falloff: FalloffType;
+}
+
+/**
+ * AttractorForce: point-based attraction or repulsion (a "gravity well").
+ *
+ * Unlike VortexForce, this force is **purely radial** — it has no tangential /
+ * swirl component. Positive `strength` pulls particles toward `(x, y)`; negative
+ * `strength` pushes them away.
+ *
+ * Falloff behaviour (matching VortexForce conventions):
+ * - 'linear': force ∝ (1 − dist/radius) — strongest at the point, zero at edge
+ * - 'inverse': force ∝ 1 / (dist/radius + 0.1) — strong near point, gradual decay
+ * - 'constant': uniform strength within radius
+ *
+ * Particles at the exact point (dist ≈ 0) are skipped to avoid division by zero.
+ *
+ * Zero allocations per step.
+ */
+export class AttractorForce implements Force {
+  readonly id = 'attractor';
+  readonly params: AttractorParams;
+
+  constructor(
+    x: number = 400,
+    y: number = 300,
+    strength: number = 200,
+    radius: number = 250,
+    falloff: FalloffType = 'linear',
+  ) {
+    this.params = { x, y, strength, radius, falloff };
+  }
+
+  apply(world: World, _grid: SpatialHashGrid, dt: number): void {
+    const { x: posX, y: posY, vx, vy, count } = world;
+    const { x: px, y: py, strength, radius, falloff } = this.params;
+
+    const radiusSq = radius * radius;
+
+    for (let i = 0; i < count; i++) {
+      // Direction TO the point (particle → attractor)
+      const dx = px - posX[i];
+      const dy = py - posY[i];
+      const distSq = dx * dx + dy * dy;
+
+      // Beyond radius: no force. At exact center: skip (direction undefined).
+      if (distSq >= radiusSq || distSq < 0.0001) continue;
+
+      const dist = Math.sqrt(distSq);
+
+      // Normalized direction TO the point
+      const nx = dx / dist;
+      const ny = dy / dist;
+
+      // Falloff multiplier
+      const t = dist / radius;
+      let falloffMultiplier: number;
+      switch (falloff) {
+        case 'linear':
+          falloffMultiplier = 1 - t;
+          break;
+        case 'inverse':
+          falloffMultiplier = 1 / (t + 0.1);
+          break;
+        case 'constant':
+          falloffMultiplier = 1;
+          break;
+      }
+
+      // Purely radial force — positive strength pulls toward point,
+      // negative strength pushes away.
+      const force = strength * falloffMultiplier;
+      vx[i] += nx * force * dt;
+      vy[i] += ny * force * dt;
+    }
+  }
+}
+
+// ─── Re-exports for barrel import ────────────────────────────────────
 export type {
   EcosystemConfig,
   SpeciesConfig,
@@ -1242,3 +1815,13 @@ export type {
   JsonSnapshot,
   AppliedConfig,
 } from './config-schema.js';
+
+// Force Registry
+export {
+  createForce,
+  registerForceType,
+  getForceDescriptor,
+  listForceTypes,
+  getRegisteredTypes,
+} from './force-registry.js';
+export type { ForceFactory, ForceTypeDescriptor, ParamSchema } from './force-registry.js';

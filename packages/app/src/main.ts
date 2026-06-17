@@ -13,12 +13,15 @@
 import {
   SpatialHashGrid,
   InteractionMatrix,
+  createRng,
   PairwiseForce,
-  DragForce,
-  WanderForce,
   PointerForce,
+  createForce,
+  listForceTypes,
   type InteractionEntry,
   type FalloffType,
+  type Force,
+  type JsonForcesConfig,
   // Ecosystem barrel re-exports
   type EcosystemConfig,
   type SpeciesConfig,
@@ -45,6 +48,14 @@ import {
   importConfig,
 } from './persistence.js';
 import { installErrorCapture, getErrors, clearErrors, formatErrors } from './error-log.js';
+import {
+  initLogger,
+  log as simLog,
+  recordPopulation,
+  startAutoPersist,
+  formatLogText,
+  exportLog,
+} from './sim-logger.js';
 import { getBuiltinPreset } from './presets.js';
 import { PopulationGraph } from './population-graph.js';
 import { AdaptiveQuality } from './adaptive-quality.js';
@@ -147,17 +158,41 @@ const CONFIG: EcosystemConfig = {
 function buildInteractionMatrix(): InteractionMatrix {
   const matrix = new InteractionMatrix(2);
 
-  // Prey ↔ Prey: mild flocking (attract at distance, repel close)
-  matrix.set(0, 0, { strength: 30, radius: 80, falloff: 'linear' });
+  // Prey ↔ Prey: flocking — attract at distance (outer), repel when close (inner)
+  matrix.set(0, 0, {
+    innerStrength: -30,
+    outerStrength: 30,
+    innerRadius: 20,
+    outerRadius: 80,
+    falloff: 'linear',
+  });
 
-  // Prey → Predator: flee (repel)
-  matrix.set(0, 1, { strength: -80, radius: 120, falloff: 'linear' });
+  // Prey → Predator: flee — panic when close, wary from far
+  matrix.set(0, 1, {
+    innerStrength: -120,
+    outerStrength: -80,
+    innerRadius: 40,
+    outerRadius: 120,
+    falloff: 'linear',
+  });
 
-  // Predator → Prey: chase (attract)
-  matrix.set(1, 0, { strength: 60, radius: 150, falloff: 'linear' });
+  // Predator → Prey: chase — lunge when close, detect from far
+  matrix.set(1, 0, {
+    innerStrength: 100,
+    outerStrength: 60,
+    innerRadius: 50,
+    outerRadius: 150,
+    falloff: 'linear',
+  });
 
-  // Predator ↔ Predator: mild spacing (repel)
-  matrix.set(1, 1, { strength: -20, radius: 50, falloff: 'linear' });
+  // Predator ↔ Predator: spacing — repel when close
+  matrix.set(1, 1, {
+    innerStrength: -40,
+    outerStrength: -20,
+    innerRadius: 20,
+    outerRadius: 50,
+    falloff: 'linear',
+  });
 
   return matrix;
 }
@@ -246,14 +281,71 @@ let freezeDetected = false;
 let consecutiveSlowFrames = 0;
 
 function onError(err: unknown): void {
+  const msg = err instanceof Error ? err.message : String(err);
+  const stack = err instanceof Error ? err.stack : undefined;
   console.error('[Critterium] Fatal error:', err);
+
+  // Log to sim-logger and persist immediately so it survives
+  simLog('fatal', 'crash', msg, { stack });
+
+  // Also keep existing error capture
   const el = document.getElementById('app');
   if (el) {
-    const msg = document.createElement('div');
-    msg.style.cssText =
-      'position:fixed;top:0;left:0;right:0;padding:12px;background:#cc0000;color:#fff;font:14px monospace;z-index:9999;white-space:pre-wrap;';
-    msg.textContent = `Critterium crashed:\n${err instanceof Error ? err.message + '\n' + err.stack : String(err)}`;
-    el.appendChild(msg);
+    const overlay = document.createElement('div');
+    overlay.style.cssText =
+      'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+
+    const box = document.createElement('div');
+    box.style.cssText =
+      'background:#1a1a1a;color:#ff6666;border:1px solid #ff4444;border-radius:8px;padding:20px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column;gap:12px;';
+
+    const title = document.createElement('h2');
+    title.textContent = '⚠️ Critterium Crashed';
+    title.style.cssText = 'color:#ff4444;margin:0;font:bold 18px sans-serif;';
+    box.appendChild(title);
+
+    const errorMsg = document.createElement('pre');
+    errorMsg.style.cssText =
+      'color:#aaa;font:12px "SF Mono","Consolas",monospace;white-space:pre-wrap;word-break:break-all;overflow:auto;max-height:200px;';
+    errorMsg.textContent = msg + (stack ? '\n\n' + stack : '');
+    box.appendChild(errorMsg);
+
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:8px;';
+
+    const dlBtn = document.createElement('button');
+    dlBtn.textContent = '📋 Download Log';
+    dlBtn.style.cssText =
+      'background:#2563eb;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font:14px sans-serif;flex:1;';
+    dlBtn.addEventListener('click', () => {
+      exportLog()
+        .then(() => {
+          dlBtn.textContent = '✓ Shared!';
+        })
+        .catch(() => {
+          dlBtn.textContent = '❌ Failed';
+        });
+    });
+    btnRow.appendChild(dlBtn);
+
+    const copyBtn = document.createElement('button');
+    copyBtn.textContent = '📋 Copy to Clipboard';
+    copyBtn.style.cssText =
+      'background:#333;color:#fff;border:1px solid #555;padding:10px 20px;border-radius:6px;cursor:pointer;font:14px sans-serif;flex:1;';
+    copyBtn.addEventListener('click', () => {
+      const text = formatLogText();
+      navigator.clipboard.writeText(text).then(() => {
+        copyBtn.textContent = '✓ Copied!';
+      });
+    });
+    btnRow.appendChild(copyBtn);
+
+    box.appendChild(btnRow);
+    overlay.appendChild(box);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+    el.appendChild(overlay);
   }
 }
 
@@ -295,14 +387,44 @@ function buildSpeciesValues(species: readonly SpeciesConfig[]): Array<Record<str
 function buildMatrixValues(
   matrix: InteractionMatrix,
   n: number,
-): Array<Array<{ strength: number; radius: number; falloff: string } | null>> {
-  const result: Array<Array<{ strength: number; radius: number; falloff: string } | null>> = [];
+): Array<
+  Array<{
+    innerStrength: number;
+    outerStrength: number;
+    innerRadius: number;
+    outerRadius: number;
+    falloff: string;
+  } | null>
+> {
+  const result: Array<
+    Array<{
+      innerStrength: number;
+      outerStrength: number;
+      innerRadius: number;
+      outerRadius: number;
+      falloff: string;
+    } | null>
+  > = [];
   for (let i = 0; i < n; i++) {
-    const row: Array<{ strength: number; radius: number; falloff: string } | null> = [];
+    const row: Array<{
+      innerStrength: number;
+      outerStrength: number;
+      innerRadius: number;
+      outerRadius: number;
+      falloff: string;
+    } | null> = [];
     for (let j = 0; j < n; j++) {
       const entry = matrix.get(i, j);
       row.push(
-        entry ? { strength: entry.strength, radius: entry.radius, falloff: entry.falloff } : null,
+        entry
+          ? {
+              innerStrength: entry.innerStrength,
+              outerStrength: entry.outerStrength,
+              innerRadius: entry.innerRadius,
+              outerRadius: entry.outerRadius,
+              falloff: entry.falloff,
+            }
+          : null,
       );
     }
     result.push(row);
@@ -324,6 +446,10 @@ async function main(): Promise<void> {
 
   // Live config that all control changes update
   let liveConfig = deepCloneConfig(CONFIG);
+
+  // Deterministic seed counter: incrementing instead of Math.random()
+  // Each reset/reseed produces a unique but deterministic seed.
+  let seedCounter = liveConfig.seed;
 
   // Check for pending preset from a species-count-changing preset load
   let hasPendingPreset = false;
@@ -374,16 +500,118 @@ async function main(): Promise<void> {
     interactionMatrix = buildInteractionMatrix();
   }
 
-  // 2. Build physics forces
-  const pairwiseForce = new PairwiseForce(interactionMatrix);
-  const dragForce = new DragForce(0.8);
-  const wanderForce = new WanderForce(40, 2.5);
-  const pointerForce = new PointerForce(200, 150, 'linear');
+  // Initialise the simulation logger with species names (so extinction events
+  // display real names) and start the crash-safe auto-persist timer.
+  initLogger(liveConfig.species.map((s) => s.name));
+  startAutoPersist();
 
-  // Active force tracking
-  let dragEnabled = true;
-  let wanderEnabled = true;
-  let pointerEnabled = false;
+  // 2. Build physics forces
+  //
+  // CRT-37: Forces are managed via a registry-driven pipeline.
+  // `pairwiseForce` is the interaction-matrix adapter (always applied first,
+  // tied to the matrix — conceptually distinct from global/registry forces).
+  // `forcePipeline` holds all registry forces (drag, wander, pointer, …)
+  // which can be added/removed/toggled at runtime.
+  const pairwiseForce = new PairwiseForce(interactionMatrix);
+
+  interface PipelineEntry {
+    force: Force;
+    enabled: boolean;
+  }
+
+  let forcePipeline: PipelineEntry[] = [
+    { force: createForce('drag', { coefficient: 0.8 }), enabled: true },
+    { force: createForce('wander', { strength: 40, rate: 2.5 }), enabled: true },
+    {
+      force: createForce('pointer', { strength: 200, radius: 150, falloff: 'linear' }),
+      enabled: false,
+    },
+  ];
+
+  // ─── Force pipeline helpers (CRT-37) ──────────────────────────
+
+  /** Find a pipeline entry by force id. Returns undefined if not found. */
+  function findForceEntry(id: string): PipelineEntry | undefined {
+    return forcePipeline.find((e) => e.force.id === id);
+  }
+
+  /**
+   * Append a registry-created force to the pipeline.
+   * @returns the index of the new entry, or -1 if the type is unknown.
+   */
+  function addForce(typeId: string, params?: Record<string, unknown>): number {
+    try {
+      const force = createForce(typeId, params);
+      forcePipeline.push({ force, enabled: true });
+      return forcePipeline.length - 1;
+    } catch (err) {
+      console.warn(`[Critterium] addForce("${typeId}") failed:`, err);
+      return -1;
+    }
+  }
+
+  /**
+   * Remove a force from the pipeline by index.
+   * @returns true if removed.
+   */
+  function removeForce(index: number): boolean {
+    if (index < 0 || index >= forcePipeline.length) return false;
+    forcePipeline.splice(index, 1);
+    return true;
+  }
+
+  /** Toggle a force's enabled flag without removing the instance. */
+  function setForceEnabled(index: number, enabled: boolean): boolean {
+    const entry = forcePipeline[index];
+    if (!entry) return false;
+    entry.enabled = enabled;
+    return true;
+  }
+
+  /** Live-update a single parameter on a pipeline force by id. */
+  function setForceParam(id: string, param: string, value: unknown): boolean {
+    const entry = findForceEntry(id);
+    if (!entry) return false;
+    (entry.force.params as Record<string, unknown>)[param] = value;
+    return true;
+  }
+
+  /** Read a numeric parameter from a pipeline force by id. Returns NaN if missing. */
+  function getForceParam(id: string, param: string): number {
+    const entry = findForceEntry(id);
+    const val = (entry?.force.params as Record<string, unknown> | undefined)?.[param];
+    return typeof val === 'number' ? val : NaN;
+  }
+
+  /**
+   * Serialize the registry pipeline to JSON force entries (for config).
+   * PairwiseForce is excluded — it is serialized via the interaction matrix.
+   */
+  function getPipelineForceEntries(): JsonForcesConfig {
+    return forcePipeline.map((e) => ({
+      type: e.force.id,
+      enabled: e.enabled,
+      params: { ...e.force.params },
+    }));
+  }
+
+  /**
+   * Rebuild the registry pipeline from deserialized force entries.
+   * Unknown types are skipped (forward-compatible). PairwiseForce is
+   * untouched (managed separately via the interaction matrix).
+   */
+  function rebuildPipelineFromConfig(forces: JsonForcesConfig): void {
+    const rebuilt: PipelineEntry[] = [];
+    for (const entry of forces) {
+      try {
+        const force = createForce(entry.type, entry.params);
+        rebuilt.push({ force, enabled: entry.enabled });
+      } catch {
+        // Skip unknown force types gracefully
+      }
+    }
+    forcePipeline = rebuilt;
+  }
 
   // 3. Spatial hash grid (mutable — recreated when cap or world size changes)
   let grid = new SpatialHashGrid(
@@ -417,6 +645,8 @@ async function main(): Promise<void> {
     renderer.setSpeciesMaxEnergy(
       new Float32Array(liveConfig.species.map((s) => s.energy.maxEnergy)),
     );
+    // Update population graph colors to match
+    popGraph.setColors(liveConfig.species.map((s) => parseInt(s.color.slice(1), 16)));
   }
 
   // Attach canvas to DOM
@@ -480,10 +710,20 @@ async function main(): Promise<void> {
 
   // Pre-allocated species counts array (avoid per-frame allocation)
   let speciesCounts = new Int32Array(liveConfig.species.length);
+  // Pre-allocated species counts for sim-logger (avoid per-step allocation)
+  let loggerCounts: number[] = new Array(liveConfig.species.length).fill(0);
 
   // ─── Matrix state tracking ──────────────────────────────────
   let nSpecies = liveConfig.species.length;
-  let matrixState: Array<Array<{ strength: number; radius: number; falloff: string } | null>>;
+  let matrixState: Array<
+    Array<{
+      innerStrength: number;
+      outerStrength: number;
+      innerRadius: number;
+      outerRadius: number;
+      falloff: string;
+    } | null>
+  >;
 
   function initMatrixState(matrix: InteractionMatrix): void {
     matrixState = buildMatrixValues(matrix, nSpecies);
@@ -504,8 +744,10 @@ async function main(): Promise<void> {
           const cell = matrixState[i]?.[j];
           if (cell) {
             interactionMatrix.set(i, j, {
-              strength: cell.strength,
-              radius: cell.radius,
+              innerStrength: cell.innerStrength,
+              outerStrength: cell.outerStrength,
+              innerRadius: cell.innerRadius,
+              outerRadius: cell.outerRadius,
               falloff: cell.falloff as FalloffType,
             });
           }
@@ -518,7 +760,7 @@ async function main(): Promise<void> {
         grid.cellSize !== 150 ||
         grid.cols !== Math.ceil(liveConfig.width / 150) ||
         grid.rows !== Math.ceil(liveConfig.height / 150) ||
-        eco.config.populationCap !== liveConfig.populationCap
+        grid.maxParticles < liveConfig.populationCap
       ) {
         grid = new SpatialHashGrid(
           liveConfig.width,
@@ -531,15 +773,25 @@ async function main(): Promise<void> {
       // Rebuild spatial hash (skip dead particles, only up to highWaterMark)
       grid.rebuild(eco.world, eco.eco.alive, eco.highWaterMark);
 
+      // Initialize simulation logger with current species names
+      initLogger(liveConfig.species.map((s) => s.name));
+      startAutoPersist();
+      simLog(
+        'info',
+        'system',
+        `Simulation started: ${liveConfig.species.length} species, cap=${liveConfig.populationCap}`,
+      );
+
       // Reset timing
       accumulator = 0;
       lastTime = performance.now();
 
       // Reset renderer state (clear stale birth/death effects + prevAlive)
-      renderer.resetState();
+      renderer.resetState(liveConfig.populationCap);
 
       // Reallocate species counts array for current species count
       speciesCounts = new Int32Array(liveConfig.species.length);
+      loggerCounts = new Array(liveConfig.species.length).fill(0);
 
       // Update population graph colors and reset history
       popGraph.reset();
@@ -563,12 +815,14 @@ async function main(): Promise<void> {
   }
 
   function getCurrentConfig(): CritteriumConfig {
-    const activeForces: Array<{ readonly id: string; readonly params: Record<string, unknown> }> = [
-      dragForce,
-      wanderForce,
-    ];
-    if (pointerEnabled) activeForces.push(pointerForce);
-    return serializeConfig(eco, interactionMatrix, activeForces);
+    const config = serializeConfig(
+      eco,
+      interactionMatrix,
+      forcePipeline.map((e) => e.force),
+    );
+    // Override forces with pipeline entries (preserves enabled/disabled state)
+    config.forces = getPipelineForceEntries();
+    return config;
   }
 
   function doAutosave(): void {
@@ -588,11 +842,13 @@ async function main(): Promise<void> {
     // Rebuild spatial hash (skip dead particles, only up to highWaterMark)
     grid.rebuild(eco.world, eco.eco.alive, eco.highWaterMark);
 
-    // Apply active forces
+    // Pairwise interaction-matrix force (always applied first)
     pairwiseForce.apply(eco.world, grid, dt);
-    if (dragEnabled) dragForce.apply(eco.world, grid, dt);
-    if (wanderEnabled) wanderForce.apply(eco.world, grid, dt);
-    if (pointerEnabled) pointerForce.apply(eco.world, grid, dt);
+
+    // Registry-driven force pipeline
+    for (const entry of forcePipeline) {
+      if (entry.enabled) entry.force.apply(eco.world, grid, dt);
+    }
   }
 
   function loop(now: number): void {
@@ -642,10 +898,15 @@ async function main(): Promise<void> {
         // Step physics
         eco.world.step(dt);
 
-        // Process ecosystem systems
-        eco.processLifecycle(dt);
+        // Process ecosystem systems (order matters!):
+        // 0. Rebuild grid at post-step positions for eating detection
+        // 1. processEating — predators gain energy from prey at new positions
+        // 2. processLifecycle — energy drain, starvation, old age, cooldown tick
+        // 3. processReproduction — eligible particles reproduce
+        grid.rebuild(eco.world, eco.eco.alive, eco.highWaterMark);
         processEating(eco, grid);
-        processReproduction(eco);
+        eco.processLifecycle(dt);
+        processReproduction(eco, dt);
 
         // Population overflow protection: force-kill excess particles
         if (eco.aliveCount > liveConfig.populationCap * 1.5) {
@@ -665,6 +926,12 @@ async function main(): Promise<void> {
         totalSimTime += dt;
         accumulator -= dt;
         stepsThisFrame++;
+
+        // Record population snapshot for logging (throttled internally)
+        for (let s = 0; s < eco.species.length; s++) {
+          loggerCounts[s] = eco.speciesCount(s);
+        }
+        recordPopulation(totalSimTime, loggerCounts);
       }
 
       // Extinction detection: if all particles died after sim has been running,
@@ -732,30 +999,42 @@ async function main(): Promise<void> {
   const canvas = renderer.app.canvas as HTMLCanvasElement;
   let pointerDown = false;
 
+  /** Get the PointerForce instance from the pipeline (if present). */
+  function getPointerForce(): PointerForce | undefined {
+    return findForceEntry('pointer')?.force as PointerForce | undefined;
+  }
+
+  /** Whether the pointer force is currently enabled in the pipeline. */
+  function isPointerEnabled(): boolean {
+    return findForceEntry('pointer')?.enabled ?? false;
+  }
+
   function updatePointerFromEvent(e: MouseEvent | Touch): void {
+    const pf = getPointerForce();
+    if (!pf) return;
     const rect = canvas.getBoundingClientRect();
     const x = (e.clientX - rect.left) * (canvas.width / rect.width);
     const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-    pointerForce.setPosition(x, y, true);
+    pf.setPosition(x, y, true);
   }
 
   canvas.addEventListener('mousedown', (e) => {
-    if (!pointerEnabled) return;
+    if (!isPointerEnabled()) return;
     pointerDown = true;
     updatePointerFromEvent(e);
   });
   canvas.addEventListener('mousemove', (e) => {
-    if (!pointerDown || !pointerEnabled) return;
+    if (!pointerDown || !isPointerEnabled()) return;
     updatePointerFromEvent(e);
   });
   window.addEventListener('mouseup', () => {
     pointerDown = false;
-    pointerForce.setPosition(0, 0, false);
+    getPointerForce()?.setPosition(0, 0, false);
   });
   canvas.addEventListener(
     'touchstart',
     (e) => {
-      if (!pointerEnabled) return;
+      if (!isPointerEnabled()) return;
       e.preventDefault();
       pointerDown = true;
       if (e.touches[0]) updatePointerFromEvent(e.touches[0]);
@@ -765,7 +1044,7 @@ async function main(): Promise<void> {
   canvas.addEventListener(
     'touchmove',
     (e) => {
-      if (!pointerEnabled) return;
+      if (!isPointerEnabled()) return;
       e.preventDefault();
       if (e.touches[0]) updatePointerFromEvent(e.touches[0]);
     },
@@ -773,7 +1052,7 @@ async function main(): Promise<void> {
   );
   canvas.addEventListener('touchend', () => {
     pointerDown = false;
-    pointerForce.setPosition(0, 0, false);
+    getPointerForce()?.setPosition(0, 0, false);
   });
 
   // 7. Build initial values for controls
@@ -794,6 +1073,9 @@ async function main(): Promise<void> {
       pointer: { strength: 200, radius: 150, falloff: 0, _enabled: 0 },
       _popCap: liveConfig.populationCap as unknown as Record<string, number>,
     },
+    // CRT-38: Dynamic force pipeline data + descriptors
+    pipelineForces: getPipelineForceEntries(),
+    forceTypeDescriptors: listForceTypes(),
 
     onTogglePause: (p: boolean) => {
       paused = p;
@@ -801,25 +1083,25 @@ async function main(): Promise<void> {
     },
 
     onReset: () => {
-      // Reset particle positions/velocities with a fresh seed,
-      // keeping the current config (species, matrix, forces).
-      liveConfig.seed = Math.floor(Math.random() * 2147483647);
+      // Reset with next deterministic seed (keeps same config, new positions)
+      seedCounter = (seedCounter + 1) | 0;
+      liveConfig.seed = seedCounter;
       rebuildSimulation();
-      // Sync all UI sliders to current values
+      // Sync all UI sliders to current values (read from pipeline)
       resetAllSliders({
         speciesValues: buildSpeciesValues(liveConfig.species),
         simValues: { speed: speedMultiplier, popCap: liveConfig.populationCap },
         forceValues: {
           drag: {
-            coefficient: (dragForce.params as Record<string, unknown>).coefficient as number,
+            coefficient: getForceParam('drag', 'coefficient'),
           },
           wander: {
-            strength: (wanderForce.params as Record<string, unknown>).strength as number,
-            rate: (wanderForce.params as Record<string, unknown>).rate as number,
+            strength: getForceParam('wander', 'strength'),
+            rate: getForceParam('wander', 'rate'),
           },
           pointer: {
-            strength: (pointerForce.params as Record<string, unknown>).strength as number,
-            radius: (pointerForce.params as Record<string, unknown>).radius as number,
+            strength: getForceParam('pointer', 'strength'),
+            radius: getForceParam('pointer', 'radius'),
           },
         },
       });
@@ -833,8 +1115,9 @@ async function main(): Promise<void> {
           liveConfig.species[i].count = counts[i]!;
         }
       }
-      // New random seed + full rebuild
-      liveConfig.seed = Math.floor(Math.random() * 2147483647);
+      // Deterministic seed increment + full rebuild
+      seedCounter = (seedCounter + 1) | 0;
+      liveConfig.seed = seedCounter;
       rebuildSimulation();
     },
 
@@ -848,58 +1131,92 @@ async function main(): Promise<void> {
     },
 
     onForceToggle: (forceId: string, enabled: boolean) => {
-      if (forceId === 'drag') dragEnabled = enabled;
-      else if (forceId === 'wander') wanderEnabled = enabled;
-      else if (forceId === 'pointer') pointerEnabled = enabled;
+      const idx = forcePipeline.findIndex((e) => e.force.id === forceId);
+      if (idx >= 0) setForceEnabled(idx, enabled);
     },
 
     onForceChange: (forceId: string, param: string, value: number) => {
-      if (forceId === 'drag' && param === 'coefficient') {
-        (dragForce.params as Record<string, unknown>).coefficient = value;
-      } else if (forceId === 'wander' && param === 'strength') {
-        (wanderForce.params as Record<string, unknown>).strength = value;
-      } else if (forceId === 'wander' && param === 'rate') {
-        (wanderForce.params as Record<string, unknown>).rate = value;
-      } else if (forceId === 'pointer' && param === 'strength') {
-        (pointerForce.params as Record<string, unknown>).strength = value;
-      } else if (forceId === 'pointer' && param === 'radius') {
-        (pointerForce.params as Record<string, unknown>).radius = value;
-      } else if (forceId === 'pointer' && param.startsWith('falloff_')) {
-        const falloff = param.replace('falloff_', '');
-        (pointerForce.params as Record<string, unknown>).falloff = falloff;
+      // Pointer falloff dropdown encodes the value in the param name
+      if (forceId === 'pointer' && param.startsWith('falloff_')) {
+        setForceParam('pointer', 'falloff', param.replace('falloff_', ''));
+      } else {
+        setForceParam(forceId, param, value);
+      }
+    },
+
+    // CRT-38: Dynamic force pipeline callbacks
+    onAddForce: (typeId: string) => {
+      const idx = addForce(typeId);
+      if (idx >= 0) {
+        // Rebuild the controls panel forces section to include the new force
+        // (the new force row appears with default params from the registry)
+      }
+    },
+
+    onRemoveForce: (index: number) => {
+      removeForce(index);
+    },
+
+    onSetForceEnabled: (index: number, enabled: boolean) => {
+      setForceEnabled(index, enabled);
+    },
+
+    onSetForceParam: (index: number, param: string, value: number) => {
+      // For select-type params, the value is an index into the options array
+      const entry = forcePipeline[index];
+      if (!entry) return;
+      const descriptor = listForceTypes().find((d) => d.type === entry.force.id);
+      const paramSchema = descriptor?.paramSchema.find((p) => p.key === param);
+      if (paramSchema?.type === 'select' && paramSchema.options) {
+        const optValue = paramSchema.options[value];
+        if (optValue !== undefined) {
+          setForceParam(entry.force.id, param, optValue);
+        }
+      } else {
+        setForceParam(entry.force.id, param, value);
       }
     },
 
     onMatrixChange: (
       i: number,
       j: number,
-      strength: number,
-      minRadius: number,
-      maxRadius: number,
+      innerStrength: number,
+      outerStrength: number,
+      innerRadius: number,
+      outerRadius: number,
       falloff: string,
     ) => {
       const entry: InteractionEntry = {
-        strength,
-        minRadius,
-        radius: maxRadius,
+        innerStrength,
+        outerStrength,
+        innerRadius,
+        outerRadius,
         falloff: falloff as 'linear' | 'inverse' | 'constant',
       };
       interactionMatrix.set(i, j, entry);
       // Update tracked state
       if (!matrixState[i]) matrixState[i] = [];
-      matrixState[i][j] = { strength, radius: maxRadius, falloff };
+      matrixState[i][j] = { innerStrength, outerStrength, innerRadius, outerRadius, falloff };
     },
 
     onRandomizeMatrix: () => {
       const n = interactionMatrix.numTypes;
       interactionMatrix = new InteractionMatrix(n);
+      // Use seeded PRNG for deterministic randomization
+      seedCounter = (seedCounter + 1) | 0;
+      const rng = createRng(seedCounter);
       for (let i = 0; i < n; i++) {
         for (let j = 0; j < n; j++) {
-          const str = Math.round((Math.random() - 0.5) * 200);
-          if (Math.abs(str) > 10) {
+          const innerStr = Math.round((rng() - 0.5) * 200);
+          const outerStr = Math.round((rng() - 0.5) * 200);
+          if (Math.abs(outerStr) > 10 || Math.abs(innerStr) > 10) {
+            const innerR = Math.round(10 + rng() * 30);
+            const outerR = Math.round(innerR + 30 + rng() * 100);
             const entry = {
-              strength: str,
-              radius: 50 + Math.random() * 100,
+              innerStrength: innerStr,
+              outerStrength: outerStr,
+              innerRadius: innerR,
+              outerRadius: outerR,
               falloff: 'linear' as const,
             };
             interactionMatrix.set(i, j, entry);
@@ -924,74 +1241,69 @@ async function main(): Promise<void> {
       (pairwiseForce as { matrix: InteractionMatrix }).matrix = interactionMatrix;
     },
 
+    getMatrixValues: () => matrixState,
+
     onSpeciesChange: (speciesIndex: number, param: string, value: number | string | boolean) => {
       if (speciesIndex < 0 || speciesIndex >= liveConfig.species.length) return;
       const sp = liveConfig.species[speciesIndex];
       if (!sp) return;
+
+      // Structural changes that require a full simulation rebuild
+      const STRUCTURAL = new Set(['count']);
 
       if (param === 'name' && typeof value === 'string') {
         sp.name = value;
       } else if (param === 'color' && typeof value === 'string') {
         sp.color = value;
         syncRendererVisuals();
-      } else if (param === 'count' && typeof value === 'number') {
-        sp.count = value;
-        rebuildSimulation();
       } else if (param === 'radius' && typeof value === 'number') {
         sp.radius = value;
         syncRendererVisuals();
-        rebuildSimulation();
-      } else if (param === 'initialSpeed' && typeof value === 'number') {
-        sp.initialSpeed = value;
+        // No rebuild needed — eating.ts reads radius live from species config
+      } else if (STRUCTURAL.has(param) && typeof value === 'number') {
+        (sp as unknown as Record<string, unknown>)[param] = value;
         rebuildSimulation();
       } else if (param === 'maxSpeed' && typeof value === 'number') {
         sp.maxSpeed = value;
-        rebuildSimulation();
-      } else if (param === 'maxEnergy' && typeof value === 'number') {
-        sp.energy.maxEnergy = value;
-        rebuildSimulation();
+        // Live update World's maxSpeeds lookup — no rebuild
+        eco.world.updateMaxSpeed(speciesIndex, value);
+      } else if (param === 'initialSpeed' && typeof value === 'number') {
+        sp.initialSpeed = value;
+        // Only affects new spawns — no rebuild needed
       } else if (param === 'initialEnergy' && typeof value === 'number') {
         sp.energy.initialEnergy = value;
-        rebuildSimulation();
-      } else if (param === 'reproductionCost' && typeof value === 'number') {
-        sp.energy.reproductionCost = value;
-        rebuildSimulation();
-      } else if (param === 'movementCostPerSec' && typeof value === 'number') {
-        sp.energy.movementCostPerSec = value;
-        rebuildSimulation();
-      } else if (param === 'idleDrainPerSec' && typeof value === 'number') {
-        sp.energy.idleDrainPerSec = value;
-        rebuildSimulation();
-      } else if (param === 'maxAgeSec' && typeof value === 'number') {
-        sp.lifecycle.maxAgeSec = value;
-        rebuildSimulation();
-      } else if (param === 'starvationDamagePerSec' && typeof value === 'number') {
-        sp.lifecycle.starvationDamagePerSec = value;
-        rebuildSimulation();
-      } else if (param === 'reproductionCooldownSec' && typeof value === 'number') {
-        sp.lifecycle.reproductionCooldownSec = value;
-        rebuildSimulation();
+        // Only affects new spawns — no rebuild needed
       } else if (param.startsWith('canEat_') && typeof value === 'boolean') {
         const targetIdx = parseInt(param.replace('canEat_', ''));
         if (value) sp.diet.canEat.add(targetIdx);
         else sp.diet.canEat.delete(targetIdx);
-        rebuildSimulation();
-      } else if (param === 'sprintDurationSec' && typeof value === 'number') {
-        if (!sp.stamina) sp.stamina = defaultStaminaConfig();
-        sp.stamina.sprintDurationSec = value;
-        rebuildSimulation();
-      } else if (param === 'sprintCooldownSec' && typeof value === 'number') {
-        if (!sp.stamina) sp.stamina = defaultStaminaConfig();
-        sp.stamina.sprintCooldownSec = value;
-        rebuildSimulation();
-      } else if (param === 'sprintSpeedMultiplier' && typeof value === 'number') {
-        if (!sp.stamina) sp.stamina = defaultStaminaConfig();
-        sp.stamina.sprintSpeedMultiplier = value;
-        rebuildSimulation();
-      } else if (param === 'tiredSpeedMultiplier' && typeof value === 'number') {
-        if (!sp.stamina) sp.stamina = defaultStaminaConfig();
-        sp.stamina.tiredSpeedMultiplier = value;
-        rebuildSimulation();
+        // eating.ts reads canEat live — no rebuild needed
+      } else if (param.startsWith('energyGainPerPrey_') && typeof value === 'number') {
+        const targetIdx = parseInt(param.replace('energyGainPerPrey_', ''));
+        while (sp.energy.energyGainPerPrey.length <= targetIdx) sp.energy.energyGainPerPrey.push(0);
+        sp.energy.energyGainPerPrey[targetIdx] = value;
+        // eating.ts reads energyGainPerPrey live — no rebuild needed
+      } else if (typeof value === 'number') {
+        // All other numeric params: maxEnergy, reproductionCost, movementCostPerSec,
+        // idleDrainPerSec, maxAgeSec, starvationDamagePerSec, reproductionCooldownSec,
+        // sprintDurationSec, sprintCooldownSec, sprintSpeedMultiplier, tiredSpeedMultiplier
+        // These are read live by processLifecycle/processStamina — no rebuild needed
+        if (param in sp.energy) {
+          (sp.energy as unknown as Record<string, unknown>)[param] = value;
+        } else if (param in sp.lifecycle) {
+          (sp.lifecycle as unknown as Record<string, unknown>)[param] = value;
+        } else if (sp.stamina && param in sp.stamina) {
+          (sp.stamina as unknown as Record<string, unknown>)[param] = value;
+        } else if (
+          !sp.stamina &&
+          (param === 'sprintDurationSec' ||
+            param === 'sprintCooldownSec' ||
+            param === 'sprintSpeedMultiplier' ||
+            param === 'tiredSpeedMultiplier')
+        ) {
+          sp.stamina = defaultStaminaConfig();
+          (sp.stamina as unknown as Record<string, unknown>)[param] = value;
+        }
       }
     },
 
@@ -1072,13 +1384,18 @@ async function main(): Promise<void> {
         })),
         interactionMatrix: matrixState.map((row) =>
           row.map((cell) =>
-            cell ? { strength: cell.strength, radius: cell.radius, falloff: cell.falloff } : null,
+            cell
+              ? {
+                  innerStrength: cell.innerStrength,
+                  outerStrength: cell.outerStrength,
+                  innerRadius: cell.innerRadius,
+                  outerRadius: cell.outerRadius,
+                  falloff: cell.falloff,
+                }
+              : null,
           ),
         ),
-        forces: {
-          drag: { id: 'drag', params: { strength: dragForce.params.strength } },
-          wander: { id: 'wander', params: { strength: wanderForce.params.strength } },
-        },
+        forces: getPipelineForceEntries(),
       };
       localStorage.setItem('critterium-pending-preset', JSON.stringify(pendingConfig));
       window.location.reload();
@@ -1141,13 +1458,18 @@ async function main(): Promise<void> {
         })),
         interactionMatrix: matrixState.map((row) =>
           row.map((cell) =>
-            cell ? { strength: cell.strength, radius: cell.radius, falloff: cell.falloff } : null,
+            cell
+              ? {
+                  innerStrength: cell.innerStrength,
+                  outerStrength: cell.outerStrength,
+                  innerRadius: cell.innerRadius,
+                  outerRadius: cell.outerRadius,
+                  falloff: cell.falloff,
+                }
+              : null,
           ),
         ),
-        forces: {
-          drag: { id: 'drag', params: { strength: dragForce.params.strength } },
-          wander: { id: 'wander', params: { strength: wanderForce.params.strength } },
-        },
+        forces: getPipelineForceEntries(),
       };
       localStorage.setItem('critterium-pending-preset', JSON.stringify(pendingConfig));
       window.location.reload();
@@ -1156,6 +1478,10 @@ async function main(): Promise<void> {
     onExport: () => {
       const config = getCurrentConfig();
       exportConfig(config, 'critterium-config.json');
+    },
+
+    onExportLog: () => {
+      exportLog();
     },
 
     onShowErrorLog: () => {
@@ -1307,14 +1633,8 @@ async function main(): Promise<void> {
         grid.rebuild(eco.world);
         // Update liveConfig to match
         liveConfig = deepCloneConfig(eco.config);
-        // Also update drag and wander forces from preset
-        if (cfg.forces?.drag) {
-          (dragForce.params as Record<string, unknown>).coefficient = cfg.forces.drag.coefficient;
-        }
-        if (cfg.forces?.wander) {
-          (wanderForce.params as Record<string, unknown>).strength = cfg.forces.wander.strength;
-          (wanderForce.params as Record<string, unknown>).rate = cfg.forces.wander.rate;
-        }
+        // Rebuild force pipeline from the preset config
+        rebuildPipelineFromConfig(validated.forces);
         accumulator = 0;
         lastTime = performance.now();
         clearAutosave();
@@ -1325,15 +1645,15 @@ async function main(): Promise<void> {
           simValues: { speed: speedMultiplier, popCap: liveConfig.populationCap },
           forceValues: {
             drag: {
-              coefficient: (dragForce.params as Record<string, unknown>).coefficient as number,
+              coefficient: getForceParam('drag', 'coefficient') ?? 0,
             },
             wander: {
-              strength: (wanderForce.params as Record<string, unknown>).strength as number,
-              rate: (wanderForce.params as Record<string, unknown>).rate as number,
+              strength: getForceParam('wander', 'strength') ?? 0,
+              rate: getForceParam('wander', 'rate') ?? 0,
             },
             pointer: {
-              strength: (pointerForce.params as Record<string, unknown>).strength as number,
-              radius: (pointerForce.params as Record<string, unknown>).radius as number,
+              strength: getForceParam('pointer', 'strength') ?? 0,
+              radius: getForceParam('pointer', 'radius') ?? 0,
             },
           },
         });
@@ -1400,6 +1720,16 @@ async function main(): Promise<void> {
   if (useAutosave) {
     console.log('[Critterium] Resumed from autosave');
   }
+
+  // Expose force pipeline management API for debugging / future UI (CRT-37)
+  (window as unknown as { __critterium: Record<string, unknown> }).__critterium = {
+    addForce,
+    removeForce,
+    setForceEnabled,
+    setForceParam,
+    getForceParam,
+    getPipelineForceEntries,
+  };
 
   requestAnimationFrame(loop);
 }

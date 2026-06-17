@@ -102,22 +102,23 @@ describe('AdaptiveQuality', () => {
   });
 
   it('upgrade has 5-second cooldown', () => {
-    const now = performance.now() / 1000;
+    // Mock time from the start to avoid real-time flakiness under parallel load.
+    // The constructor sets lastUpgradeTime = 0; using a fixed start time of 0
+    // keeps the cooldown math deterministic regardless of process uptime.
+    let fakeTime = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => fakeTime * 1000);
 
     // Drop to low
     for (let i = 0; i < 7; i++) aq.update(10);
     expect(aq.level).toBe('low');
 
-    // Try to upgrade immediately — should be blocked
-    const origNow = performance.now;
-    let fakeTime = now + 1; // only 1 second later
-    vi.spyOn(performance, 'now').mockImplementation(() => fakeTime * 1000);
-
+    // Try to upgrade immediately — should be blocked (only 1 second later)
+    fakeTime = 1; // only 1 second later
     for (let i = 0; i < 7; i++) aq.update(60);
     expect(aq.level).toBe('low'); // still low, cooldown not elapsed
 
     // Advance past 5 seconds
-    fakeTime = now + 6;
+    fakeTime = 6;
     for (let i = 0; i < 7; i++) aq.update(60);
     expect(aq.level).toBe('high'); // now upgraded
 
@@ -169,5 +170,33 @@ describe('AdaptiveQuality', () => {
   it('medium quality has correct reductionFactor', () => {
     aq.setQuality('medium');
     expect(aq.quality.reductionFactor).toBeCloseTo(0.75);
+  });
+
+  // ─── CRT-67 #3: ring buffer for FPS history ─────────────────────
+  //
+  // FPS samples are stored in a fixed-size ring buffer (capacity 8)
+  // rather than a push/shift array. This test verifies the ring buffer
+  // correctly evicts old samples so the average reflects only the last
+  // ≤8 values — not all values ever pushed.
+
+  it('ring buffer averages only the last 8 samples (CRT-67 #3)', () => {
+    // Fill buffer completely with high-FPS samples
+    for (let i = 0; i < 20; i++) aq.update(60); // far more than capacity
+    expect(aq.level).toBe('high');
+
+    // Push exactly 8 low-FPS samples — should fully replace the buffer.
+    // If the ring buffer leaked old samples, the average would stay high.
+    for (let i = 0; i < 8; i++) aq.update(10);
+    // avg of all-10s = 10 → 'low' tier
+    expect(aq.level).toBe('low');
+  });
+
+  it('ring buffer partial fill (<8) averages correctly (CRT-67 #3)', () => {
+    // 6 samples at 40 FPS. Buffer fills to 6 (< 8 capacity).
+    // avg = 240/6 = 40 → 'medium' tier (25-45).
+    // Hysteresis: first 2 samples early-return (count<3), then 3 consecutive
+    // matching-tier samples trigger the change at sample 5-6.
+    for (let i = 0; i < 6; i++) aq.update(40);
+    expect(aq.level).toBe('medium');
   });
 });

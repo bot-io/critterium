@@ -68,27 +68,29 @@ export interface JsonSpeciesConfig {
 
 /** JSON-serializable interaction matrix entry. */
 export interface JsonInteractionEntry {
-  strength: number;
-  radius: number;
+  innerStrength: number;
+  outerStrength: number;
+  innerRadius: number;
+  outerRadius: number;
   falloff: FalloffType;
 }
 
-/** JSON-serializable force configuration. */
-export interface JsonForcesConfig {
-  drag?: { coefficient: number } | null;
-  wander?: { strength: number; rate: number } | null;
-  gravity?: { acceleration: number } | null;
-  flowField?: { strength: number; mode: string; angle: number; turbulenceScale: number } | null;
-  vortex?: {
-    cx: number;
-    cy: number;
-    strength: number;
-    radialStrength: number;
-    radius: number;
-    falloff: FalloffType;
-  } | null;
-  pointer?: { strength: number; radius: number; falloff: FalloffType } | null;
+/** A single force entry in the dynamic forces configuration. */
+export interface JsonForceEntry {
+  type: string;
+  enabled: boolean;
+  params: Record<string, unknown>;
 }
+
+/**
+ * JSON-serializable force configuration — dynamic array of force entries.
+ *
+ * Each entry is `{ type, enabled, params }`. The array order is the force
+ * pipeline order. This replaces the old named-slot format (`drag?`, `wander?`,
+ * etc.) and makes the schema extensible: new force types can be added without
+ * schema changes.
+ */
+export type JsonForcesConfig = JsonForceEntry[];
 
 /** JSON-serializable particle snapshot (all typed arrays → number[]). */
 export interface JsonSnapshot {
@@ -287,8 +289,10 @@ function serializeInteractionMatrix(matrix: InteractionMatrix): (JsonInteraction
       const entry = matrix.get(i, j);
       if (entry) {
         row.push({
-          strength: entry.strength,
-          radius: entry.radius,
+          innerStrength: entry.innerStrength,
+          outerStrength: entry.outerStrength,
+          innerRadius: entry.innerRadius,
+          outerRadius: entry.outerRadius,
           falloff: entry.falloff,
         });
       } else {
@@ -300,51 +304,13 @@ function serializeInteractionMatrix(matrix: InteractionMatrix): (JsonInteraction
   return result;
 }
 
-/** Serialize force instances to JSON config. */
+/** Serialize force instances to JSON config (dynamic array format). */
 function serializeForces(forces: SerializeableForce[]): JsonForcesConfig {
-  const result: JsonForcesConfig = {};
-  for (const force of forces) {
-    switch (force.id) {
-      case 'drag':
-        result.drag = { coefficient: force.params.coefficient as number };
-        break;
-      case 'wander':
-        result.wander = {
-          strength: force.params.strength as number,
-          rate: force.params.rate as number,
-        };
-        break;
-      case 'gravity':
-        result.gravity = { acceleration: force.params.acceleration as number };
-        break;
-      case 'flow-field':
-        result.flowField = {
-          strength: force.params.strength as number,
-          mode: force.params.mode as string,
-          angle: force.params.angle as number,
-          turbulenceScale: force.params.turbulenceScale as number,
-        };
-        break;
-      case 'vortex':
-        result.vortex = {
-          cx: force.params.cx as number,
-          cy: force.params.cy as number,
-          strength: force.params.strength as number,
-          radialStrength: force.params.radialStrength as number,
-          radius: force.params.radius as number,
-          falloff: force.params.falloff as FalloffType,
-        };
-        break;
-      case 'pointer':
-        result.pointer = {
-          strength: force.params.strength as number,
-          radius: force.params.radius as number,
-          falloff: force.params.falloff as FalloffType,
-        };
-        break;
-    }
-  }
-  return result;
+  return forces.map((f) => ({
+    type: f.id,
+    enabled: true, // all forces passed to serializeConfig are active
+    params: { ...f.params },
+  }));
 }
 
 /** Serialize ecosystem world snapshot to JSON-compatible format. */
@@ -384,6 +350,76 @@ function serializeSnapshot(eco: EcosystemWorld): JsonSnapshot {
   };
 }
 
+// ─── Force normalization (old → new format migration) ─────────
+
+/** Old-format force slot names mapped to canonical type IDs. */
+const OLD_SLOT_TO_TYPE: Record<string, string> = {
+  drag: 'drag',
+  wander: 'wander',
+  gravity: 'gravity',
+  flowField: 'flow-field',
+  vortex: 'vortex',
+  pointer: 'pointer',
+};
+
+/** Canonical order for migrating old-format forces to array. */
+const OLD_SLOT_ORDER = ['drag', 'wander', 'gravity', 'flowField', 'vortex', 'pointer'];
+
+/**
+ * Normalize force configuration from unknown input.
+ *
+ * Accepts three forms:
+ * - **New array format**: `[{ type, enabled, params }, ...]`
+ * - **Old object-slot format**: `{ drag?: {...}, wander?: {...}, ... }`
+ * - **undefined / null**: empty array
+ *
+ * Always returns a validated `JsonForceEntry[]` (new format).
+ */
+function normalizeForces(raw: unknown): JsonForcesConfig {
+  if (raw === undefined || raw === null) return [];
+
+  // New format: array of force entries
+  if (Array.isArray(raw)) {
+    return raw
+      .filter((e): e is Record<string, unknown> => typeof e === 'object' && e !== null)
+      .map((e) => normalizeForceEntry(e))
+      .filter((e): e is JsonForceEntry => e !== null);
+  }
+
+  // Old format: object with named slots (drag?, wander?, etc.)
+  if (typeof raw === 'object') {
+    return migrateOldForces(raw as Record<string, unknown>);
+  }
+
+  return [];
+}
+
+/** Normalize a single force entry from raw input. */
+function normalizeForceEntry(raw: Record<string, unknown>): JsonForceEntry | null {
+  if (typeof raw.type !== 'string') return null;
+  const enabled = raw.enabled !== false; // default true unless explicitly false
+  const params =
+    typeof raw.params === 'object' && raw.params !== null
+      ? (raw.params as Record<string, unknown>)
+      : {};
+  return { type: raw.type, enabled, params };
+}
+
+/** Migrate old object-slot format to new array format. */
+function migrateOldForces(old: Record<string, unknown>): JsonForcesConfig {
+  const result: JsonForceEntry[] = [];
+  for (const slot of OLD_SLOT_ORDER) {
+    const val = old[slot];
+    if (val !== undefined && val !== null) {
+      const type = OLD_SLOT_TO_TYPE[slot] ?? slot;
+      const params =
+        typeof val === 'object' && val !== null ? (val as Record<string, unknown>) : {};
+      result.push({ type, enabled: true, params });
+    }
+  }
+  return result;
+}
+
 // ─── Deserialize ───────────────────────────────────────────────
 
 /**
@@ -416,6 +452,10 @@ export function deserializeConfig(json: unknown): CritteriumConfig {
   if (typeof simObj.seed !== 'number') {
     throw new Error('simulation.seed must be a number');
   }
+  // Clamp NaN/Infinity seed to 0 (deterministic default)
+  if (!Number.isFinite(simObj.seed)) {
+    simObj.seed = 0;
+  }
   if (typeof simObj.populationCap !== 'number') {
     throw new Error('simulation.populationCap must be a number');
   }
@@ -440,15 +480,11 @@ export function deserializeConfig(json: unknown): CritteriumConfig {
     validateSpecies(obj.species[i] as Record<string, unknown>, i);
   }
 
-  // Validate interaction matrix
-  if (!Array.isArray(obj.interactionMatrix)) {
-    throw new Error('interactionMatrix must be a 2D array');
-  }
+  // Validate interaction matrix — structure + entry clamping
+  validateInteractionMatrix(obj.interactionMatrix, obj.species.length);
 
-  // Validate forces (optional fields)
-  if (obj.forces !== undefined && (typeof obj.forces !== 'object' || obj.forces === null)) {
-    throw new Error('forces must be an object if provided');
-  }
+  // Normalize forces: accept old object-slot format AND new array format
+  const normalizedForces = normalizeForces(obj.forces);
 
   // Validate snapshot (optional)
   if (obj.snapshot !== undefined) {
@@ -467,7 +503,7 @@ export function deserializeConfig(json: unknown): CritteriumConfig {
     },
     species: obj.species as JsonSpeciesConfig[],
     interactionMatrix: obj.interactionMatrix as (JsonInteractionEntry | null)[][],
-    forces: (obj.forces ?? {}) as JsonForcesConfig,
+    forces: normalizedForces,
     snapshot: obj.snapshot as JsonSnapshot | undefined,
   };
 }
@@ -521,7 +557,14 @@ function validateSpecies(sp: Record<string, unknown>, index: number): void {
       index,
       'energy.movementCostPerSec',
     );
-    e.idleDrainPerSec = clampNum(e.idleDrainPerSec, 0, 1000, 1, index, 'energy.idleDrainPerSec');
+    e.idleDrainPerSec = clampNum(
+      e.idleDrainPerSec,
+      -1000,
+      1000,
+      1,
+      index,
+      'energy.idleDrainPerSec',
+    );
   }
 
   // Validate nested lifecycle config
@@ -568,6 +611,99 @@ function clampNum(
   if (val < min) return min;
   if (val > max) return max;
   return val;
+}
+
+/**
+ * Validate the interaction matrix structure and clamp entry values.
+ * Ensures the matrix is a square 2D array with dimensions matching the
+ * species count. Each non-null entry's strength/radius are clamped against
+ * NaN/Infinity/negative values, and the falloff field is validated.
+ */
+function validateInteractionMatrix(raw: unknown, numSpecies: number): void {
+  if (!Array.isArray(raw)) {
+    throw new Error('interactionMatrix must be a 2D array');
+  }
+
+  const rows = raw.length;
+
+  // Empty matrix with empty species is valid
+  if (rows === 0) return;
+
+  // Dimension check: matrix must match species count (if species present)
+  if (numSpecies > 0 && rows !== numSpecies) {
+    throw new Error(
+      `interactionMatrix dimensions (${rows} rows) do not match species count (${numSpecies})`,
+    );
+  }
+
+  // Validate each row is an array and the matrix is square
+  for (let i = 0; i < rows; i++) {
+    const row = raw[i];
+    if (!Array.isArray(row)) {
+      throw new Error(`interactionMatrix[${i}] must be an array`);
+    }
+    if (row.length !== rows) {
+      throw new Error(
+        `interactionMatrix is not square: row ${i} has ${row.length} columns, expected ${rows}`,
+      );
+    }
+  }
+
+  // Clamp entry values: NaN/Infinity in strength → 0, radius → default 100
+  const VALID_FALLOFFS = new Set(['linear', 'inverse', 'constant']);
+  for (let i = 0; i < rows; i++) {
+    for (let j = 0; j < raw[i].length; j++) {
+      const entry = raw[i][j];
+      if (entry === null || entry === undefined) continue;
+      if (typeof entry !== 'object') {
+        throw new Error(`interactionMatrix[${i}][${j}] must be an object or null`);
+      }
+      const e = entry as Record<string, unknown>;
+      // Backward compat: migrate old { strength, radius } → new schema
+      if (!('innerStrength' in e) && 'strength' in e) {
+        e.innerStrength = e.strength;
+        e.outerStrength = e.strength;
+      }
+      if (!('outerRadius' in e) && 'radius' in e) {
+        e.innerRadius = 0;
+        e.outerRadius = e.radius;
+      }
+      // Clamp innerStrength: NaN/Infinity → 0
+      if (typeof e.innerStrength !== 'number' || !Number.isFinite(e.innerStrength)) {
+        e.innerStrength = 0;
+      }
+      // Clamp outerStrength: NaN/Infinity → 0
+      if (typeof e.outerStrength !== 'number' || !Number.isFinite(e.outerStrength)) {
+        e.outerStrength = 0;
+      }
+      // Clamp innerRadius: NaN/Infinity/negative → 0
+      if (
+        typeof e.innerRadius !== 'number' ||
+        !Number.isFinite(e.innerRadius) ||
+        (e.innerRadius as number) < 0
+      ) {
+        e.innerRadius = 0;
+      }
+      // Clamp outerRadius: NaN/Infinity/negative → default 100; clamp upper bound
+      if (
+        typeof e.outerRadius !== 'number' ||
+        !Number.isFinite(e.outerRadius) ||
+        (e.outerRadius as number) < 0
+      ) {
+        e.outerRadius = 100;
+      } else if ((e.outerRadius as number) > 5000) {
+        e.outerRadius = 5000;
+      }
+      // innerRadius cannot exceed outerRadius
+      if ((e.innerRadius as number) > (e.outerRadius as number)) {
+        e.innerRadius = e.outerRadius;
+      }
+      // Validate falloff enum
+      if (typeof e.falloff !== 'string' || !VALID_FALLOFFS.has(e.falloff)) {
+        e.falloff = 'linear';
+      }
+    }
+  }
 }
 
 /** Validate a snapshot object. */
@@ -630,20 +766,38 @@ export function applyConfig(config: CritteriumConfig): AppliedConfig {
   return { eco, matrix, species };
 }
 
-/** Build an InteractionMatrix from the JSON 2D array. */
+/** Build an InteractionMatrix from the JSON 2D array.
+ * Supports backward compat: old format { strength, radius, falloff } auto-migrates
+ * to { innerStrength: strength, outerStrength: strength, innerRadius: 0, outerRadius: radius }.
+ */
 function buildInteractionMatrix(json: (JsonInteractionEntry | null)[][]): InteractionMatrix {
   const numTypes = json.length;
   const matrix = new InteractionMatrix(numTypes);
 
   for (let i = 0; i < numTypes; i++) {
     for (let j = 0; j < json[i].length; j++) {
-      const entry = json[i][j];
+      const entry = json[i][j] as unknown as Record<string, unknown> | null;
       if (entry) {
-        matrix.set(i, j, {
-          strength: entry.strength,
-          radius: entry.radius,
-          falloff: entry.falloff,
-        });
+        // Backward compat: old format had { strength, radius }
+        if ('strength' in entry && !('outerStrength' in entry)) {
+          const s = entry.strength as number;
+          const r = entry.radius as number;
+          matrix.set(i, j, {
+            innerStrength: s,
+            outerStrength: s,
+            innerRadius: 0,
+            outerRadius: r,
+            falloff: entry.falloff as FalloffType,
+          });
+        } else {
+          matrix.set(i, j, {
+            innerStrength: entry.innerStrength as number,
+            outerStrength: entry.outerStrength as number,
+            innerRadius: entry.innerRadius as number,
+            outerRadius: entry.outerRadius as number,
+            falloff: entry.falloff as FalloffType,
+          });
+        }
       }
     }
   }
@@ -658,13 +812,16 @@ function buildInteractionRulesFromMatrix(
   return json.map((row) =>
     row.map((entry) => {
       if (!entry) return null;
-      // For the ecosystem config, we create a simple enabledForces set
-      const isAttract = entry.strength >= 0;
+      // Backward compat: old format
+      const e = entry as unknown as Record<string, unknown>;
+      const outerStrength = ('outerStrength' in e ? e.outerStrength : e.strength) as number;
+      const outerRadius = ('outerRadius' in e ? e.outerRadius : e.radius) as number;
+      const isAttract = outerStrength >= 0;
       return {
         enabledForces: new Set([isAttract ? 'attract' : 'repel']),
-        radius: entry.radius,
-        strength: entry.strength,
-        falloff: entry.falloff as 'linear' | 'inverse' | 'constant',
+        radius: outerRadius,
+        strength: outerStrength,
+        falloff: e.falloff as 'linear' | 'inverse' | 'constant',
       };
     }),
   );

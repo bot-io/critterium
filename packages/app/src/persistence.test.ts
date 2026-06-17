@@ -490,3 +490,50 @@ describe('persistence', () => {
     vi.restoreAllMocks();
   });
 });
+
+// ─── Regression: shareContent + exportConfig on Android ──────────
+// Bug: exportConfig used Share.share({ url: result.uri }) which doesn't
+// work on Android WebView. Fixed to use Share.share({ dialogTitle, text }).
+
+describe('shareContent (Android export regression)', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.restoreAllMocks();
+  });
+
+  it('shareContent is exported from persistence', async () => {
+    const mod = await import('./persistence.js');
+    expect(mod.shareContent).toBeDefined();
+    expect(typeof mod.shareContent).toBe('function');
+  });
+
+  it('exportConfig uses Capacitor Share with file URI', async () => {
+    // Mock the dynamic imports for Capacitor plugins
+    const shareSpy = vi.fn().mockResolvedValue(undefined);
+    const writeFileSpy = vi.fn().mockResolvedValue({ uri: 'file:///test' });
+
+    vi.doMock('@capacitor/share', () => ({
+      Share: { share: shareSpy },
+    }));
+    vi.doMock('@capacitor/filesystem', () => ({
+      Filesystem: { writeFile: writeFileSpy },
+      Directory: { Documents: 'DOCUMENTS', Cache: 'CACHE' },
+      Encoding: { UTF8: 'utf8' },
+    }));
+
+    const { exportConfig } = await import('./persistence.js');
+    await exportConfig(sampleConfig as any, 'test.json');
+
+    // Must have written file to Cache
+    expect(writeFileSpy).toHaveBeenCalledTimes(1);
+    const writeArg = writeFileSpy.mock.calls[0][0];
+    expect(writeArg.directory).toBe('CACHE');
+
+    // Must have called Share.share with url (file URI), not text
+    expect(shareSpy).toHaveBeenCalledTimes(1);
+    const shareArg = shareSpy.mock.calls[0][0];
+    expect(shareArg.url).toBeDefined();
+    expect(shareArg.url).toBe('file:///test');
+    expect(shareArg.dialogTitle).toBeDefined();
+  });
+});

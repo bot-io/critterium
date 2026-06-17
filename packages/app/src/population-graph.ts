@@ -4,6 +4,8 @@
  * Lightweight canvas-based population graph that draws on a
  * separate small canvas overlaid on the main simulation canvas.
  * Shows per-species population trends over time.
+ *
+ * Optimized: ring buffer for O(1) history management, redraw only on new sample.
  */
 
 export interface PopulationGraphOptions {
@@ -11,17 +13,18 @@ export interface PopulationGraphOptions {
   maxHistorySec: number;
 }
 
-interface HistoryEntry {
-  counts: number[];
-}
-
 export class PopulationGraph {
   private ctx: CanvasRenderingContext2D;
   private speciesColors: number[];
   private maxHistorySec: number;
 
-  /** History buffer: oldest first. */
-  private history: HistoryEntry[] = [];
+  /** Ring buffer for history entries. Pre-allocated, never grows. */
+  private readonly ringCounts: Int32Array[];
+  private ringHead = 0;
+  private ringLen = 0;
+
+  /** Capacity of the ring buffer. */
+  private readonly ringCap: number;
 
   /** Time accumulator for sampling. */
   private sampleTimer = 0;
@@ -50,6 +53,14 @@ export class PopulationGraph {
     canvas.style.pointerEvents = 'none';
     canvas.style.zIndex = '10';
     canvas.style.borderRadius = '4px';
+
+    // Pre-allocate ring buffer
+    this.ringCap = Math.ceil(this.maxHistorySec / this.sampleInterval) + 1;
+    const numSpecies = options.speciesColors.length;
+    this.ringCounts = new Array(this.ringCap);
+    for (let i = 0; i < this.ringCap; i++) {
+      this.ringCounts[i] = new Int32Array(numSpecies);
+    }
   }
 
   /**
@@ -60,19 +71,22 @@ export class PopulationGraph {
   update(speciesCounts: number[] | Int32Array | Uint8Array, dt: number): void {
     this.sampleTimer += dt;
 
-    // Only sample every 0.5s
+    // Only sample every 0.5s — and only redraw when we have new data
     if (this.sampleTimer >= this.sampleInterval) {
       this.sampleTimer = 0;
-      this.history.push({ counts: Array.from(speciesCounts) });
 
-      // Trim to max history
-      const maxEntries = Math.ceil(this.maxHistorySec / this.sampleInterval);
-      while (this.history.length > maxEntries) {
-        this.history.shift();
+      // Copy current counts into ring buffer slot
+      const slot = this.ringCounts[this.ringHead];
+      const numSpecies = Math.min(slot.length, speciesCounts.length);
+      for (let i = 0; i < numSpecies; i++) {
+        slot[i] = speciesCounts[i];
       }
-    }
 
-    this.draw();
+      this.ringHead = (this.ringHead + 1) % this.ringCap;
+      if (this.ringLen < this.ringCap) this.ringLen++;
+
+      this.draw();
+    }
   }
 
   private draw(): void {
@@ -87,13 +101,15 @@ export class PopulationGraph {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
     ctx.fillRect(0, 0, w, h);
 
-    if (this.history.length < 2) return;
+    if (this.ringLen < 2) return;
 
-    // Find max population for Y-axis scaling
+    // Find max population for Y-axis scaling — single pass over ring buffer
     let maxPop = 1;
-    for (const entry of this.history) {
-      for (const c of entry.counts) {
-        if (c > maxPop) maxPop = c;
+    for (let i = 0; i < this.ringLen; i++) {
+      const idx = (this.ringHead - this.ringLen + i + this.ringCap) % this.ringCap;
+      const counts = this.ringCounts[idx];
+      for (let s = 0; s < counts.length; s++) {
+        if (counts[s] > maxPop) maxPop = counts[s];
       }
     }
 
@@ -121,9 +137,10 @@ export class PopulationGraph {
       ctx.lineWidth = 1.5;
       ctx.beginPath();
 
-      for (let j = 0; j < this.history.length; j++) {
-        const x = (j / (this.history.length - 1)) * w;
-        const count = this.history[j].counts[s] || 0;
+      for (let j = 0; j < this.ringLen; j++) {
+        const idx = (this.ringHead - this.ringLen + j + this.ringCap) % this.ringCap;
+        const x = (j / (this.ringLen - 1)) * w;
+        const count = this.ringCounts[idx][s] || 0;
         const y = h - (count / maxPop) * h;
         if (j === 0) {
           ctx.moveTo(x, y);
@@ -138,11 +155,18 @@ export class PopulationGraph {
   /** Update species colors (e.g. when species are added/removed). */
   setColors(colors: number[]): void {
     this.speciesColors = colors;
+    // Resize ring buffer slots if species count changed
+    if (colors.length !== this.ringCounts[0].length) {
+      for (let i = 0; i < this.ringCap; i++) {
+        this.ringCounts[i] = new Int32Array(colors.length);
+      }
+    }
   }
 
   /** Clean up and reset all history. */
   reset(): void {
-    this.history.length = 0;
+    this.ringHead = 0;
+    this.ringLen = 0;
     this.sampleTimer = 0;
     this.ctx.clearRect(0, 0, this.width, this.height);
   }

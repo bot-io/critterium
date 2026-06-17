@@ -16,16 +16,6 @@ export interface EatingResult {
   energyGained: number; // total energy gained by predators
 }
 
-// Pre-allocated buffer for tracking eaten particles — reused across calls
-let eatenBuffer: Uint8Array | null = null;
-
-function getEatenBuffer(size: number): Uint8Array {
-  if (!eatenBuffer || eatenBuffer.length < size) {
-    eatenBuffer = new Uint8Array(size);
-  }
-  return eatenBuffer;
-}
-
 /**
  * Process eating for one simulation step.
  *
@@ -56,8 +46,8 @@ export function processEating(eco: EcosystemWorld, grid: SpatialHashGrid): Eatin
   // No predator species — skip entirely
   if (maxEatRadius === 0) return result;
 
-  // Reuse pre-allocated eaten buffer (zero per-step allocation)
-  const eaten = getEatenBuffer(state.alive.length);
+  // Get per-instance eaten buffer from EcosystemWorld (zero per-step allocation)
+  const eaten = eco.getEatenBuffer();
   eaten.fill(0);
 
   const { x, y, type, count } = world;
@@ -73,6 +63,7 @@ export function processEating(eco: EcosystemWorld, grid: SpatialHashGrid): Eatin
     if (diet.canEat.size === 0) continue;
 
     const ri = species[speciesIdx].radius;
+    const maxE = species[speciesIdx].energy.maxEnergy;
 
     // Query spatial hash for neighbors within max eat radius.
     // Pass selfIdx=i so co-located prey (dSq===0) are still found.
@@ -99,18 +90,17 @@ export function processEating(eco: EcosystemWorld, grid: SpatialHashGrid): Eatin
         // Energy gain from energyGainPerPrey array
         const energyGain = species[speciesIdx].energy.energyGainPerPrey[preySpeciesIdx] ?? 0;
 
-        // Don't eat if it would exceed max energy — predator is "full"
-        const maxE = species[speciesIdx].energy.maxEnergy;
-        if (state.energy[i] + energyGain > maxE) return;
-
-        // Eat! Instant kill + energy gain
+        // Eat! Instant kill + energy gain (capped at maxEnergy)
         eaten[j] = 1;
         eco.kill(j);
         result.killed++;
 
         if (energyGain > 0) {
-          state.energy[i] += energyGain;
-          result.energyGained += energyGain;
+          const actualGain = Math.min(energyGain, maxE - state.energy[i]);
+          if (actualGain > 0) {
+            state.energy[i] += actualGain;
+            result.energyGained += actualGain;
+          }
         }
       },
       i,

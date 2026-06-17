@@ -2,20 +2,17 @@
  * Critterium — Render Module
  *
  * PixiJS v8 adapter for rendering the simulation.
- * One circle Graphics per particle, colored by species.
+ * Uses a SINGLE batched Graphics for all particles (not one per particle).
  * HUD overlay with particle count and species counts.
  *
  * Visual effects:
  * - Energy-based opacity
- * - Sickness rings (pulsing red)
  * - Death expanding rings (object pool)
  * - Birth flash (object pool)
- * - Infection aura
  *
  * Performance controls:
  * - renderSkip: only render every Nth particle
  * - effectsEnabled: toggle death/birth effects
- * - sicknessRingsEnabled: toggle sickness ring rendering
  * - energyOpacityEnabled: toggle energy-based alpha
  */
 
@@ -58,16 +55,12 @@ export class CritteriumRenderer {
   readonly app: Application;
   private particleContainer!: Container;
   private effectsContainer!: Container;
-  private sicknessContainer!: Container;
   private birthFlashContainer!: Container;
   private hudContainer!: Container;
   private hudText!: Text;
 
-  /** Per-particle graphics objects (indexed by particle index). */
-  private sprites: Graphics[] = [];
-
-  /** Per-sprite cached species index (avoid redraws). */
-  private spriteSpecies: number[] = [];
+  /** Single batched Graphics for all particles. */
+  private particleGraphics!: Graphics;
 
   /** Species visual config (indexed by species/type). */
   private speciesVisuals: SpeciesVisual[];
@@ -92,9 +85,6 @@ export class CritteriumRenderer {
 
   /** Skip birth/death detection for one frame after reset or fresh init. */
   private skipEffectsFrame = true;
-
-  /** Pulsing phase for sickness rings. */
-  private pulsePhase = 0;
 
   /** Render skip: only render every Nth particle (1 = all, 2 = every 2nd). */
   renderSkip: number = 1;
@@ -124,14 +114,17 @@ export class CritteriumRenderer {
     this.prevAlive.fill(DEAD);
     // Pre-allocate species counts (avoids allocation in hot path)
     this.speciesCounts = new Int32Array(speciesVisuals.length);
-    this.setupScene(maxParticles);
+    this.setupScene();
   }
 
   /**
    * Reset tracking state (prevAlive, effect pools). Call after sim rebuild
    * to prevent stale birth/death effects from lingering.
    */
-  resetState(): void {
+  resetState(maxParticles?: number): void {
+    if (maxParticles !== undefined && maxParticles > this.prevAlive.length) {
+      this.prevAlive = new Uint8Array(maxParticles);
+    }
     this.prevAlive.fill(DEAD);
     this.skipEffectsFrame = true;
     for (const effect of this.birthPool) {
@@ -171,19 +164,19 @@ export class CritteriumRenderer {
     return renderer;
   }
 
-  /** Set up the display containers and pre-allocate particle sprites. */
-  private setupScene(maxParticles: number): void {
+  /** Set up the display containers and pre-allocate effect pools. */
+  private setupScene(): void {
     this.particleContainer = new Container();
     this.particleContainer.label = 'particles';
     this.app.stage.addChild(this.particleContainer);
 
+    // Single batched Graphics for all particles
+    this.particleGraphics = new Graphics();
+    this.particleContainer.addChild(this.particleGraphics);
+
     this.effectsContainer = new Container();
     this.effectsContainer.label = 'death-effects';
     this.app.stage.addChild(this.effectsContainer);
-
-    this.sicknessContainer = new Container();
-    this.sicknessContainer.label = 'sickness-rings';
-    this.app.stage.addChild(this.sicknessContainer);
 
     this.birthFlashContainer = new Container();
     this.birthFlashContainer.label = 'birth-flash';
@@ -192,15 +185,6 @@ export class CritteriumRenderer {
     this.hudContainer = new Container();
     this.hudContainer.label = 'hud';
     this.app.stage.addChild(this.hudContainer);
-
-    // Pre-allocate graphics objects for the max particle count
-    for (let i = 0; i < maxParticles; i++) {
-      const g = new Graphics();
-      g.visible = false;
-      this.particleContainer.addChild(g);
-      this.sprites.push(g);
-      this.spriteSpecies.push(-1);
-    }
 
     // Pre-allocate death effect pool
     for (let i = 0; i < MAX_DEATH_EFFECTS; i++) {
@@ -243,23 +227,24 @@ export class CritteriumRenderer {
     this.speciesMaxEnergy = maxEnergy;
   }
 
-  /** Update species visual config (color, radius) and invalidate sprite cache so particles redraw. */
+  /** Update species visual config (color, radius). */
   updateSpeciesVisuals(visuals: SpeciesVisual[]): void {
     this.speciesVisuals = visuals;
-    // Invalidate all sprite species so they get redrawn with new visuals
-    this.spriteSpecies.fill(-1);
+  }
+
+  /** Get per-species counts from the last update (avoids double counting in main loop). */
+  getSpeciesCounts(): Int32Array {
+    return this.speciesCounts;
   }
 
   /**
    * Sync all particle positions, visibility, and colors from the world state.
    * Call once per frame. Zero allocations in hot path.
+   *
+   * Uses a single batched Graphics — all particles drawn into one display object.
    */
   update(world: World, eco: EcosystemState, dt: number): void {
     const hwm = world.x.length;
-    const len = this.sprites.length;
-
-    // Advance pulse phase for sickness rings
-    this.pulsePhase += dt * 4;
 
     // Reset pre-allocated species counts (no allocation)
     const speciesCounts = this.speciesCounts;
@@ -269,20 +254,17 @@ export class CritteriumRenderer {
     const effectsEnabled = this.effectsEnabled;
     const energyOpacityEnabled = this.energyOpacityEnabled;
 
-    for (let i = 0; i < hwm && i < len; i++) {
-      const sprite = this.sprites[i];
+    // Clear the single batched graphics — redraw all particles this frame
+    const gfx = this.particleGraphics;
+    gfx.clear();
 
+    for (let i = 0; i < hwm; i++) {
       const isAlive = eco.alive[i] !== DEAD;
       const wasAlive = this.prevAlive[i] !== DEAD;
 
       // After reset, skip effects for one frame but sync prevAlive
       if (this.skipEffectsFrame) {
         this.prevAlive[i] = eco.alive[i];
-        if (!isAlive) {
-          sprite.visible = false;
-          continue;
-        }
-        // fall through to normal rendering
       } else {
         // Detect death: was alive last frame, now dead
         if (wasAlive && !isAlive) {
@@ -304,63 +286,37 @@ export class CritteriumRenderer {
         this.prevAlive[i] = eco.alive[i];
       }
 
-      if (!isAlive) {
-        sprite.visible = false;
-        continue;
-      }
+      if (!isAlive) continue;
 
       const speciesIdx = world.type[i];
       const vis = this.speciesVisuals[speciesIdx];
-      if (!vis) {
-        sprite.visible = false;
-        continue;
-      }
+      if (!vis) continue;
 
-      // Count per species (always, for HUD accuracy)
+      // Count per species (always, for HUD + population graph)
       speciesCounts[speciesIdx]++;
 
       // Render skip: only render every Nth particle
-      if (renderSkip > 1 && i % renderSkip !== 0) {
-        sprite.visible = false;
-        continue;
-      }
+      if (renderSkip > 1 && i % renderSkip !== 0) continue;
 
-      // Position
-      sprite.x = world.x[i];
-      sprite.y = world.y[i];
-      sprite.visible = true;
+      const px = world.x[i];
+      const py = world.y[i];
 
-      // Energy-based opacity: modulate sprite alpha
+      // Energy-based opacity
+      let alpha = 0.85;
       if (energyOpacityEnabled) {
         const maxE = this.speciesMaxEnergy[speciesIdx] || 100;
         const energyRatio = Math.min(1, Math.max(0, eco.energy[i] / maxE));
-        // High energy = fully visible (1.0), low energy = 50% (0.5)
-        sprite.alpha = 0.5 + energyRatio * 0.5;
-      } else {
-        sprite.alpha = 1.0;
+        // High energy = fully visible (0.85), low energy = ~0.4
+        alpha = 0.4 + energyRatio * 0.45;
       }
 
-      // Only redraw if species changed
-      if (this.spriteSpecies[i] !== speciesIdx) {
-        sprite.clear();
-        // Slight glow: larger translucent circle behind
-        sprite.circle(0, 0, vis.radius + 2);
-        sprite.fill({ color: vis.color, alpha: 0.15 });
-        // Main circle
-        sprite.circle(0, 0, vis.radius);
-        sprite.fill({ color: vis.color, alpha: 0.85 });
-        this.spriteSpecies[i] = speciesIdx;
-      }
-    }
+      // Slight glow: larger translucent circle behind
+      gfx.circle(px, py, vis.radius + 2);
+      gfx.fill({ color: vis.color, alpha: alpha * 0.18 });
 
-    // Hide sprites beyond current array length
-    for (let i = hwm; i < len; i++) {
-      this.sprites[i].visible = false;
-    }
-
-    // Clear any stale sickness graphics
-    if (this.sicknessGfx) {
-      this.sicknessGfx.clear();
+      // Main circle
+      gfx.circle(px, py, vis.radius);
+      gfx.fill({ color: vis.color, alpha });
     }
 
     // Update death effects (always run so active effects can finish)
@@ -512,9 +468,6 @@ export class CritteriumRenderer {
       effect.g.y = world.y[idx];
     }
   }
-
-  /** Single graphics object for all sickness rings (avoid per-frame allocations). */
-  private sicknessGfx: Graphics | null = null;
 
   /** Destroy the renderer and clean up. */
   destroy(): void {

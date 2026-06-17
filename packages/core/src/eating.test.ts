@@ -123,7 +123,7 @@ describe('processEating', () => {
     expect(eco.eco.energy[0]).toBe(energyBefore + 30);
   });
 
-  it('predator skips eating when energy would exceed maxEnergy', () => {
+  it('predator eats and caps energy at maxEnergy when gain would overflow', () => {
     const cfg = predatorPreyConfig(1, 1, 100);
     const eco = new EcosystemWorld(cfg);
     eco.world.x[0] = 100;
@@ -134,14 +134,36 @@ describe('processEating', () => {
     eco.world.vy[0] = 0;
     eco.world.vx[1] = 0;
     eco.world.vy[1] = 0;
-    // Set predator energy near max
-    eco.eco.energy[0] = 195; // max is 200, gain is 30 → 225 > max → should NOT eat
+    // Set predator energy (max is 200)
+    eco.eco.energy[0] = 140; // gain is 30 → would be 170, under cap
 
     const grid = makeGrid(eco);
     const result = processEating(eco, grid);
-    expect(eco.eco.energy[0]).toBe(195); // energy unchanged
-    expect(result.killed).toBe(0); // prey not killed
-    expect(eco.eco.alive[1]).toBe(ALIVE); // prey still alive
+    expect(result.killed).toBe(1); // prey killed
+    expect(eco.eco.energy[0]).toBe(170); // 140 + 30 gain
+    expect(eco.eco.alive[1]).toBe(DEAD); // prey eaten
+  });
+
+  it('predator always eats regardless of energy level (no satiation gate)', () => {
+    const cfg = predatorPreyConfig(1, 1, 100);
+    const eco = new EcosystemWorld(cfg);
+    eco.world.x[0] = 100;
+    eco.world.y[0] = 100;
+    eco.world.x[1] = 100;
+    eco.world.y[1] = 100;
+    eco.world.vx[0] = 0;
+    eco.world.vy[0] = 0;
+    eco.world.vx[1] = 0;
+    eco.world.vy[1] = 0;
+    // Predator at 195/200 energy — very full, but still hunts (maxEnergy is the only cap)
+    eco.eco.energy[0] = 195;
+
+    const grid = makeGrid(eco);
+    const result = processEating(eco, grid);
+    expect(result.killed).toBe(1); // ate even at high energy
+    expect(eco.eco.alive[1]).toBe(DEAD); // prey eaten
+    // Energy capped at maxEnergy (195 + 30 would be 225, capped to 200)
+    expect(eco.eco.energy[0]).toBe(200);
   });
 
   it('predator can eat multiple prey in one step', () => {
@@ -299,5 +321,49 @@ describe('eating + lifecycle integration', () => {
     const idx = eco.spawn(1, 200, 200);
     expect(idx).toBe(1); // reused the killed slot
     expect(eco.aliveCount).toBe(2);
+  });
+});
+
+// ─── CRT-67 #1: instance-scoped eaten buffer ─────────────────────
+//
+// The eaten buffer was previously a module-level singleton shared across
+// all processEating calls — two concurrent simulations could corrupt each
+// other's state. It is now instance-scoped on EcosystemWorld via
+// getEatenBuffer(), eliminating the cross-instance hazard.
+
+describe('CRT-67: eaten buffer is instance-scoped', () => {
+  it('two EcosystemWorld instances have independent eaten buffers', () => {
+    const ecoA = new EcosystemWorld(predatorPreyConfig(1, 1, 100));
+    const ecoB = new EcosystemWorld(predatorPreyConfig(1, 1, 100));
+    const bufA = ecoA.getEatenBuffer();
+    const bufB = ecoB.getEatenBuffer();
+    expect(bufA).not.toBe(bufB); // distinct instances
+  });
+
+  it('getEatenBuffer returns a buffer sized to populationCap', () => {
+    const eco = new EcosystemWorld(predatorPreyConfig(1, 1, 50));
+    const buf = eco.getEatenBuffer();
+    expect(buf.length).toBeGreaterThanOrEqual(50);
+  });
+
+  it('processing one sim does not corrupt another sim buffer', () => {
+    const ecoA = new EcosystemWorld(predatorPreyConfig(1, 1, 100));
+    const ecoB = new EcosystemWorld(predatorPreyConfig(1, 1, 100));
+
+    // Set up overlaps in ecoA only
+    for (let i = 0; i < 2; i++) {
+      ecoA.world.x[i] = 100;
+      ecoA.world.y[i] = 100;
+      ecoA.world.vx[i] = 0;
+      ecoA.world.vy[i] = 0;
+    }
+
+    const gridA = makeGrid(ecoA);
+    const resultA = processEating(ecoA, gridA);
+    expect(resultA.killed).toBe(1);
+
+    // ecoB untouched — its buffer must still be all zeros
+    const bufB = ecoB.getEatenBuffer();
+    expect(bufB.every((v) => v === 0)).toBe(true);
   });
 });
