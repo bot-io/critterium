@@ -657,22 +657,25 @@ export class InteractionMatrix {
    * Compute the force magnitude for a given entry at a given distance.
    *
    * Additive two-force model (boids-style separation + cohesion):
+   *   - Inner force: active in (0, innerRadius) when innerRadius > 0.
+   *   - Outer force: active in (0, outerRadius).
+   *   Both use the entry's `falloff` mode and are computed independently then
+   *   ADDED together (so opposing-sign inner/outer forces — e.g. inner
+   *   repulsion + outer attraction — can balance at one stable distance).
    *
-   *   Inner force (repulsion): active in [0, innerRadius).
-   *     Fades from innerStrength at d=0 to 0 at d=innerRadius.
+   * Falloff shapes (t = dist / zoneRadius, applied within each active zone):
+   *   linear   → strength*(1-t): reaches exactly 0 at the zone boundary
+   *              (continuous — no force jump at the cutoff).
+   *   inverse  → strength/(t+0.1): peaks ~10x strength as d→0, retains ~0.91x
+   *              strength at the boundary, then hard-drops to 0 (discontinuous).
+   *   constant → strength: flat across the zone, hard-drops to 0 at the boundary
+   *              (discontinuous).
    *
-   *   Outer force (attraction): active in [0, outerRadius).
-   *     Fades from outerStrength at d=0 to 0 at d=outerRadius.
+   * Only `linear` is continuous at the zone boundaries; `inverse` and
+   * `constant` have a force discontinuity where the zone ends.
    *
-   * Both forces are computed independently and ADDED together.
-   * This means:
-   *   - At d=0: force = innerStrength + outerStrength (usually net repulsion)
-   *   - At d=innerRadius: force = 0 + outerStrength*(1-innerRadius/outerRadius)
-   *   - At d=outerRadius: force = 0 (both have faded out)
-   *   - Exactly ONE equilibrium where repulsion balances attraction
-   *   - No discontinuities, no artificial ring formation
-   *
-   * Returns 0 if distance >= outerRadius or <= 0.
+   * Returns 0 when dist >= outerRadius or dist <= 0. The dist <= 0 guard skips
+   * self-interaction, so the additive profile is NOT evaluated at d = 0.
    */
   static forceAtDistance(entry: InteractionEntry, dist: number): number {
     if (dist >= entry.outerRadius || dist <= 0) return 0;
