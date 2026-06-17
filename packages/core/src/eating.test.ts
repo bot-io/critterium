@@ -134,7 +134,7 @@ describe('processEating', () => {
     eco.world.vy[0] = 0;
     eco.world.vx[1] = 0;
     eco.world.vy[1] = 0;
-    // Set predator energy below 75% satiation threshold (max is 200, 75% = 150)
+    // Set predator energy (max is 200)
     eco.eco.energy[0] = 140; // gain is 30 → would be 170, under cap
 
     const grid = makeGrid(eco);
@@ -144,7 +144,7 @@ describe('processEating', () => {
     expect(eco.eco.alive[1]).toBe(DEAD); // prey eaten
   });
 
-  it('satiated predator (energy > 75% max) skips eating', () => {
+  it('predator always eats regardless of energy level (no satiation gate)', () => {
     const cfg = predatorPreyConfig(1, 1, 100);
     const eco = new EcosystemWorld(cfg);
     eco.world.x[0] = 100;
@@ -155,13 +155,15 @@ describe('processEating', () => {
     eco.world.vy[0] = 0;
     eco.world.vx[1] = 0;
     eco.world.vy[1] = 0;
-    // Predator at 180/200 energy (90% — above 75% satiation threshold)
-    eco.eco.energy[0] = 180;
+    // Predator at 195/200 energy — very full, but still hunts (maxEnergy is the only cap)
+    eco.eco.energy[0] = 195;
 
     const grid = makeGrid(eco);
     const result = processEating(eco, grid);
-    expect(result.killed).toBe(0); // satiated — didn't eat
-    expect(eco.eco.alive[1]).not.toBe(DEAD); // prey survived
+    expect(result.killed).toBe(1); // ate even at high energy
+    expect(eco.eco.alive[1]).toBe(DEAD); // prey eaten
+    // Energy capped at maxEnergy (195 + 30 would be 225, capped to 200)
+    expect(eco.eco.energy[0]).toBe(200);
   });
 
   it('predator can eat multiple prey in one step', () => {
