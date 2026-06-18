@@ -42,6 +42,7 @@ interface DeathEffect {
 interface BirthEffect {
   g: Graphics;
   idx: number;
+  speciesIdx: number;
   elapsed: number;
   duration: number;
 }
@@ -98,6 +99,12 @@ export class CritteriumRenderer {
   /** Pre-allocated species counts array (avoids per-frame allocation). */
   private speciesCounts: Int32Array;
 
+  /** Frame counter for HUD update throttling. */
+  private frameCount = 0;
+
+  /** Cached HUD text to avoid unnecessary re-rasterization. */
+  private lastHudText = '';
+
   constructor(
     app: Application,
     speciesVisuals: SpeciesVisual[],
@@ -129,11 +136,14 @@ export class CritteriumRenderer {
     this.skipEffectsFrame = true;
     for (const effect of this.birthPool) {
       effect.g.visible = false;
+      effect.g.clear();
       effect.elapsed = -1;
       effect.idx = -1;
+      effect.speciesIdx = -1;
     }
     for (const effect of this.deathPool) {
       effect.g.visible = false;
+      effect.g.clear();
       effect.elapsed = -1;
     }
   }
@@ -153,7 +163,7 @@ export class CritteriumRenderer {
       background: '#111111',
       resizeTo: window,
       antialias: true,
-      resolution: window.devicePixelRatio || 1,
+      resolution: Math.min(2, window.devicePixelRatio || 1),
       autoDensity: true,
     });
 
@@ -199,7 +209,7 @@ export class CritteriumRenderer {
       const g = new Graphics();
       g.visible = false;
       this.birthFlashContainer.addChild(g);
-      this.birthPool.push({ g, idx: -1, elapsed: -1, duration: 0.2 });
+      this.birthPool.push({ g, idx: -1, speciesIdx: -1, elapsed: -1, duration: 0.2 });
     }
 
     // HUD text
@@ -244,7 +254,9 @@ export class CritteriumRenderer {
    * Uses a single batched Graphics — all particles drawn into one display object.
    */
   update(world: World, eco: EcosystemState, dt: number): void {
-    const hwm = world.x.length;
+    // Bound to the minimum of world and eco arrays — they can differ in size
+    // when sum(speciesCounts) exceeds populationCap due to rounding.
+    const hwm = Math.min(world.x.length, eco.alive.length);
 
     // Reset pre-allocated species counts (no allocation)
     const speciesCounts = this.speciesCounts;
@@ -279,7 +291,7 @@ export class CritteriumRenderer {
 
         // Detect birth: was dead, now alive
         if (!wasAlive && isAlive && effectsEnabled) {
-          this.spawnBirthEffect(i);
+          this.spawnBirthEffect(i, world.type[i]);
         }
 
         // Update prevAlive (always track for state consistency)
@@ -334,12 +346,16 @@ export class CritteriumRenderer {
       totalAlive += speciesCounts[s];
     }
 
-    // Update HUD (no array allocation — direct string concatenation)
+    // Update HUD only when text changes (avoids per-frame text re-rasterization)
+    this.frameCount++;
     let hud = 'Particles: ' + totalAlive;
     for (let s = 0; s < this.speciesNames.length; s++) {
       hud += '\n  ' + this.speciesNames[s] + ': ' + speciesCounts[s];
     }
-    this.hudText.text = hud;
+    if (this.frameCount % 10 === 0 || hud !== this.lastHudText) {
+      this.hudText.text = hud;
+      this.lastHudText = hud;
+    }
 
     // Update colored species indicators
     const lineHeight = 17;
@@ -396,6 +412,7 @@ export class CritteriumRenderer {
 
       if (t >= 1) {
         effect.g.visible = false;
+        effect.g.clear();
         effect.elapsed = -1;
         continue;
       }
@@ -414,11 +431,12 @@ export class CritteriumRenderer {
   }
 
   /** Spawn a birth flash for a particle. */
-  private spawnBirthEffect(idx: number): void {
+  private spawnBirthEffect(idx: number, speciesIdx: number): void {
     for (let i = 0; i < this.birthPool.length; i++) {
       const effect = this.birthPool[i];
       if (effect.elapsed < 0) {
         effect.idx = idx;
+        effect.speciesIdx = speciesIdx;
         effect.elapsed = 0;
         effect.g.visible = true;
         return;
@@ -437,14 +455,25 @@ export class CritteriumRenderer {
 
       if (t >= 1) {
         effect.g.visible = false;
+        effect.g.clear();
         effect.elapsed = -1;
         effect.idx = -1;
+        effect.speciesIdx = -1;
         continue;
       }
 
       const idx = effect.idx;
       if (idx < 0 || idx >= world.x.length || eco.alive[idx] === DEAD) {
         effect.g.visible = false;
+        effect.g.clear();
+        effect.elapsed = -1;
+        continue;
+      }
+
+      // Abort if the particle slot was recycled to a different species
+      if (world.type[idx] !== effect.speciesIdx) {
+        effect.g.visible = false;
+        effect.g.clear();
         effect.elapsed = -1;
         continue;
       }
@@ -453,6 +482,7 @@ export class CritteriumRenderer {
       const vis = this.speciesVisuals[speciesIdx];
       if (!vis) {
         effect.g.visible = false;
+        effect.g.clear();
         effect.elapsed = -1;
         continue;
       }
@@ -469,8 +499,8 @@ export class CritteriumRenderer {
     }
   }
 
-  /** Destroy the renderer and clean up. */
+  /** Destroy the renderer and clean up GPU resources. */
   destroy(): void {
-    this.app.destroy(true);
+    this.app.destroy(true, { children: true, context: true, texture: true, textureSource: true });
   }
 }

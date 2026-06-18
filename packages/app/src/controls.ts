@@ -800,7 +800,7 @@ function buildSpeciesSection(opts: ControlsPanelOptions): HTMLElement {
         delBtn.style.cssText =
           'margin-left:auto; color:#ff6666; font-size:12px; padding:2px 6px; min-width:auto;';
         delBtn.addEventListener('click', () => {
-          if (confirm(`Delete "${names[si]}"?`)) {
+          if (confirm(`Delete "${nameInput.value}"?`)) {
             opts.onDeleteSpecies?.(speciesIdx);
           }
         });
@@ -1433,6 +1433,7 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
         // Prevent outer from going below this inner value
         outerR.slider.min = String(v);
         innerR.valSpan.textContent = String(v);
+        innerR.slider.value = String(v);
         fireChange(i, j);
       });
 
@@ -1449,6 +1450,7 @@ function buildMatrixSection(opts: ControlsPanelOptions): HTMLElement {
           // Prevent inner from exceeding this outer value
           innerR.slider.max = String(v);
           outerR.valSpan.textContent = String(v);
+          outerR.slider.value = String(v);
           fireChange(i, j);
         },
       );

@@ -224,7 +224,11 @@ function deepCloneConfig(config: EcosystemConfig): EcosystemConfig {
     seed: config.seed,
     populationCap: config.populationCap,
     species: deepCloneSpeciesConfig(config.species),
-    interactionRules: config.interactionRules,
+    interactionRules: {
+      enabledForces: config.interactionRules.enabledForces
+        ? new Set(config.interactionRules.enabledForces)
+        : undefined,
+    },
   };
 }
 
@@ -334,9 +338,14 @@ function onError(err: unknown): void {
       'background:#333;color:#fff;border:1px solid #555;padding:10px 20px;border-radius:6px;cursor:pointer;font:14px sans-serif;flex:1;';
     copyBtn.addEventListener('click', () => {
       const text = formatLogText();
-      navigator.clipboard.writeText(text).then(() => {
-        copyBtn.textContent = '✓ Copied!';
-      });
+      navigator.clipboard
+        .writeText(text)
+        .then(() => {
+          copyBtn.textContent = '✓ Copied!';
+        })
+        .catch(() => {
+          copyBtn.textContent = '❌ Copy failed';
+        });
     });
     btnRow.appendChild(copyBtn);
 
@@ -379,6 +388,15 @@ function buildSpeciesValues(species: readonly SpeciesConfig[]): Array<Record<str
     maxAgeSec: sp.lifecycle.maxAgeSec,
     starvationDamagePerSec: sp.lifecycle.starvationDamagePerSec,
     reproductionCooldownSec: sp.lifecycle.reproductionCooldownSec,
+    // Stamina (omitted previously → sliders reset to wrong defaults on preset load)
+    ...(sp.stamina
+      ? {
+          sprintDurationSec: sp.stamina.sprintDurationSec,
+          sprintCooldownSec: sp.stamina.sprintCooldownSec,
+          sprintSpeedMultiplier: sp.stamina.sprintSpeedMultiplier,
+          tiredSpeedMultiplier: sp.stamina.tiredSpeedMultiplier,
+        }
+      : {}),
     // Diet encoded as boolean flags
     ...Object.fromEntries(Array.from(sp.diet.canEat).map((j) => ['canEat_' + j, 1])),
   }));
@@ -707,6 +725,7 @@ async function main(): Promise<void> {
   let lastTime = performance.now();
   let totalSimTime = 0;
   let paused = false;
+  let popCapRebuildTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Pre-allocated species counts array (avoid per-frame allocation)
   let speciesCounts = new Int32Array(liveConfig.species.length);
@@ -1079,7 +1098,12 @@ async function main(): Promise<void> {
 
     onTogglePause: (p: boolean) => {
       paused = p;
-      if (p) doAutosave();
+      if (p) {
+        doAutosave();
+      } else {
+        // Reset timing on unpause to prevent freeze-detection glitch
+        lastTime = performance.now();
+      }
     },
 
     onReset: () => {
@@ -1127,7 +1151,14 @@ async function main(): Promise<void> {
 
     onPopulationCapChange: (cap: number) => {
       liveConfig.populationCap = cap;
-      rebuildSimulation();
+      // Debounce rebuild — dragging the slider fires input events every pixel.
+      // Without this, dozens of rebuildSimulation() calls per second destroy
+      // and recreate the entire ecosystem mid-drag.
+      if (popCapRebuildTimer) clearTimeout(popCapRebuildTimer);
+      popCapRebuildTimer = setTimeout(() => {
+        popCapRebuildTimer = null;
+        rebuildSimulation();
+      }, 250);
     },
 
     onForceToggle: (forceId: string, enabled: boolean) => {
@@ -1510,9 +1541,14 @@ async function main(): Promise<void> {
       copyBtn.style.cssText =
         'background:#333;color:#fff;border:1px solid #555;padding:4px 12px;border-radius:4px;cursor:pointer;margin-right:4px;';
       copyBtn.addEventListener('click', () => {
-        navigator.clipboard.writeText(text).then(() => {
-          copyBtn.textContent = '✓ Copied!';
-        });
+        navigator.clipboard
+          .writeText(text)
+          .then(() => {
+            copyBtn.textContent = '✓ Copied!';
+          })
+          .catch(() => {
+            copyBtn.textContent = '❌ Copy failed';
+          });
       });
       header.appendChild(copyBtn);
       const closeBtn = document.createElement('button');
