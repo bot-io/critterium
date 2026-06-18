@@ -115,10 +115,8 @@ describe('persistence', () => {
   it('exportConfig creates a download link with .json extension', async () => {
     const createObjectURLSpy = vi.fn(() => 'blob:http://localhost/fake');
     const revokeObjectURLSpy = vi.fn();
-    vi.stubGlobal('URL', {
-      createObjectURL: createObjectURLSpy,
-      revokeObjectURL: revokeObjectURLSpy,
-    });
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(createObjectURLSpy);
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(revokeObjectURLSpy);
 
     const clickSpy = vi.fn();
     const appendChildSpy = vi
@@ -150,10 +148,8 @@ describe('persistence', () => {
   it('exportConfig appends .json if not present in filename', async () => {
     const createObjectURLSpy = vi.fn(() => 'blob:http://localhost/fake');
     const revokeObjectURLSpy = vi.fn();
-    vi.stubGlobal('URL', {
-      createObjectURL: createObjectURLSpy,
-      revokeObjectURL: revokeObjectURLSpy,
-    });
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(createObjectURLSpy);
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(revokeObjectURLSpy);
 
     let capturedHref = '';
     const origCreateElement = document.createElement.bind(document);
@@ -391,10 +387,8 @@ describe('persistence', () => {
       return 'blob:http://localhost/fake';
     });
     const revokeObjectURLSpy = vi.fn();
-    vi.stubGlobal('URL', {
-      createObjectURL: createObjectURLSpy,
-      revokeObjectURL: revokeObjectURLSpy,
-    });
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(createObjectURLSpy);
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(revokeObjectURLSpy);
 
     let capturedDownload = '';
     const origCreateElement = document.createElement.bind(document);
@@ -442,10 +436,8 @@ describe('persistence', () => {
   it('exportConfig does not duplicate .json extension', async () => {
     const createObjectURLSpy = vi.fn(() => 'blob:http://localhost/fake');
     const revokeObjectURLSpy = vi.fn();
-    vi.stubGlobal('URL', {
-      createObjectURL: createObjectURLSpy,
-      revokeObjectURL: revokeObjectURLSpy,
-    });
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(createObjectURLSpy);
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(revokeObjectURLSpy);
 
     let capturedDownload = '';
     const origCreateElement = document.createElement.bind(document);
