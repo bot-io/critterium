@@ -224,11 +224,18 @@ function deepCloneConfig(config: EcosystemConfig): EcosystemConfig {
     seed: config.seed,
     populationCap: config.populationCap,
     species: deepCloneSpeciesConfig(config.species),
-    interactionRules: {
-      enabledForces: config.interactionRules.enabledForces
-        ? new Set(config.interactionRules.enabledForces)
-        : undefined,
-    },
+    interactionRules: config.interactionRules.map((row) =>
+      row.map((rule) =>
+        rule
+          ? {
+              enabledForces: new Set(rule.enabledForces),
+              radius: rule.radius,
+              strength: rule.strength,
+              falloff: rule.falloff,
+            }
+          : null,
+      ),
+    ),
   };
 }
 
